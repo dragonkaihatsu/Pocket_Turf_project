@@ -1,0 +1,89 @@
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keiba.betting import make_betting_plan
+from keiba.marks import assign_marks
+from keiba.models import Horse, HistoryRecord, load_history, load_horses
+from keiba.pace import forecast_pace
+from keiba.scoring import MAX_BASE, score_race
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+
+class TestScoringBasics(unittest.TestCase):
+    def test_max_base_is_85(self):
+        self.assertEqual(MAX_BASE, 85)
+
+    def test_age_parsing(self):
+        h = Horse.from_row({"馬番": "1", "枠番": "1", "馬名": "A", "性齢": "牡7", "斤量": "58",
+                             "騎手": "テスト", "前走着順": "1", "前走レース名": "X", "上がり3F": "34.0",
+                             "調教評価": "A"})
+        self.assertEqual(h.age, 7)
+
+    def test_koreiuma_correction_scales_for_short_distance(self):
+        from keiba.scoring import correction_koreiuma
+        h8 = Horse.from_row({"馬番": "1", "枠番": "1", "馬名": "A", "性齢": "牡8", "斤量": "58",
+                              "騎手": "テスト", "前走着順": "1", "前走レース名": "X", "上がり3F": "34.0",
+                              "調教評価": "A"})
+        self.assertAlmostEqual(correction_koreiuma(h8, 2000).points, -5.0)
+        self.assertAlmostEqual(correction_koreiuma(h8, 1600).points, -3.75)
+
+
+class TestSampleRacePipeline(unittest.TestCase):
+    """data/サンプルステークス_*.csv を使ったエンドツーエンドの健全性チェック。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.horses = load_horses(DATA_DIR / "サンプルステークス_出走馬.csv")
+        cls.history = load_history(DATA_DIR / "サンプルステークス_過去10年.csv")
+        cls.scores = score_race(cls.horses, cls.history, kyori=2000)
+
+    def test_all_horses_scored(self):
+        self.assertEqual(len(self.scores), len(self.horses))
+
+    def test_base_subtotal_within_bounds(self):
+        for s in self.scores:
+            self.assertGreaterEqual(s.base_subtotal, 0)
+            self.assertLessEqual(s.base_subtotal, MAX_BASE)
+
+    def test_course_experience_detected_for_repeat_runner(self):
+        # テスト太郎は過去10年データに同名で出走歴あり→初コースペナルティが付かない
+        taro = next(s for s in self.scores if s.horse.name == "テスト太郎")
+        penalty = next(c for c in taro.corrections if c.label == "初コース・ぶっつけペナルティ")
+        self.assertEqual(penalty.points, 0.0)
+
+    def test_first_timer_gets_penalty(self):
+        # ロクローは過去10年データに出走歴なし→ペナルティが付く
+        rokuro = next(s for s in self.scores if s.horse.name == "ロクロー")
+        penalty = next(c for c in rokuro.corrections if c.label == "初コース・ぶっつけペナルティ")
+        self.assertEqual(penalty.points, -3.0)
+
+    def test_handicap_discount_applied(self):
+        rokuro = next(s for s in self.scores if s.horse.name == "ロクロー")
+        zenso_item = next(i for i in rokuro.base_items if i.label == "前走内容")
+        self.assertIn("0.9倍", zenso_item.note)
+
+    def test_marks_assigned_in_score_order(self):
+        marked = assign_marks(self.scores, baba="良")
+        self.assertEqual(marked[0].mark, "◎")
+        scores_desc = [m.score.total_yoi for m in marked]
+        self.assertEqual(scores_desc, sorted(scores_desc, reverse=True))
+
+    def test_betting_plan_ticket_counts(self):
+        marked = assign_marks(self.scores, baba="良")
+        plan = make_betting_plan(marked, baba="良")
+        self.assertEqual(len(plan.tansho), 2)
+        if not plan.is_axis_mode:
+            self.assertEqual(len(plan.wide), 3)
+            self.assertLessEqual(len(plan.umaren), 10)
+
+    def test_pace_forecast_probabilities_sum_to_one(self):
+        pace = forecast_pace(self.horses)
+        self.assertAlmostEqual(sum(pace.probabilities.values()), 1.0, places=6)
+
+
+if __name__ == "__main__":
+    unittest.main()
