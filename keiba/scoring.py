@@ -124,11 +124,19 @@ def score_zenso_naiyou(horse: Horse) -> ScoreItem:
     return ScoreItem("前走内容", pts, f"前走{ch}着（{horse.zenso_race or '前走レース名不明'}）")
 
 
-def score_course_tekisei(horse: Horse, history: list[HistoryRecord]) -> tuple[ScoreItem, bool]:
+def score_course_tekisei(
+    horse: Horse, history: list[HistoryRecord] | None
+) -> tuple[ScoreItem, bool | None]:
     """コース適性（15点）: 同レースの過去10年データに当該馬の出走歴があれば
     その平均着順から算出。出走歴が無ければ手動評価カラムか中立値にフォールバック。
-    戻り値の bool は「該当コース経験あり」かどうか（初コースペナルティ判定用）。
+
+    戻り値の bool|None は「該当コース経験あり」かどうか（初コースペナルティ判定用）。
+    history が None（過去10年データ自体が未提供）の場合は判定不能として None を返し、
+    「未経験と確認された」わけではないことを区別する（全馬一律ペナルティを避けるため）。
     """
+    if history is None:
+        return ScoreItem("コース適性", MAX_COURSE * 0.55, "過去10年データ未提供→中立値"), None
+
     past = [r for r in history if r.name == horse.name and r.chakujun is not None]
     if past:
         avg = statistics.mean(r.chakujun for r in past)
@@ -139,8 +147,6 @@ def score_course_tekisei(horse: Horse, history: list[HistoryRecord]) -> tuple[Sc
             f"当該レース過去出走{len(past)}回・平均着順{avg:.1f}着",
         ), True
 
-    if horse.kiso_nouryoku_override is not None:
-        pass  # override は基礎能力専用なので流用しない
     return ScoreItem("コース適性", MAX_COURSE * 0.55, "当該コース出走歴なし→中立値"), False
 
 
@@ -188,9 +194,9 @@ def correction_kishu(horse: Horse, tiers: dict[int, tuple[str, ...]] | None = No
     return ScoreItem("騎手補正", 0.0, f"{horse.jockey}（該当なし）")
 
 
-def correction_wakuban(horse: Horse, history: list[HistoryRecord]) -> ScoreItem:
+def correction_wakuban(horse: Horse, history: list[HistoryRecord] | None) -> ScoreItem:
     by_frame: dict[int, list[bool]] = {}
-    for r in history:
+    for r in history or []:
         if r.wakuban is None or r.chakujun is None:
             continue
         by_frame.setdefault(r.wakuban, []).append(r.chakujun <= 3)
@@ -240,16 +246,22 @@ def correction_koreiuma(horse: Horse, kyori: int | None) -> ScoreItem:
     return ScoreItem("高齢馬補正", pts, note)
 
 
-def correction_hatsu_course(horse: Horse, has_course_experience: bool) -> ScoreItem:
+def correction_hatsu_course(horse: Horse, has_course_experience: bool | None) -> ScoreItem:
+    """has_course_experience が None（過去10年データ未提供で判定不能）の場合は
+    「未経験と確認された」わけではないので、初コース側の判定はスキップする。
+    長期休養明けの判定は独立に行う。
+    """
     long_layoff = horse.kyusoku_days is not None and horse.kyusoku_days > 180
-    if not has_course_experience or long_layoff:
+    confirmed_no_experience = has_course_experience is False
+    if confirmed_no_experience or long_layoff:
         reasons = []
-        if not has_course_experience:
+        if confirmed_no_experience:
             reasons.append("初コース")
         if long_layoff:
             reasons.append(f"長期休養明け({horse.kyusoku_days}日)")
         return ScoreItem("初コース・ぶっつけペナルティ", -3.0, "・".join(reasons))
-    return ScoreItem("初コース・ぶっつけペナルティ", 0.0, "該当なし")
+    note = "判定不能（過去10年データ未提供）" if has_course_experience is None else "該当なし"
+    return ScoreItem("初コース・ぶっつけペナルティ", 0.0, note)
 
 
 def baba_delta(horse: Horse) -> tuple[float, str]:
@@ -286,7 +298,7 @@ def apply_handicap_discount(score: HorseScore, horse: Horse) -> None:
 def score_horse(
     horse: Horse,
     field_horses: list[Horse],
-    history: list[HistoryRecord],
+    history: list[HistoryRecord] | None,
     kyori: int | None,
     jockey_tiers: dict[int, tuple[str, ...]] | None = None,
 ) -> HorseScore:
@@ -318,7 +330,7 @@ def score_horse(
 
 def score_race(
     horses: list[Horse],
-    history: list[HistoryRecord],
+    history: list[HistoryRecord] | None,
     kyori: int | None = None,
     jockey_tiers: dict[int, tuple[str, ...]] | None = None,
 ) -> list[HorseScore]:

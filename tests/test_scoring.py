@@ -66,6 +66,15 @@ class TestSampleRacePipeline(unittest.TestCase):
         zenso_item = next(i for i in rokuro.base_items if i.label == "前走内容")
         self.assertIn("0.9倍", zenso_item.note)
 
+    def test_no_history_file_does_not_penalize_everyone(self):
+        # 過去10年データ自体が未提供(None)の場合は「未経験と確認された」わけではないので
+        # 初コースペナルティを一律には付けない（休養日数による判定は独立に効く）
+        scores_no_history = score_race(self.horses, None, kyori=2000)
+        for s in scores_no_history:
+            penalty = next(c for c in s.corrections if c.label == "初コース・ぶっつけペナルティ")
+            if s.horse.kyusoku_days is None or s.horse.kyusoku_days <= 180:
+                self.assertEqual(penalty.points, 0.0, s.horse.name)
+
     def test_marks_assigned_in_score_order(self):
         marked = assign_marks(self.scores, baba="良")
         self.assertEqual(marked[0].mark, "◎")

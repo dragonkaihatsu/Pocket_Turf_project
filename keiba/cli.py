@@ -28,7 +28,7 @@ from .scoring import score_race
 
 def _build_common(args) -> tuple:
     horses = load_horses(args.entries)
-    history = load_history(args.history) if args.history else []
+    history = load_history(args.history) if args.history else None
     scores = score_race(horses, history, kyori=args.kyori)
     marked = assign_marks(scores, baba=args.baba)
     return horses, history, scores, marked
