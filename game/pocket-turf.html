@@ -122,6 +122,18 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;font-f
   background:repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 5px,transparent 5px 10px);
 }
 .trackmap .goal{position:absolute; top:2px; bottom:2px; width:2px; right:4px; background:var(--gold)}
+/* コース構成：コーナー＝斜線、直線＝金の帯、坂＝▲ */
+.trackmap .corner{
+  position:absolute; top:2px; bottom:2px; border-radius:2px;
+  background:repeating-linear-gradient(-50deg,rgba(255,255,255,.10) 0 2px,transparent 2px 5px);
+}
+.trackmap .corner.last{background:repeating-linear-gradient(-50deg,rgba(255,255,255,.20) 0 2px,transparent 2px 5px)}
+.trackmap .straightz{position:absolute; top:2px; bottom:2px; background:rgba(244,196,74,.16); border-radius:2px}
+.trackmap .hill{
+  position:absolute; top:3px; width:0; height:0;
+  border-left:4px solid transparent; border-right:4px solid transparent;
+  border-bottom:7px solid rgba(255,107,74,.7);
+}
 .trackmap i{
   position:absolute; width:7px; height:7px; border-radius:50%; top:3px;
   transform:translateX(-50%); border:1px solid rgba(0,0,0,.6);
@@ -172,11 +184,21 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;font-f
 /* ---------- 下画面 ---------- */
 .bot{flex:1 1 auto; min-height:0; display:flex}
 .bot .glass{
-  flex:1; min-height:0; display:flex; flex-direction:column;
+  flex:1; min-height:0; display:flex; flex-direction:column; position:relative;
   border-radius:8px; overflow:hidden;
   background:var(--panel);
   box-shadow:0 0 0 1px #000 inset;
 }
+.toast{
+  position:absolute; left:50%; top:12px; z-index:5;
+  transform:translateX(-50%) translateY(-8px); opacity:0;
+  background:#1d2431; border:1px solid var(--gold); color:var(--gold);
+  padding:8px 16px; border-radius:99px; font-size:12px; font-weight:700;
+  box-shadow:0 6px 20px rgba(0,0,0,.55); pointer-events:none;
+  transition:opacity .2s ease, transform .2s ease;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){ .toast{transform:translateX(-50%)} }
 #panel{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:10px}
 nav.tabs{
   flex:0 0 auto; display:flex; border-top:1px solid var(--line);
@@ -352,6 +374,7 @@ label.fld{display:block;font-size:11px;color:var(--ink-2);margin:0 0 4px}
   <section class="bezel bot" aria-label="下画面">
     <div class="glass">
       <div id="panel"></div>
+      <div class="toast" id="toast" hidden></div>
       <nav class="tabs" id="tabs" hidden>
         <button data-tab="home" aria-selected="true">行動</button>
         <button data-tab="horse" aria-selected="false">愛馬</button>
@@ -434,42 +457,67 @@ const distCat = d => d<=1400?'短距離' : d<=1800?'マイル' : d<=2400?'中距
 /* --- レース定義 ---
    cls: 出走に必要なクラス（0=新馬/未勝利, 1=1勝, 2=2勝, 3=3勝, 4=OP以上）
    grade: 'jo'条件戦 / 'op' / 'G3' / 'G2' / 'G1'                         */
+/* --- 競馬場ごとのコース特性 ---
+   straight: 直線距離(m)。短いほど後方から届かない（レースのフェーズ配分に直結する）
+   curve:    小回り度 0=大回り 1=極小回り。コーナーで減速し、賢さで軽減される
+   slope:    ゴール前の坂の急さ 0=平坦 1=急坂。パワーと根性で駆け上がる          */
+const COURSES = {
+  東京:{straight:525, curve:0.20, slope:0.35},
+  中山:{straight:310, curve:0.85, slope:0.95},
+  阪神:{straight:400, curve:0.50, slope:0.85},
+  京都:{straight:400, curve:0.45, slope:0.10},
+  中京:{straight:412, curve:0.55, slope:0.80},
+  新潟:{straight:659, curve:0.05, slope:0.05},
+  福島:{straight:292, curve:0.90, slope:0.25},
+  小倉:{straight:293, curve:0.90, slope:0.15},
+  札幌:{straight:266, curve:0.85, slope:0.10},
+  函館:{straight:262, curve:0.95, slope:0.20}
+};
+const COURSE_LIST = Object.keys(COURSES);
+const courseOf = r => COURSES[r&&r.c] || COURSES.東京;
+const courseTags = r => {
+  const c=courseOf(r);
+  return [ c.curve>=0.8?'小回り':c.curve<=0.25?'大回り':'中回り',
+           c.slope>=0.75?'急坂':c.slope<=0.2?'平坦':'緩坂' ];
+};
+const courseLine = r => `${r.c||'東京'} 直線${courseOf(r).straight}m ${courseTags(r).join('・')}`;
+
 const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:26000};
 const COND_PRIZE  = [900,1600,2400,3400];
 const RACES = [
   // 3歳限定
-  {n:'共同通信杯',      m:2,  d:1800, s:'芝', g:'G3', cls:1, age:[3]},
-  {n:'弥生賞',          m:3,  d:2000, s:'芝', g:'G2', cls:1, age:[3]},
-  {n:'皐月賞',          m:4,  d:2000, s:'芝', g:'G1', cls:1, age:[3]},
-  {n:'日本ダービー',    m:5,  d:2400, s:'芝', g:'G1', cls:1, age:[3]},
-  {n:'ユニコーンS',     m:6,  d:1600, s:'ダート', g:'G3', cls:1, age:[3]},
-  {n:'ラジオNIKKEI賞',  m:7,  d:1800, s:'芝', g:'G3', cls:1, age:[3]},
-  {n:'セントライト記念',m:9,  d:2200, s:'芝', g:'G2', cls:1, age:[3]},
-  {n:'菊花賞',          m:10, d:3000, s:'芝', g:'G1', cls:1, age:[3]},
+  {n:'共同通信杯',      m:2,  d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'東京'},
+  {n:'弥生賞',          m:3,  d:2000, s:'芝', g:'G2', cls:1, age:[3], c:'中山'},
+  {n:'皐月賞',          m:4,  d:2000, s:'芝', g:'G1', cls:1, age:[3], c:'中山'},
+  {n:'日本ダービー',    m:5,  d:2400, s:'芝', g:'G1', cls:1, age:[3], c:'東京'},
+  {n:'ユニコーンS',     m:6,  d:1600, s:'ダート', g:'G3', cls:1, age:[3], c:'東京'},
+  {n:'ラジオNIKKEI賞',  m:7,  d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'福島'},
+  {n:'セントライト記念',m:9,  d:2200, s:'芝', g:'G2', cls:1, age:[3], c:'中山'},
+  {n:'菊花賞',          m:10, d:3000, s:'芝', g:'G1', cls:1, age:[3], c:'京都'},
   // 古馬・オープン
-  {n:'日経新春杯',      m:1,  d:2400, s:'芝', g:'G2', cls:4, age:[4,5]},
-  {n:'フェブラリーS',   m:2,  d:1600, s:'ダート', g:'G1', cls:4, age:[4,5]},
-  {n:'中山記念',        m:2,  d:1800, s:'芝', g:'G2', cls:4, age:[4,5]},
-  {n:'高松宮記念',      m:3,  d:1200, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'金鯱賞',          m:3,  d:2000, s:'芝', g:'G2', cls:4, age:[4,5]},
-  {n:'大阪杯',          m:4,  d:2000, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'マイラーズC',     m:4,  d:1600, s:'芝', g:'G2', cls:3, age:[4,5]},
-  {n:'天皇賞（春）',    m:5,  d:3200, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'安田記念',        m:6,  d:1600, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'宝塚記念',        m:6,  d:2200, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'函館記念',        m:7,  d:2000, s:'芝', g:'G3', cls:3, age:[4,5]},
-  {n:'アイビスSD',      m:7,  d:1000, s:'芝', g:'G3', cls:3, age:[4,5]},
-  {n:'札幌記念',        m:8,  d:2000, s:'芝', g:'G2', cls:4, age:[4,5]},
-  {n:'エルムS',         m:8,  d:1700, s:'ダート', g:'G3', cls:3, age:[4,5]},
-  {n:'オールカマー',    m:9,  d:2200, s:'芝', g:'G2', cls:4, age:[4,5]},
-  {n:'スプリンターズS', m:9,  d:1200, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'毎日王冠',        m:10, d:1800, s:'芝', g:'G2', cls:4, age:[4,5]},
-  {n:'天皇賞（秋）',    m:10, d:2000, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'ジャパンカップ',  m:11, d:2400, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'マイルCS',        m:11, d:1600, s:'芝', g:'G1', cls:4, age:[4,5]},
-  {n:'福島記念',        m:11, d:2000, s:'芝', g:'G3', cls:3, age:[4,5]},
-  {n:'チャンピオンズC', m:12, d:1800, s:'ダート', g:'G1', cls:4, age:[4,5]},
-  {n:'有馬記念',        m:12, d:2500, s:'芝', g:'G1', cls:4, age:[3,4,5]}
+  {n:'日経新春杯',      m:1,  d:2400, s:'芝', g:'G2', cls:4, age:[4,5], c:'京都'},
+  {n:'フェブラリーS',   m:2,  d:1600, s:'ダート', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'中山記念',        m:2,  d:1800, s:'芝', g:'G2', cls:4, age:[4,5], c:'中山'},
+  {n:'高松宮記念',      m:3,  d:1200, s:'芝', g:'G1', cls:4, age:[4,5], c:'中京'},
+  {n:'金鯱賞',          m:3,  d:2000, s:'芝', g:'G2', cls:4, age:[4,5], c:'中京'},
+  {n:'大阪杯',          m:4,  d:2000, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神'},
+  {n:'マイラーズC',     m:4,  d:1600, s:'芝', g:'G2', cls:3, age:[4,5], c:'京都'},
+  {n:'天皇賞（春）',    m:5,  d:3200, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
+  {n:'安田記念',        m:6,  d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'宝塚記念',        m:6,  d:2200, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神'},
+  {n:'函館記念',        m:7,  d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'函館'},
+  {n:'アイビスSD',      m:7,  d:1000, s:'芝', g:'G3', cls:3, age:[4,5], c:'新潟'},
+  {n:'札幌記念',        m:8,  d:2000, s:'芝', g:'G2', cls:4, age:[4,5], c:'札幌'},
+  {n:'エルムS',         m:8,  d:1700, s:'ダート', g:'G3', cls:3, age:[4,5], c:'札幌'},
+  {n:'オールカマー',    m:9,  d:2200, s:'芝', g:'G2', cls:4, age:[4,5], c:'中山'},
+  {n:'スプリンターズS', m:9,  d:1200, s:'芝', g:'G1', cls:4, age:[4,5], c:'中山'},
+  {n:'毎日王冠',        m:10, d:1800, s:'芝', g:'G2', cls:4, age:[4,5], c:'東京'},
+  {n:'天皇賞（秋）',    m:10, d:2000, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'ジャパンカップ',  m:11, d:2400, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'マイルCS',        m:11, d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
+  {n:'福島記念',        m:11, d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'福島'},
+  {n:'チャンピオンズC', m:12, d:1800, s:'ダート', g:'G1', cls:4, age:[4,5], c:'中京'},
+  {n:'有馬記念',        m:12, d:2500, s:'芝', g:'G1', cls:4, age:[3,4,5], c:'中山'}
 ];
 /* 条件戦は毎月生成（クラスに応じて距離・馬場をローテーション） */
 function condRaces(g){
@@ -478,16 +526,19 @@ function condRaces(g){
   const seed = (g.year*13+g.month*7);
   const d1 = dists[(seed)%dists.length], d2 = dists[(seed+3)%dists.length];
   const surf = ((seed>>1)%3===0)?'ダート':'芝';
+  // 開催場も月ごとに替える（同じ条件戦でもコース適性で結果が変わる）
+  const c1 = COURSE_LIST[seed%COURSE_LIST.length];
+  const c2 = COURSE_LIST[(seed+4)%COURSE_LIST.length];
   if(h.cls===0){
     if(h.races===0 && g.year===3 && g.month<=6)
-      out.push({n:'新馬戦', m:g.month, d:d1, s:surf, g:'jo', cls:0, lv:0});
-    out.push({n:'未勝利戦', m:g.month, d:d2, s:'芝', g:'jo', cls:0, lv:0});
-    if(g.year>3) out.length=0, out.push({n:'1勝クラス', m:g.month, d:d2, s:'芝', g:'jo', cls:0, lv:1});
+      out.push({n:'新馬戦', m:g.month, d:d1, s:surf, g:'jo', cls:0, lv:0, c:c1});
+    out.push({n:'未勝利戦', m:g.month, d:d2, s:'芝', g:'jo', cls:0, lv:0, c:c2});
+    if(g.year>3){ out.length=0; out.push({n:'1勝クラス', m:g.month, d:d2, s:'芝', g:'jo', cls:0, lv:1, c:c2}); }
   }else if(h.cls<4){
-    out.push({n:h.cls+'勝クラス', m:g.month, d:d1, s:'芝', g:'jo', cls:h.cls, lv:h.cls});
-    out.push({n:h.cls+'勝クラス', m:g.month, d:d2, s:surf, g:'jo', cls:h.cls, lv:h.cls});
+    out.push({n:h.cls+'勝クラス', m:g.month, d:d1, s:'芝', g:'jo', cls:h.cls, lv:h.cls, c:c1});
+    out.push({n:h.cls+'勝クラス', m:g.month, d:d2, s:surf, g:'jo', cls:h.cls, lv:h.cls, c:c2});
   }else{
-    out.push({n:'オープン特別', m:g.month, d:d1, s:'芝', g:'op', cls:4, lv:4});
+    out.push({n:'オープン特別', m:g.month, d:d1, s:'芝', g:'op', cls:4, lv:4, c:c1});
   }
   return out;
 }
@@ -556,7 +607,10 @@ function ratingOf(h, race){
   const apt = APT_MULT[race.s==='芝'?h.aptTurf:h.aptDirt] * APT_MULT[h.aptD[distCat(race.d)]];
   const long = race.d>=2200 ? 1 : race.d<=1400 ? 0 : .5;   // 距離が長いほどスタミナ比重
   const core = h.sp*(1-long*.28) + h.st*(.18+long*.30) + h.pw*.16 + h.gt*.16 + h.wt*.10;
-  return core * apt * c;
+  // コース特性：小回りは賢さ、急坂はパワーと根性が効く
+  const cs = courseOf(race);
+  const cAdj = 1 + (h.wt-50)/900*cs.curve + ((h.pw-50)/900 + (h.gt-50)/1500)*cs.slope;
+  return core * apt * c * cAdj;
 }
 
 /* ライバル生成：クラスに応じた地力 */
@@ -603,8 +657,15 @@ class RaceSim{
     const nige = field.filter(h=>h.style==='逃げ').length + field.filter(h=>h.style==='先行').length*.5;
     this.pace = nige>=3.5 ? 'ハイ' : nige<=1.5 ? 'スロー' : 'ミドル';
     const paceAdj = {'ハイ':1.03,'ミドル':1.0,'スロー':.975}[this.pace];
-    this.distF = distFactor(race.d);
-    const distF = distFactor(race.d);
+    const distF = this.distF = distFactor(race.d);
+    /* コース特性をレース構造に落とし込む。
+       直線が短いコースほど「追い比べの区間」が短く、後方からでは届かない。 */
+    this.course   = courseOf(race);
+    this.straight = Math.min(this.course.straight, race.d*0.5);
+    this.sStart   = 1 - this.straight/race.d;              // 直線入口
+    // 勝負所。長い距離ほど早く動き出す（直線だけでは差が詰まらないため）
+    const goEarly = race.d>=2400 ? 0.30 : race.d>=2000 ? 0.25 : 0.20;
+    this.cStart   = Math.max(0.28, this.sStart-goEarly);
     this.run = field.map((h,i)=>{
       const c = COND_NAME[condIdx(h)].m;
       const apt = APT_MULT[race.s==='芝'?h.aptTurf:h.aptDirt]*APT_MULT[h.aptD[distCat(race.d)]];
@@ -633,15 +694,15 @@ class RaceSim{
     /* 実際のレースは隊列が固まって進むので、序盤の差は小さく、
        決着は終い（フェーズ2〜3）でつける。ここを開きすぎると逃げ切りばかりになる。 */
     const tbl = {
-      '逃げ':[1.045,.995,1.000,1.005],
-      '先行':[1.025,.990,1.010,1.030],
-      '差し':[0.980,.980,1.030,1.075],
-      '追込':[0.955,.970,1.040,1.100]
+      '逃げ':[1.045,.992,1.000,1.005],
+      '先行':[1.025,.988,1.010,1.030],
+      '差し':[0.980,.982,1.030,1.075],
+      '追込':[0.955,.978,1.040,1.100]
     }[s];
-    const idx = prog<.2?0 : prog<.55?1 : prog<.8?2 : 3;
+    const idx = prog<.2?0 : prog<this.cStart?1 : prog<this.sStart?2 : 3;
     let m = tbl[idx];
     // ペース補正：ハイなら前が消耗、スローなら後方不利
-    if(prog<.55){
+    if(prog<this.cStart){
       if(this.pace==='ハイ' && (s==='逃げ'||s==='先行')) m*=1.022;
       if(this.pace==='スロー'&& (s==='差し'||s==='追込')) m*=0.985;
     }
@@ -660,10 +721,20 @@ class RaceSim{
       else if(prog>=r.goAt) mul*=1.06;
       if(r.whipT>0){ mul*=1.045; r.whipT-=dt; }
       if(r.trouble>0){ mul*=0.90; r.trouble-=dt; }
+      // コーナー：小回りほど振られて減速し、賢さで軽減される
+      if(prog>0.12 && prog<this.sStart){
+        mul *= 1 - this.course.curve*0.030*(1 - r.h.wt/280);
+        // 4コーナーで後方の馬は外を回らされる
+        if(prog>this.cStart && (r.style==='追込'||r.style==='差し'))
+          mul *= 1 - this.course.curve*0.028;
+      }
+      // ゴール前の坂：パワーと根性で駆け上がる
+      if(D-r.x < 220)
+        mul *= 1 - this.course.slope*0.060*(1 - r.h.pw/300 - r.h.gt/500);
       // 脚色：残りスタミナが細るほど連続的に失速する（根性で粘る）
       if(r.stam<0.30){
-        const lack=clamp((0.30-r.stam)/0.30,0,1.7);
-        mul *= 1 - lack*(0.165 - r.guts/1500);
+        const lack=clamp((0.30-r.stam)/0.30,0,1.2);
+        mul *= 1 - lack*(0.140 - r.guts/1700);
       }
       let target = r.cap*mul;
       // ラスト100mは根性で粘る
@@ -702,11 +773,28 @@ class RaceSim{
     const say=(k,txt,hot)=>{ if(!this.fired[k]){ this.fired[k]=1; this.events.push({t:this.t,txt,hot}); } };
     if(p>.02) say('s',`スタート！ ${this.pace}ペースの入り。`);
     if(p>.22) say('a',`先頭は${this.leader.h.num}番 ${this.leader.h.name}。`);
-    if(p>.52) say('b',`向正面、${this.me.rank}番手に${this.me.h.name}。`, true);
-    if(p>.70) say('c',`3コーナーから隊列が動く！`);
-    if(p>.82) say('d',`4コーナーを回って直線へ！`);
+    if(p>.42 && p<this.cStart) say('b',`向正面、${this.me.rank}番手に${this.me.h.name}。`, true);
+    if(p>this.cStart) say('c', this.course.curve>=0.8
+      ? `3コーナー、小回りで隊列が一気に凝縮する！`
+      : `3コーナーから隊列が動き出す！`);
+    if(p>this.sStart) say('d',`4コーナーを回って直線へ！残り${Math.round(this.straight)}m！`);
+    if(p>1-190/this.D && this.course.slope>=0.7) say('h',`最後の急坂だ！ここで脚が上がる！`, true);
     if(p>.90) say('e',`${this.order[0].h.name}先頭、${this.order[1].h.name}が並びかける！`);
     if(p>.97) say('f',`ゴール前、大接戦だ！`, true);
+  }
+  /* 現在地の区間名とコーナーの曲がり具合（描画とHUD用） */
+  sectionOf(x){
+    const p=x/this.D;
+    if(p>=this.sStart) return '直線';
+    if(p>=this.cStart) return '4角';
+    if(p>=0.42) return '3角';
+    if(p>=0.2)  return '向正面';
+    return 'スタート';
+  }
+  bendAt(x){
+    const p=x/this.D;
+    if(p>=this.sStart || p<0.12) return 0;
+    return this.course.curve*(p>=this.cStart?1:0.55);
   }
   finish(){
     const res=[...this.run].sort((a,b)=>a.fin-b.fin);
@@ -719,6 +807,14 @@ class RaceSim{
     this.result=res;
   }
   skipToEnd(){ let guard=0; while(!this.done && guard++<40000) this.step(1/30); }
+  /* 先頭がその進捗に達するまで一気に進める（スキップ＝直線まで飛ばす用） */
+  skipTo(frac){
+    const target=this.D*frac; let guard=0;
+    while(!this.done && guard++<40000){
+      this.step(1/30);
+      if(this.leader && this.leader.x>=target) break;
+    }
+  }
 }
 
 /* =======================================================================
@@ -810,7 +906,7 @@ function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label){
   g.beginPath(); g.ellipse( 0.26*s,-0.05*s,0.19*s,0.185*s,0,0,7); g.fill();
 
   // 首（走行時は前へ低く、静止時はやや起こす）
-  const nx=running?0.575:0.545, ny=running?-0.34:-0.38;
+  const nx=running?0.575:0.535, ny=running?-0.34:-0.33;
   g.beginPath();
   g.moveTo(0.30*s,-0.17*s);
   g.quadraticCurveTo(0.47*s,-0.20*s,nx*s,ny*s);
@@ -819,7 +915,8 @@ function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label){
   g.closePath(); g.fill();
 
   // 頭
-  g.save(); g.translate((nx+0.055)*s,(ny-0.015)*s); g.rotate(running?-0.42:-0.60);
+  // 走行時は首を伸ばして鼻先が前、静止時は鼻面を下げて立ち姿にする
+  g.save(); g.translate((nx+0.055)*s,(ny-0.015)*s); g.rotate(running?-0.30:0.30);
   g.fillStyle=c.c;
   g.beginPath(); g.ellipse(0,0,0.128*s,0.066*s,0,0,7); g.fill();
   g.fillStyle=dark;
@@ -880,7 +977,10 @@ function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label){
   g.restore();
 }
 /* 芝／ダートの路面 */
-function drawTrack(camX, surface, D){
+/* 画面に映すコースの横幅（m）。狭いと隊列が画面外に出てしまう。 */
+const VIEW_M = 44;
+function drawTrack(camX, surface, D, bend){
+  bend=bend||0;
   const top=H*.575, bot=H;
   const base = surface==='芝'
     ? ['#1f6b3c','#25793f','#194f2d']
@@ -889,7 +989,7 @@ function drawTrack(camX, surface, D){
   grd.addColorStop(0,base[2]); grd.addColorStop(.35,base[0]); grd.addColorStop(1,base[1]);
   g.fillStyle=grd; g.fillRect(0,top,W,bot-top);
   // 縞（芝の刈り跡）
-  const M2P = W/32;
+  const M2P = W/VIEW_M;
   const o=(camX*M2P)%(M2P*5);
   g.globalAlpha= surface==='芝'?.10:.06;
   for(let i=-1;i<W/(M2P*5)+2;i++){
@@ -897,12 +997,19 @@ function drawTrack(camX, surface, D){
     g.fillRect(i*M2P*5-o,top,M2P*5,bot-top);
   }
   g.globalAlpha=1;
-  // ラチ
+  // ラチ（コーナーでは内ラチが弧を描き、旋回しているのが分かる）
+  const bow = x => -bend*26*Math.sin(Math.PI*(x/W));   // 画面中央がいちばん膨らむ
   g.strokeStyle='rgba(255,255,255,.5)'; g.lineWidth=2;
-  g.beginPath(); g.moveTo(0,top+2); g.lineTo(W,top+2); g.stroke();
+  g.beginPath();
+  g.moveTo(0,top+2);
+  g.quadraticCurveTo(W/2,top+2+bow(W/2)*2,W,top+2);
+  g.stroke();
   const po=(camX*M2P)%(M2P*10);
   g.fillStyle='rgba(255,255,255,.35)';
-  for(let i=-1;i<W/(M2P*10)+2;i++) g.fillRect(i*M2P*10-po,top-8,2,10);
+  for(let i=-1;i<W/(M2P*10)+2;i++){
+    const px=i*M2P*10-po;
+    g.fillRect(px,top-8+bow(px),2,10);
+  }
   // 残り距離ハロン棒
   for(const rem of [1000,800,600,400,200]){
     const px=(D-rem-camX)*M2P;
@@ -926,7 +1033,7 @@ function drawTrack(camX, surface, D){
 }
 /* 出走中の全馬。奥のレーンから手前へ描いて重なりに奥行きを出す。 */
 function drawField(sim, camX){
-  const M2P=W/32, n=sim.run.length;
+  const M2P=W/VIEW_M, n=sim.run.length;
   sim.run.forEach((r,i)=>{
     r.laneY = H*0.615 + (i/Math.max(1,n-1))*H*0.315;
     r.laneJit = (i%2)?0.6:-0.6;      // 完全に重ならないよう前後に少しずらす
@@ -934,7 +1041,7 @@ function drawField(sim, camX){
   [...sim.run].sort((a,b)=>a.laneY-b.laneY).forEach(r=>{
     const px=(r.x+r.laneJit-camX)*M2P;
     if(px<-70||px>W+70) return;
-    const sc=Math.min(W*0.10,H*0.15)*(0.80+(r.laneY/H)*0.36);
+    const sc=Math.min(W*0.085,H*0.13)*(0.80+(r.laneY/H)*0.36);
     drawHorse(px,r.laneY,sc,r.h.coat,r.h.num-1,r.h.num,r.phase,true,!r.h.npc,!r.h.npc);
   });
 }
@@ -969,6 +1076,17 @@ function drawStable(h, t){
   // 飼い葉桶
   g.fillStyle='#2f2417'; roundRect(W*.06,H*.72,W*.16,H*.10,3); g.fill();
   g.fillStyle='#6b5323'; roundRect(W*.07,H*.725,W*.14,H*.035,2); g.fill();
+  // 吊りランプ。馬体が背景の板壁に沈まないよう、光だまりで浮かせる
+  const lx=W*.52, ly=H*.085;
+  const lamp=g.createRadialGradient(lx,ly,3,lx,H*.72,W*.55);
+  lamp.addColorStop(0,'rgba(255,214,150,.26)');
+  lamp.addColorStop(.45,'rgba(255,196,124,.11)');
+  lamp.addColorStop(1,'rgba(255,186,110,0)');
+  g.fillStyle=lamp; g.fillRect(0,0,W,H);
+  g.fillStyle='#3a3026'; g.fillRect(lx-1,0,2,H*.055);
+  g.fillStyle='#ffd98a';
+  g.beginPath(); g.moveTo(lx-10,H*.09); g.lineTo(lx+10,H*.09);
+  g.lineTo(lx+5,H*.055); g.lineTo(lx-5,H*.055); g.closePath(); g.fill();
   // 馬（呼吸で上下）
   const s=Math.min(W*0.26,H*0.38);
   const breathe=Math.sin(t/900)*s*0.012;
@@ -1092,7 +1210,12 @@ const V = {
     <div class="card"><p class="eyebrow">3 / 馬券</p>
       <p class="muted">出走前にメダルで単勝・複勝を購入。愛馬に賭けても、ライバルに賭けてもよい。賞金と払戻の両方がメダルになる。</p></div>
     <div class="card"><p class="eyebrow">4 / レース操作</p>
-      <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。</p></div>
+      <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
+    <div class="card"><p class="eyebrow">5 / コース</p>
+      <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
+      ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
+      ・小回りはコーナーで振られるので<b>賢さ</b>が要る。差し・追込は外を回らされる<br>
+      ・中山や阪神のゴール前の急坂は<b>パワー</b>と<b>根性</b>で駆け上がる</p></div>
     <button class="btn primary center wide" data-act="back">もどる</button>`;
   },
   /* ---- 馬選択 ---- */
@@ -1172,14 +1295,17 @@ const V = {
         <p class="eyebrow">今月のレース</p>
         <div class="list" style="margin-bottom:10px">
           ${rs.map((r,i)=>`<button class="entry" data-act="entry" data-i="${i}">
-            <div class="nm"><b>${esc(r.n)}</b><br><span style="font-size:10px;color:var(--ink-3)">${raceMeta(r)}</span></div>
+            <div class="nm"><b>${esc(r.n)}</b><br><span style="font-size:10px;color:var(--ink-3)">${raceMeta(r)}</span>
+              <br><span style="font-size:9.5px;color:var(--ink-3)">${courseLine(r)}</span></div>
             <span class="od">${yen(prizeOf(r))}</span>
           </button>`).join('')}
         </div>`:`<p class="muted" style="margin:0 0 10px">今月は出走できるレースがない。</p>`}
       <p class="eyebrow">調教メニュー</p>
-      <div class="grid2" style="margin-bottom:7px">${menus}
+      <div class="grid2" style="margin-bottom:9px">${menus}
         <button class="btn" data-act="rest"><span>休養</span><small>疲労-40・調子回復</small></button>
-      </div>`;
+      </div>
+      <button class="btn ghost center wide" data-act="save" style="min-height:40px">
+        セーブする<small>進行は自動でも保存される</small></button>`;
   },
   /* ---- 愛馬 ---- */
   horse(){
@@ -1241,6 +1367,7 @@ const V = {
             :`<p class="muted">まだ出走記録がない。</p>`}
       ${past?`<p class="eyebrow">歴代の愛馬</p>${past}`:''}
       <div class="sep"></div>
+      <button class="btn center wide" data-act="save" style="margin-bottom:7px">セーブする</button>
       <button class="btn danger center wide" data-act="reset">セーブデータを消す</button>`;
   },
   /* ---- 出走登録・馬券 ---- */
@@ -1263,7 +1390,24 @@ const V = {
     return `<div class="row between"><p class="eyebrow" style="margin:0">${G.year}歳 ${G.month}月</p>
         <button class="btn ghost" data-act="cancelrace" style="min-height:0;padding:3px 9px;font-size:11px">出走取消</button></div>
       <h2 class="head">${esc(r.n)} ${raceMeta(r)}</h2>
-      <p class="muted" style="margin:-4px 0 8px">1着賞金 <b class="gold num">${yen(prizeOf(r))}</b>メダル・${app.sim.pace}ペース想定</p>
+      <div class="card tight" style="margin-bottom:9px">
+        <div class="row between" style="margin-bottom:5px">
+          <b style="font-size:12.5px">${esc(r.c||'東京')}競馬場</b>
+          <span class="row" style="gap:4px">${courseTags(r).map(t=>
+            `<span class="pill ${t==='急坂'?'g1':t==='小回り'?'g3':'jo'}">${t}</span>`).join('')}</span>
+        </div>
+        <div class="row between" style="font-size:11px">
+          <span class="muted">直線</span><b class="num cyan">${courseOf(r).straight}m</b>
+        </div>
+        <div class="sep" style="margin:6px 0"></div>
+        <div class="row between" style="font-size:11px">
+          <span class="muted">1着賞金</span><b class="num gold">${yen(prizeOf(r))}</b>
+        </div>
+        <div class="sep" style="margin:6px 0"></div>
+        <div class="row between" style="font-size:11px">
+          <span class="muted">想定ペース</span><b>${app.sim.pace}</b>
+        </div>
+      </div>
       <p class="eyebrow">出走表（数字は単勝オッズ）</p>
       <div class="list" style="margin-bottom:9px">${rows}</div>
       <p class="eyebrow">馬券を買う</p>
@@ -1304,7 +1448,7 @@ const V = {
       <div class="row" style="gap:6px">
         <button class="whip" data-act="whip" style="flex:1.5">ムチ <span class="pips" id="whipPips">●●●</span></button>
         <button class="btn ghost center" data-act="speed" style="flex:1;min-height:52px;font-size:12px" id="spdBtn">×1</button>
-        <button class="btn ghost center" data-act="skip" style="flex:1;min-height:52px;font-size:12px">スキップ</button>
+        <button class="btn ghost center" data-act="skip" id="skipBtn" style="flex:1;min-height:52px;font-size:12px">直線まで</button>
       </div>
     </div>`;
   },
@@ -1384,6 +1528,17 @@ function syncMeters(){
   $('#mDate').textContent  = G&&G.horse? `${G.year}歳${G.month}月` : '--';
 }
 function setHud(html){ hud.innerHTML=html; }
+let toastTimer=null;
+function toast(msg){
+  const el=$('#toast'); if(!el) return;
+  el.textContent=msg; el.hidden=false;
+  requestAnimationFrame(()=>el.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{
+    el.classList.remove('show');
+    setTimeout(()=>{ el.hidden=true; },260);
+  },1500);
+}
 function say(txt, hot){
   if(REDUCE){ ticker.innerHTML=`<span class="${hot?'cur':''}">${esc(txt)}</span>`; return; }
   app.tickText=txt; app.tickIdx=0; app.tickHot=hot;
@@ -1484,9 +1639,21 @@ function placeBet(type,amt){
   SFX.coin();
   show('bet');
 }
+/* 位置表示板の下地。コーナー区間・直線・坂の位置をコース特性から描く。 */
+function buildMapBase(sim){
+  const ss=sim.sStart*100, cs=sim.cStart*100;
+  let h='';
+  h+=`<span class="corner" style="left:12%;width:${Math.max(0,ss-12)}%"></span>`;
+  h+=`<span class="corner last" style="left:${cs}%;width:${Math.max(0,ss-cs)}%"></span>`;
+  h+=`<span class="straightz" style="left:${ss}%;width:${100-ss}%"></span>`;
+  if(sim.course.slope>=0.7) h+=`<span class="hill" style="left:${(1-200/sim.D)*100}%"></span>`;
+  h+='<span class="rail"></span><span class="goal"></span>';
+  return h;
+}
 function startRace(){
   app.scene='race'; app.raceT=0; app.speed=1; evIdx=0;
   app.sim.me.whip=3;
+  app.mapBase=buildMapBase(app.sim);
   tmap.hidden=false;
   SFX.gate();
   show('race');
@@ -1575,6 +1742,7 @@ const ACT = {
     say(`${G.horse.name}が厩舎にやってきた。デビューを目指そう。`);
     show('home'); save(); drawScene();
   },
+  save(){ save(); SFX.coin(); toast('セーブしました'); },
   train(d){ doTrain(+d.i); },
   rest(){ doRest(); },
   advance(){ SFX.tap(); advanceMonth(); },
@@ -1594,7 +1762,17 @@ const ACT = {
     if(s.me.stam<0.12) s.events.push({t:s.t,txt:'反応がない！もう脚がない！',hot:true}); },
   speed(){ app.speed = app.speed===1?2:app.speed===2?4:1;
     const b=$('#spdBtn'); if(b) b.textContent='×'+app.speed; SFX.tap(); },
-  skip(){ const s=app.sim; if(!s) return; s.skipToEnd(); finishRace(); },
+  /* スキップ＝スタートを見せたあとコーナーを飛ばして直線から中継を再開する。
+     すでに直線に入っていれば、そのまま結果まで送る。 */
+  skip(){
+    const s=app.sim; if(!s||s.done) return;
+    if(s.leader && s.leader.x >= s.D*s.sStart){ s.skipToEnd(); finishRace(); return; }
+    s.skipTo(s.sStart);
+    evIdx=Math.max(0,s.events.length-1);      // 飛ばした区間の実況は流さない
+    SFX.gate();
+    const b=$('#skipBtn'); if(b) b.textContent='結果へ';
+    if(s.done) finishRace();
+  },
   afterrace(){ app.scene='stable'; app.sim=null; SFX.tap(); advanceMonth(); },
   nextgen(){ app.scene='stable'; SFX.tap(); show('pick'); save(); },
   reset(){ if(!confirm('セーブデータを消して最初からやり直す？')) return; wipe(); G=blank(); app.scene='title'; tmap.hidden=true; show('title'); }
@@ -1671,9 +1849,9 @@ function render(now, dt){
     const n=app.field.length;
     for(let i=0;i<n;i++){
       const h=app.field[i];
-      const s=Math.min(W*0.12,H*0.19);
-      const x=W*0.10+ (i%4)*W*0.26 + Math.sin(now/1400+i)*4;
-      const y=H*0.70+Math.floor(i/4)*H*0.16;
+      const s=Math.min(W*0.10,H*0.15);
+      const x=W*(0.15+(i%4)*0.235) + Math.sin(now/1400+i)*4;
+      const y=H*(0.56+Math.floor(i/4)*0.235);
       drawHorse(x,y,s,h.coat,h.num-1,h.num,now/900+i,false,true);
     }
     setHud(`<span class="chip gold">${esc(app.race.n)}</span>
@@ -1687,18 +1865,20 @@ function render(now, dt){
       for(let i=0;i<steps && !sim.done;i++) sim.step(SD);
     }
     const me=sim.me, D=sim.D;
-    const camX=clamp(me.x-12, 0, D+20);
+    const camX=clamp(me.x-16, 0, D+20);
     drawBack(camX,app.race.s);
-    drawTrack(camX,app.race.s,D);
+    drawTrack(camX,app.race.s,D,sim.bendAt(me.x));
     drawField(sim,camX);
     const rem=Math.max(0,Math.round((D-me.x)/10)*10);
-    setHud(`<span class="chip">残り <b>${rem}</b>m</span>
-      <span class="chip gold">${me.rank}<b>位</b> / ${sim.run.length}</span>`);
+    const sec=sim.sectionOf(me.x);
+    setHud(`<span class="chip">${esc(app.race.c||'東京')} <b>${sec}</b></span>
+      <span class="chip">残り <b>${rem}</b>m</span>
+      <span class="chip gold">${me.rank}<b>位</b></span>`);
     // 位置表示板と隊列は毎フレーム書き換えると重いので間引く
     app.uiT=(app.uiT||0)+dt;
     if(app.uiT>0.12 && sim.order){
       app.uiT=0;
-      tmap.innerHTML='<div class="rail"></div><div class="goal"></div>'+
+      tmap.innerHTML=app.mapBase+
         sim.run.map(r=>`<i class="${r.h.npc?'':'me'}" style="left:${clamp(r.x/D*100,0,100)}%;background:${WAKU[r.h.num-1]}"></i>`).join('');
       const ll=$('#liveList'), lead=sim.order[0];
       if(ll) ll.innerHTML=sim.order.map(r=>{
@@ -1733,8 +1913,8 @@ function render(now, dt){
     // フィニッシュ演出の余韻（最後のフレームを保持）
     const sim=app.sim;
     if(sim){
-      const camX=clamp(sim.me.x-12,0,sim.D+20);
-      drawBack(camX,app.race.s); drawTrack(camX,app.race.s,sim.D);
+      const camX=clamp(sim.me.x-16,0,sim.D+20);
+      drawBack(camX,app.race.s); drawTrack(camX,app.race.s,sim.D,0);
       drawField(sim,camX);
     }
     setHud(`<span class="chip gold">GOAL!</span>`);
