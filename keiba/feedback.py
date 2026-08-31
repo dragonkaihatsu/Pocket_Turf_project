@@ -224,3 +224,13 @@ table.wide th:nth-child(3),table.wide td:nth-child(3){{text-align:left}}
 </body>
 </html>
 """
+
+
+def ticket_hit(kind: str, ticket, result: RaceResult) -> bool | None:
+    """買い目1点が実際の着順で的中したかを返す（配当データ不要）。
+
+    kind: "単勝" / "ワイド" / "馬連"
+    ticket: MarkedHorse（単勝）または Ticket（ワイド・馬連）
+    戻り値: True=的中, False=ハズレ, None=着順情報が足りず判定不能
+    """
+    return _is_hit(kind, _ticket_umaban(ticket), result)

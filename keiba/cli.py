@@ -18,6 +18,7 @@ import argparse
 from pathlib import Path
 
 from .betting import make_betting_plan
+from .daily import build_from_config
 from .feedback import RaceResult, generate_feedback_report, load_payouts
 from .marks import assign_marks
 from .models import load_history, load_horses
@@ -64,6 +65,14 @@ def cmd_feedback(args) -> None:
     print(f"書き出し完了: {out_path}")
 
 
+def cmd_daily(args) -> None:
+    html_out = build_from_config(args.config)
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(html_out, encoding="utf-8")
+    print(f"書き出し完了: {out_path}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="競馬予想システム（100点スコアリング）")
     sub = p.add_subparsers(dest="command", required=True)
@@ -83,6 +92,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_feedback.add_argument("--results", required=True, help="結果CSV（馬番,着順）")
     p_feedback.add_argument("--payouts", help="配当CSV（券種,組み合わせ,配当）")
     p_feedback.set_defaults(func=cmd_feedback)
+
+    p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
+    p_daily.add_argument("config", help="開催日設定JSON")
+    p_daily.add_argument("--output", required=True, help="出力HTMLパス")
+    p_daily.set_defaults(func=cmd_daily)
 
     return p
 
