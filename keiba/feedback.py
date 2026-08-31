@@ -60,20 +60,78 @@ def _ticket_umaban(ticket) -> frozenset:
     return frozenset(m.score.horse.umaban for m in ticket.horses)
 
 
-def _settle(tickets, kind: str, payouts: list[Payout]) -> tuple[int, int, list[tuple[str, int]]]:
-    """(投資額, 払戻額, [(表示ラベル, 払戻額), ...]) を返す。"""
+def _confirmed_outside_top_n(result: RaceResult, umaban: int, n: int) -> bool:
+    """umaban の着順が n位以内ではないと確定できるか。
+
+    結果CSVには「上位n頭のうち何頭か」しか記載されていないケースがある
+    （例: 1〜3着だけ分かっていて、他馬の着順は空欄）。その場合でも、
+    1位〜n位の枠が既に他の馬で全て埋まっていれば、この馬はそこに入り
+    得ない＝n位以内ではないと確定できる（クローズドワールド推論）。
+    """
+    c = result.umaban_to_chakujun.get(umaban)
+    if c is not None:
+        return c > n
+    ranks_taken_by_others = {
+        rc for u, rc in result.umaban_to_chakujun.items()
+        if u != umaban and rc is not None and rc <= n
+    }
+    return ranks_taken_by_others == set(range(1, n + 1))
+
+
+def _is_hit(kind: str, combo: frozenset, result: RaceResult) -> bool | None:
+    """実際の着順から、配当データなしでも的中/不的中を判定する。
+    判定に必要な着順情報が欠けている場合は None（判定不能）を返す。
+    """
+    chakujun = {u: result.umaban_to_chakujun.get(u) for u in combo}
+
+    if kind == "単勝":
+        (u,) = tuple(combo)
+        c = chakujun[u]
+        if c is not None:
+            return c == 1
+        return False if _confirmed_outside_top_n(result, u, 1) else None
+
+    if kind in ("ワイド", "馬連"):
+        n = 3 if kind == "ワイド" else 2
+        for u in combo:
+            c = chakujun[u]
+            if c is not None and c > n:
+                return False  # 明示的に n位より下→外れ確定
+            if c is None and _confirmed_outside_top_n(result, u, n):
+                return False  # 他馬で n位までの枠が埋まっている→この馬は入れない＝外れ確定
+        if all(chakujun[u] is not None and chakujun[u] <= n for u in combo):
+            if kind == "ワイド":
+                return True
+            return sorted(chakujun[u] for u in combo) == [1, 2]
+        return None  # 的中/不的中を確定できない
+
+    return None
+
+
+def _settle(
+    tickets, kind: str, payouts: list[Payout], result: RaceResult
+) -> tuple[int, int | None, list[tuple[str, bool | None, int | None]]]:
+    """(投資額, 払戻額(不明なら None), [(表示ラベル, 的中?, 配当円 or None), ...]) を返す。"""
     invest = 0
     payout_total = 0
+    payout_unknown = False
     detail = []
     for t in tickets:
         invest += STAKE_PER_TICKET
         combo = _ticket_umaban(t)
-        hit = next((p for p in payouts if p.kind == kind and p.combo == combo), None)
-        amount = hit.amount if hit else 0
-        payout_total += amount
+        hit = _is_hit(kind, combo, result)
+        matched_payout = next((p for p in payouts if p.kind == kind and p.combo == combo), None)
+        amount = matched_payout.amount if matched_payout else None
+        if hit is None:
+            payout_unknown = True  # 的中したかどうか自体が不明→総払戻も不明
+        elif hit:
+            if amount is None:
+                payout_unknown = True
+            else:
+                payout_total += amount
         label = t.score.horse.name if isinstance(t, MarkedHorse) else t.label
-        detail.append((label, amount))
-    return invest, payout_total, detail
+        detail.append((label, hit, amount))
+    return invest, (None if payout_unknown else payout_total), detail
 
 
 def generate_feedback_report(
@@ -98,21 +156,37 @@ def generate_feedback_report(
         )
 
     sections = []
-    total_invest = total_return = 0
+    total_invest = 0
+    total_return = 0
+    rate_unknown = False
     for kind, tickets in (("単勝", plan.tansho), ("ワイド", plan.wide), ("馬連", plan.umaren)):
-        invest, ret, detail = _settle(tickets, kind, payouts)
+        invest, ret, detail = _settle(tickets, kind, payouts, result)
         total_invest += invest
-        total_return += ret
+        if ret is None:
+            rate_unknown = True
+        else:
+            total_return += ret
+
+        def _hit_label(hit: bool | None) -> str:
+            return "○的中" if hit else ("？判定不能" if hit is None else "✕ハズレ")
+
         detail_rows = "".join(
-            f"<tr><td>{html.escape(label)}</td><td>{amt:,}円</td></tr>" for label, amt in detail
+            f"<tr><td>{html.escape(label)}</td><td>{_hit_label(hit)}</td>"
+            f"<td>{f'{amt:,}円' if amt is not None else ('-' if not hit else '配当不明')}</td></tr>"
+            for label, hit, amt in detail
         )
-        rate = (ret / invest * 100) if invest else 0
+        rate_str = f"{ret / invest * 100:.0f}%" if (ret is not None and invest) else "配当データ不足のため不明"
         sections.append(
-            f"<h3 style='font-size:.9rem;margin:14px 0 4px'>{kind}（投資{invest:,}円 / 払戻{ret:,}円 / "
-            f"回収率{rate:.0f}%）</h3><table class='wide'>{detail_rows}</table>"
+            f"<h3 style='font-size:.9rem;margin:14px 0 4px'>{kind}（投資{invest:,}円 / "
+            f"払戻{f'{ret:,}円' if ret is not None else '不明'} / 回収率{rate_str}）</h3>"
+            f"<table class='wide'><tr><th>買い目</th><th>結果</th><th>配当</th></tr>{detail_rows}</table>"
         )
 
-    overall_rate = (total_return / total_invest * 100) if total_invest else 0
+    overall_rate_str = (
+        f"{total_return / total_invest * 100:.0f}%"
+        if (not rate_unknown and total_invest)
+        else "一部配当データ不足のため算出不可"
+    )
 
     return f"""<!doctype html>
 <html lang="ja">
@@ -144,8 +218,8 @@ table.wide th:nth-child(3),table.wide td:nth-child(3){{text-align:left}}
 {''.join(sections)}
 
 <div class="summary">
-総投資: {total_invest:,}円 ／ 総払戻: {total_return:,}円<br>
-<span class="big">回収率 {overall_rate:.0f}%</span>
+総投資: {total_invest:,}円 ／ 総払戻: {f'{total_return:,}円' if not rate_unknown else '一部不明'}<br>
+<span class="big">回収率 {overall_rate_str}</span>
 </div>
 </body>
 </html>
