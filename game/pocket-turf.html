@@ -353,6 +353,12 @@ input[type=text]{
   width:100%;padding:9px 10px;border-radius:8px;background:#07190f;
   border:1px solid var(--line);color:var(--ink);font-size:15px;font-family:inherit;
 }
+textarea{
+  width:100%;padding:9px 10px;border-radius:8px;background:#07190f;
+  border:1px solid var(--line);color:var(--ink);font-size:12px;
+  font-family:"DotGothic16",monospace;line-height:1.5;resize:vertical;
+  word-break:break-all;
+}
 label.fld{display:block;font-size:11px;color:var(--ink-2);margin:0 0 4px}
 
 .center{text-align:center}
@@ -1277,6 +1283,44 @@ function load(){
   }catch(e){ return null; }
 }
 function wipe(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+/* 端末やブラウザの設定で localStorage が使えないことがある（プライベート
+   ウィンドウ、サイトデータのブロックなど）。その場合は自動セーブが効かないので、
+   下のセーブコードで持ち出せるようにしてある。 */
+function storageOK(){
+  try{ localStorage.setItem('__pt_probe','1'); localStorage.removeItem('__pt_probe'); return true; }
+  catch(e){ return false; }
+}
+function encodeSave(o){
+  try{
+    const bytes=new TextEncoder().encode(JSON.stringify(o||G));
+    let bin=''; bytes.forEach(b=>{ bin+=String.fromCharCode(b); });
+    return 'PT2-'+btoa(bin);
+  }catch(e){ return ''; }
+}
+function decodeSave(code){
+  try{
+    const b64=String(code||'').trim().replace(/^PT2-/i,'').replace(/\s+/g,'');
+    if(!b64) return null;
+    const bin=atob(b64);
+    const o=JSON.parse(new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0))));
+    if(!o||typeof o!=='object') return null;
+    if(typeof o.week!=='number'||typeof o.year!=='number'||typeof o.medals!=='number') return null;
+    if(o.horse===undefined) return null;
+    return o;
+  }catch(e){ return null; }
+}
+/* セーブデータの1行要約（どれを読み込むのか分かるように） */
+function saveSummary(o){
+  if(!o) return null;
+  if(!o.horse) return `愛馬を選ぶところから・${yen(o.medals)}枚`;
+  const h=o.horse;
+  return `${h.name}／${o.year}歳 第${o.week}週／${CLASS_NAME[h.cls]}・${h.races}戦${h.wins}勝／${yen(o.medals)}枚`;
+}
+function enterGame(){
+  if(!G.horse){ app.scene='title'; show('pick'); }
+  else { app.scene='stable'; show(G.tab||'home'); }
+  drawScene();
+}
 
 /* =======================================================================
    6. 画面（下画面）
@@ -1307,17 +1351,56 @@ function raceMeta(r){
 const V = {
   /* ---- タイトル ---- */
   title(){
-    const has=!!load();
-    return `<div class="center" style="padding:14px 4px">
+    const slot=load(), sum=saveSummary(slot), ok=storageOK();
+    return `<div class="center" style="padding:12px 4px">
       <p class="eyebrow">POCKET TURF / 2画面 競馬育成</p>
       <h2 class="big gold" style="margin:6px 0 4px">ポケットターフ</h2>
-      <p class="muted" style="margin:0 0 14px">上画面でレースを観る。下画面で愛馬を鍛える。<br>3年間で頂点を狙う、馬主と馬券のメダルゲーム。</p>
+      <p class="muted" style="margin:0 0 12px">上画面でレースを観る。下画面で愛馬を鍛える。<br>3年間で頂点を狙う、馬主と馬券のメダルゲーム。</p>
       <div class="list">
-        ${has?`<button class="btn primary center wide" data-act="continue">つづきから<small>保存データを読み込む</small></button>`:''}
-        <button class="btn ${has?'':'primary'} center wide" data-act="newgame">はじめから<small>新しい愛馬を迎える</small></button>
+        <button class="btn ${slot?'primary':''} center wide" data-act="continue" ${slot?'':'disabled'}>
+          つづきから<small>${slot?esc(sum):'セーブデータがありません'}</small></button>
+        <button class="btn center wide" data-act="loadscreen">
+          データを読み込む<small>セーブコードから復元する</small></button>
+        <button class="btn ${slot?'':'primary'} center wide" data-act="newgame">
+          はじめから<small>新しい愛馬を迎える</small></button>
         <button class="btn ghost center wide" data-act="help">あそびかた</button>
       </div>
+      ${ok?'':`<div class="card tight" style="margin-top:10px;border-color:#6b332e;text-align:left">
+        <p class="muted" style="margin:0;font-size:11px">この環境では自動セーブが使えない設定になっている。
+        記録タブの<b class="gold">セーブコード</b>を控えておけば、いつでもここから読み込める。</p></div>`}
     </div>`;
+  },
+  /* ---- データの読み込み ---- */
+  loadscreen(){
+    const slot=load(), sum=saveSummary(slot);
+    return `<p class="eyebrow">LOAD / データを読み込む</p>
+      <h2 class="head">セーブデータを選ぶ</h2>
+      <div class="card">
+        <p class="eyebrow">この端末の保存データ</p>
+        ${slot?`<p class="muted" style="margin:0 0 8px;font-size:11.5px">${esc(sum)}</p>
+          <button class="btn primary center wide" data-act="continue" style="min-height:40px">このデータで再開する</button>`
+          :`<p class="muted" style="margin:0;font-size:11.5px">保存データが見つからない。下のセーブコードから復元できる。</p>`}
+      </div>
+      <div class="card">
+        <p class="eyebrow">セーブコードから復元</p>
+        <label class="fld" for="code">記録タブで表示したコードを貼り付ける</label>
+        <textarea id="code" rows="4" placeholder="PT2-..."></textarea>
+        <button class="btn primary center wide" data-act="loadcode" style="min-height:40px;margin-top:8px">読み込む</button>
+      </div>
+      <button class="btn ghost center wide" data-act="back">タイトルへもどる</button>`;
+  },
+  /* ---- セーブコードの書き出し ---- */
+  savecode(){
+    const code=encodeSave();
+    return `<p class="eyebrow">SAVE CODE / セーブコード</p>
+      <h2 class="head">今のデータを持ち出す</h2>
+      <p class="muted" style="margin:-4px 0 9px">このコードを控えておけば、端末を変えても、保存が消えても
+        タイトルの<b class="gold">データを読み込む</b>から元に戻せる。</p>
+      <div class="card">
+        <textarea id="outcode" rows="6" readonly>${esc(code)}</textarea>
+        <button class="btn primary center wide" data-act="copycode" style="min-height:40px;margin-top:8px">コピーする</button>
+      </div>
+      <button class="btn ghost center wide" data-act="backrecord">もどる</button>`;
   },
   help(){
     return `<h2 class="head">あそびかた</h2>
@@ -1605,6 +1688,7 @@ const V = {
       ${past?`<p class="eyebrow">歴代の愛馬</p>${past}`:''}
       <div class="sep"></div>
       <button class="btn center wide" data-act="save" style="margin-bottom:7px">セーブする</button>
+      <button class="btn center wide" data-act="showcode" style="margin-bottom:7px">セーブコードを表示</button>
       <button class="btn danger center wide" data-act="reset">セーブデータを消す</button>`;
   },
   /* ---- 出走登録・馬券 ---- */
@@ -2094,6 +2178,27 @@ function retire(){
    ======================================================================= */
 const ACT = {
   newgame(){ G=blank(); SFX.boot(); SFX.tap(); show('pick'); app.scene='stable'; },
+  loadscreen(){ SFX.tap(); show('loadscreen'); },
+  loadcode(){
+    const el=$('#code'), o=decodeSave(el&&el.value);
+    if(!o){ SFX.err(); toast('コードを読み取れなかった'); return; }
+    G=o; SFX.boot(); SFX.ok(); save();
+    toast('データを読み込んだ');
+    enterGame();
+  },
+  showcode(){ SFX.tap(); show('savecode'); },
+  backrecord(){ SFX.tap(); show('record'); },
+  copycode(){
+    const el=$('#outcode'); if(!el) return;
+    el.select(); el.setSelectionRange(0,999999);
+    const done=()=>{ SFX.coin(); toast('コピーした'); };
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(el.value).then(done,()=>{ toast('長押しでコピーしてください'); });
+    }else{
+      try{ document.execCommand('copy'); done(); }
+      catch(e){ toast('長押しでコピーしてください'); }
+    }
+  },
   continue(){ const s=load(); if(!s){SFX.err();return;} G=s; SFX.boot(); SFX.ok();
     if(!G.horse){ show('pick'); } else { app.scene='stable'; show(G.tab||'home'); }
     drawScene(); },
