@@ -572,7 +572,7 @@ const COURSES = {
   函館:{straight:262, curve:0.95, slope:0.20}
 };
 /* 隠しレース（SG）の舞台。国ごとに性格を変えてある。 */
-COURSES.アラビア={straight:600, curve:0.15, slope:0.10};  // 広く平坦、長い直線
+COURSES.レジェンド={straight:400, curve:0.80, slope:0.95}; // 小回りの急坂。すべてを問う
 COURSES.アメリカ={straight:320, curve:0.90, slope:0.05};    // 小回りの平坦オーバル
 COURSES.チャイナ={straight:430, curve:0.50, slope:0.30};
 COURSES.パリ={straight:533, curve:0.35, slope:0.60};      // 長い直線に急坂
@@ -587,7 +587,9 @@ const courseTags = r => {
 };
 const courseLine = r => `${r.c||'東京'} 直線${courseOf(r).straight}m ${courseTags(r).join('・')}`;
 
-const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:26000, SG:60000};
+/* 賞金はメダルの蛇口。G1を半分に、SGを1割に絞ってある。ここを緩めると
+   売店のブランデーが無限に買えるようになり、育成そのものが要らなくなる。 */
+const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:13000, SG:6000};
 const COND_PRIZE  = [900,1600,2400,3400];
 /* 1年＝50週。w がそのレースの開催週（1〜50）。 */
 const WEEKS_PER_YEAR = 50;
@@ -646,13 +648,18 @@ const OMEN_RATE = 0.18;
 const SG_NEED_G1 = 2;
 const seasonOf = w => (w>=9&&w<=21)?'春' : (w>=22&&w<=34)?'夏' : (w>=35&&w<=47)?'秋' : '冬';
 const sgReady = h => (h && (h.g1w||0) >= SG_NEED_G1);
+/* 四季の4カップ。これを全部勝った馬にだけ、最後のレジェンドカップが見える。 */
+const SG_TOUR = ['チャイナカップ','アメリカンカップ','ブリテンカップ','パリカップ'];
+const legendReady = h => sgReady(h) && SG_TOUR.every(n=>wonRace(h,n));
+const tourWon = h => SG_TOUR.filter(n=>wonRace(h,n)).length;
 const SG_RACES = [
   {n:'チャイナカップ',     w:1,  d:1200, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'チャイナ',
    theme:'china',   logo:'China CUP',   ink:'#ff8fc0', omen:'パンダ',
    cond:'G1を2勝する', test:sgReady},
-  {n:'アラビアンカップ',   w:12, d:2000, s:'ダート', g:'SG', cls:1, age:[4,5],   c:'アラビア',
-   theme:'arabian', logo:'Arabian CUP', ink:'#ffd23f', omen:'スフィンクス',
-   cond:'G1を2勝する', test:sgReady},
+  /* 最後の一戦。相手は上限いっぱいの108で、四季のカップを総なめにしないと現れない。 */
+  {n:'レジェンドカップ',   w:49, d:2000, s:'ダート', g:'SG', cls:1, age:[4,5],   c:'レジェンド',
+   theme:'legend',  logo:'LEGEND CUP',  ink:'#ffd23f', omen:'流れ星', lvl:108,
+   cond:'四季のカップを全制覇する', test:legendReady},
   {n:'ブリテンカップ',     w:33, d:2400, s:'芝',     g:'SG', cls:1, age:[3,4,5], c:'ブリテン',
    theme:'britain', logo:'Britain CUP', ink:'#ff9ad2', omen:'金のビッグベン',
    cond:'G1を2勝する', test:sgReady},
@@ -696,7 +703,8 @@ function racesFor(g){
   const cond = (g.week%2===1) ? condRaces(g) : [];
   return sg.concat(cond, list);
 }
-const prizeOf = r => r.g==='jo' ? COND_PRIZE[clamp(r.lv||0,0,3)] : GRADE_PRIZE[r.g];
+const prizeOf = r => r.prize!=null ? r.prize
+  : (r.g==='jo' ? COND_PRIZE[clamp(r.lv||0,0,3)] : GRADE_PRIZE[r.g]);
 /* 次に出走できる週を先読みする（50週あるので目安がないと待ち方が分からない） */
 function nextRaceInfo(){
   for(let k=1;k<=WEEKS_PER_YEAR*3;k++){
@@ -813,9 +821,12 @@ function ratingOf(h, race){
 }
 
 /* ライバル生成：クラスに応じた地力 */
+/* 相手のレベル。race.lvl があればそれを使う（レジェンドカップだけが上限を使う） */
+const fieldLevel = race => race.lvl!=null ? race.lvl
+  : (race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g]);
 function makeField(g, race){
-  const lvl = race.g==='jo' ? 34+ (race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g];
-  const field=[];
+  const lvl = fieldLevel(race);
+  const field=[], used=new Set([g.horse&&g.horse.name]);
   for(let i=0;i<7;i++){
     const b = clamp(lvl + rint(-9,9), 22, 108);
     const r = newHorse({base:b});
@@ -823,6 +834,9 @@ function makeField(g, race){
     r.fatigue = rint(0,25);
     r.npc = true;
     if(Math.random()<0.45) r.name = pick(MOB_NAMES);
+    // 同じ名前が2頭並ぶと着順表が読めなくなる
+    for(let t=0; t<12 && used.has(r.name); t++) r.name = pick(MOB_NAMES);
+    used.add(r.name);
     field.push(r);
   }
   field.push(g.horse);
@@ -833,12 +847,14 @@ function makeField(g, race){
 }
 /* 観戦専用：愛馬を含まない8頭立てを作る */
 function makeWatchField(race){
-  const lvl = race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g];
-  const field=[];
+  const lvl = fieldLevel(race);
+  const field=[], used=new Set();
   for(let i=0;i<8;i++){
     const r=newHorse({base:clamp(lvl+rint(-9,9),22,108)});
     r.cond=rint(45,92); r.fatigue=rint(0,25); r.npc=true;
     if(Math.random()<0.45) r.name = pick(MOB_NAMES);
+    for(let t=0; t<12 && used.has(r.name); t++) r.name = pick(MOB_NAMES);
+    used.add(r.name);
     field.push(r);
   }
   field.forEach((h,i)=>{ h.num=i+1; });
@@ -1085,37 +1101,61 @@ function drawTheme(sg, camX, omen){
   const par=f=>-((camX*f)%(W*1.5));
   const sky=g.createLinearGradient(0,0,0,HZ);
 
-  if(sg.theme==='arabian'){
-    sky.addColorStop(0,'#3b2a5e'); sky.addColorStop(.55,'#c96a3c'); sky.addColorStop(1,'#efc07a');
+  if(sg.theme==='legend'){
+    // 星空と、地平線に立つ巨大な金の優勝杯。吉兆は流れ星。
+    sky.addColorStop(0,'#090b2a'); sky.addColorStop(.6,'#241a4d'); sky.addColorStop(1,'#5b3a6b');
     g.fillStyle=sky; g.fillRect(0,0,W,HZ);
-    g.fillStyle='rgba(255,220,140,.9)';
-    g.beginPath(); g.arc(W*.80,HZ*.62,H*.05,0,7); g.fill();
-    const ox=par(0.10);
-    for(let k=-1;k<2;k++){
-      const bx=ox+k*W*1.5;
-      const pyr=(cx,w,hh)=>{
-        g.fillStyle='#7a4f2c';
-        g.beginPath(); g.moveTo(cx,HZ-hh); g.lineTo(cx-w,HZ); g.lineTo(cx+w,HZ); g.closePath(); g.fill();
-        g.fillStyle='rgba(255,214,150,.30)';
-        g.beginPath(); g.moveTo(cx,HZ-hh); g.lineTo(cx+w,HZ); g.lineTo(cx,HZ); g.closePath(); g.fill();
-      };
-      pyr(bx+W*.24,W*.20,H*.25); pyr(bx+W*.58,W*.13,H*.16);
-      if(omen){                                      // スフィンクス
-        const sx=bx+W*.78, sy=HZ-H*.03;
-        g.fillStyle='#8d5f34';
-        g.beginPath(); g.ellipse(sx,sy-H*.05,W*.115,H*.05,0,0,7); g.fill();
-        g.beginPath(); g.arc(sx+W*.082,sy-H*.125,H*.045,0,7); g.fill();
-        g.fillStyle='#6d4526';                       // ネメス頭巾
-        g.beginPath(); g.moveTo(sx+W*.038,sy-H*.150); g.lineTo(sx+W*.130,sy-H*.150);
-        g.lineTo(sx+W*.120,sy-H*.070); g.lineTo(sx+W*.048,sy-H*.070); g.closePath(); g.fill();
-        g.fillStyle='#3a2515';
-        g.beginPath(); g.arc(sx+W*.095,sy-H*.130,H*.008,0,7); g.fill();
-      }
+    for(let i=0;i<70;i++){                           // 星（席と同じく位置で決める。乱数だと瞬きが暴れる）
+      const sx=hash1(i*3+1)*W, sy=hash1(i*3+2)*HZ*.85, tw=0.45+0.55*Math.sin(t/700+i);
+      g.globalAlpha=0.25+hash1(i*3+3)*0.6*tw;
+      g.fillStyle='#fff6d0'; g.fillRect(sx,sy,1.6,1.6);
     }
-    g.fillStyle='#cf9a5c';
-    g.beginPath(); g.moveTo(0,HZ);
-    for(let x=0;x<=W;x+=W/8) g.lineTo(x,HZ-H*.012+Math.sin(x/W*4+1)*H*.012);
-    g.lineTo(W,HZ+H*.05); g.lineTo(0,HZ+H*.05); g.closePath(); g.fill();
+    g.globalAlpha=1;
+    const ox=par(0.08);
+    for(let k=-1;k<2;k++){
+      const bx=ox+k*W*1.5, cx=bx+W*.42, base=HZ, hh=H*.30;
+      const cup=g.createLinearGradient(cx-W*.12,base-hh,cx+W*.12,base);
+      cup.addColorStop(0,'#f7e08a'); cup.addColorStop(.5,'#d0a02c'); cup.addColorStop(1,'#7a5a12');
+      g.fillStyle=cup;
+      g.beginPath();                                 // 杯
+      g.moveTo(cx-W*.11,base-hh);
+      g.bezierCurveTo(cx-W*.10,base-hh*.45, cx-W*.05,base-hh*.34, cx,base-hh*.34);
+      g.bezierCurveTo(cx+W*.05,base-hh*.34, cx+W*.10,base-hh*.45, cx+W*.11,base-hh);
+      g.closePath(); g.fill();
+      g.fillRect(cx-W*.012,base-hh*.34,W*.024,hh*.20);   // 脚
+      g.fillRect(cx-W*.055,base-hh*.14,W*.11,hh*.06);    // 台座
+      g.fillRect(cx-W*.075,base-hh*.08,W*.15,hh*.08);
+      g.strokeStyle='#e6ca3a'; g.lineWidth=Math.max(2,W*.008);
+      [-1,1].forEach(sgn=>{                          // 取っ手
+        g.beginPath();
+        g.arc(cx+sgn*W*.115, base-hh*.78, H*.045, -Math.PI/2, Math.PI/2, sgn<0);
+        g.stroke();
+      });
+      [-1,1].forEach(sgn=>{                          // 篝火
+        const fx=cx+sgn*W*.26, fy=base-H*.02, fl=H*.045*(0.85+0.15*Math.sin(t/120+sgn));
+        g.fillStyle='#3a2a12'; g.fillRect(fx-W*.012,fy-H*.05,W*.024,H*.05);
+        const fg=g.createLinearGradient(fx,fy-H*.05-fl,fx,fy-H*.05);
+        fg.addColorStop(0,'rgba(255,240,160,.15)'); fg.addColorStop(.5,'#ffb03a'); fg.addColorStop(1,'#ff6a2a');
+        g.fillStyle=fg;
+        g.beginPath(); g.moveTo(fx,fy-H*.05-fl);
+        g.quadraticCurveTo(fx+W*.020,fy-H*.05-fl*.35, fx,fy-H*.05);
+        g.quadraticCurveTo(fx-W*.020,fy-H*.05-fl*.35, fx,fy-H*.05-fl);
+        g.fill();
+      });
+    }
+    if(omen){                                        // 流れ星
+      const ph=((t/2600)%1), sx=W*(1.05-ph*1.25), sy=HZ*(0.12+ph*0.35);
+      const tail=g.createLinearGradient(sx,sy,sx+W*.16,sy-H*.05);
+      tail.addColorStop(0,'rgba(255,255,255,.95)'); tail.addColorStop(1,'rgba(255,255,255,0)');
+      g.strokeStyle=tail; g.lineWidth=2.4;
+      g.beginPath(); g.moveTo(sx,sy); g.lineTo(sx+W*.16,sy-H*.05); g.stroke();
+      g.fillStyle='#fffbe8';
+      g.beginPath(); g.arc(sx,sy,2.6,0,7); g.fill();
+    }
+    g.fillStyle='#241a33';                           // 黒い岩肌の地面
+    g.fillRect(0,HZ-H*.008,W,H*.06);
+    g.fillStyle='rgba(212,168,58,.35)';              // 金の鉱脈
+    for(let x=0;x<W;x+=W/10) g.fillRect(x+((camX*0.3)%(W/10)),HZ+H*.004,W/26,1.5);
   }
 
   else if(sg.theme==='china'){
@@ -1934,7 +1974,7 @@ const V = {
     <div class="card"><p class="eyebrow">7 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
     <div class="card"><p class="eyebrow">8 / 招待状</p>
-      <p class="muted"><b class="gold">G1を${SG_NEED_G1}勝</b>した馬のもとには招待状が届く。カレンダーに載っていない各国のカップに、<b class="gold">春・夏・秋・冬</b>と巡って挑めるようになる。1着賞金はG1の2倍以上。条件は愛馬ごとに数えるので、代が替わればまた一からになる。</p></div>
+      <p class="muted"><b class="gold">G1を${SG_NEED_G1}勝</b>した馬のもとには招待状が届く。カレンダーに載っていない各国のカップに、<b class="gold">春・夏・秋・冬</b>と巡って挑めるようになる。四季の4つを<b class="gold">すべて制覇</b>すると、年の暮れに<b class="gold">レジェンドカップ</b>が現れる。相手は上限いっぱいの最強馬ばかりで、賞金では割に合わない。名前を残すためだけの一戦。条件は愛馬ごとに数えるので、代が替わればまた一からになる。</p></div>
     <div class="card"><p class="eyebrow">9 / コース</p>
       <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
       ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
@@ -2219,16 +2259,28 @@ const V = {
           <span class="gauge"><i style="width:${clamp(g1w/SG_NEED_G1*100,0,100)}%;background:${
             open?'var(--gold)':'linear-gradient(90deg,#2f9a63,#6ff0a0)'}"></i></span>
           <div class="sep"></div>
-          ${SG_RACES.slice().sort((a,b)=>a.w-b.w).map(r=>{
-            const found=(G.sgFound||[]).indexOf(r.n)>=0;
+          ${SG_RACES.filter(r=>r.theme!=='legend').sort((a,b)=>a.w-b.w).map(r=>{
+            const found=(G.sgFound||[]).indexOf(r.n)>=0, done=wonRace(h,r.n);
             return `<div class="row between" style="font-size:11.5px;padding:3px 0">
               <span><span class="pill jo" style="margin-right:5px">${seasonOf(r.w)}</span>
                 ${open||found?`<b style="color:${r.ink}">${esc(r.n)}</b>`
                   :'<span style="color:var(--ink-3)">？？？</span>'}</span>
-              <span class="dot" style="font-size:10px;color:${found?'var(--gold)':'var(--ink-3)'}">${
-                found?'制覇':(open?`第${r.w}週`:'未招待')}</span>
+              <span class="dot" style="font-size:10px;color:${done?'var(--gold)':'var(--ink-3)'}">${
+                done?'制覇':(open?`第${r.w}週`:'未招待')}</span>
             </div>`;
           }).join('')}
+          ${(()=>{                                   // 最後の一戦は四季を全部勝ってから見える
+            const lg=SG_RACES.find(r=>r.theme==='legend'), n=tourWon(h);
+            if(!open) return '';
+            return `<div class="sep"></div>
+              <div class="row between" style="font-size:11.5px;padding:2px 0">
+                <span><span class="pill" style="margin-right:5px;background:#3a2c07;color:var(--gold)">最終</span>
+                  ${legendReady(h)?`<b style="color:${lg.ink}">${esc(lg.n)}</b>`
+                    :'<span style="color:var(--ink-3)">？？？</span>'}</span>
+                <span class="dot" style="font-size:10px;color:${wonRace(h,lg.n)?'var(--gold)':'var(--ink-3)'}">${
+                  wonRace(h,lg.n)?'制覇':(legendReady(h)?`第${lg.w}週`:`四季 ${n} / ${SG_TOUR.length}`)}</span>
+              </div>`;
+          })()}
         </div>`;
       })()}
       ${past?`<p class="eyebrow">歴代の愛馬</p>${past}`:''}
@@ -2424,13 +2476,26 @@ const V = {
         <div class="row between"><b>収支</b><b class="num ${d.net>=0?'ok':'hot'}">${d.net>=0?'+':''}${yen(d.net)}</b></div>
       </div>
       ${d.up?`<div class="card tight"><p class="eyebrow">昇級</p><p style="margin:0;font-size:12.5px" class="gold">${esc(d.up)}</p></div>`:''}
-      ${(d.unlocked&&d.unlocked.length)?`
+      ${(()=>{                                     // 最後の一戦が開いたときは別の報せにする
+        const lg=SG_RACES.find(x=>x.theme==='legend');
+        if(!(d.unlocked||[]).includes(lg.n)) return '';
+        return `<div class="card pop" style="border-color:var(--gold);background:#2a1408">
+          <p class="eyebrow gold">THE LAST INVITATION / 最後の招待状</p>
+          <p class="muted" style="margin:0 0 8px;font-size:11.5px">
+            四季のカップを<b class="gold">すべて制した</b>馬のもとに、最後の一戦の報せが届いた。
+            年の暮れ・第${lg.w}週、<b style="color:${lg.ink}">${esc(lg.n)}</b>。
+            ${lg.c}競馬場の${lg.s}${lg.d}m、小回りの急坂。集まるのは上限いっぱいまで仕上げた馬ばかりで、
+            賞金は <b class="num">${yen(prizeOf(lg))}</b> しかない。それでも勝てば、名前だけが残る。</p>
+        </div>`;
+      })()}
+      ${(d.unlocked&&d.unlocked.filter(n=>n!=='レジェンドカップ').length)?`
         <div class="card pop" style="border-color:var(--gold);background:#241d0b">
           <p class="eyebrow gold">INVITATION / 招待状</p>
           <p class="muted" style="margin:0 0 8px;font-size:11.5px">
-            G1を${SG_NEED_G1}勝した馬にだけ届く。四季を巡る5つのカップに出走できる。
-            どれも1着賞金 <b class="gold num">${yen(GRADE_PRIZE.SG)}</b>。</p>
-          ${SG_RACES.slice().sort((a,b)=>a.w-b.w).map(sg=>`
+            G1を${SG_NEED_G1}勝した馬にだけ届く。四季を巡る4つのカップに出走できる。
+            1着賞金は <b class="gold num">${yen(GRADE_PRIZE.SG)}</b> と軽い。稼ぐ場ではなく、名を残す場。
+            4つすべて勝てば、年の暮れに最後の一戦が待っている。</p>
+          ${SG_RACES.filter(x=>x.theme!=='legend').sort((a,b)=>a.w-b.w).map(sg=>`
             <div class="row between" style="font-size:11.5px;padding:3px 0">
               <span><span class="pill jo" style="margin-right:5px">${seasonOf(sg.w)}</span>
                 <b style="color:${sg.ink}">${esc(sg.n)}</b></span>
@@ -3108,7 +3173,8 @@ function boot(){
 }
 /* バランス調整・検証用のフック（走破時計や着差を外から測れるようにする） */
 window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
-                      SG_RACES, racesFor, sgOpen, sgReady, seasonOf, SG_NEED_G1, GRADE_PRIZE,
+                      SG_RACES, racesFor, sgOpen, sgReady, legendReady, tourWon, SG_TOUR,
+                      seasonOf, SG_NEED_G1, GRADE_PRIZE, prizeOf, fieldLevel,
                       get state(){ return G; } };
 
 try{ boot(); }
