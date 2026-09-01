@@ -581,6 +581,26 @@ const STAT_KEYS = [['sp','スピード'],['st','スタミナ'],['pw','パワー'
    馬券の的中で増えたメダルを能力に還元する。調教と違い週を消費しない代わりに、
    伸ばせるのは成長上限＋ITEM_OVER まで。ここが青天井だとレースが壊れる。 */
 const ITEM_OVER = 20;
+/* --- アルバイト ---
+   メダルが尽きたときの救済措置。4週（約1ヶ月）育成を止める代わりに稼ぐ。
+   期待値はピザが最も高く、実験台は一撃狙い。どれも「育成の時間」との交換なので、
+   稼ぎ続けると馬が仕上がらない。ここが釣り合っている限りバランスは壊れない。 */
+const WORK_WEEKS = 4;
+const JOBS = [
+  {k:'皿洗い',         rate:.75, win:500,  lose:300,
+   d:'堅実。ただし25%の確率で皿を割る',
+   okTxt:'洗い場を任され、4週間を無事に勤め上げた。',
+   ngTxt:'皿を割ってしまい、弁償ぶんを差し引かれた。'},
+  {k:'ピザの配達',     rate:.50, win:1000, lose:500,
+   d:'実入りは大きいが、半分は失敗する',
+   okTxt:'一度も遅れずに届けきり、店長に感謝された。',
+   ngTxt:'ピザが崩れてクレーム。詫び代を引かれた。'},
+  {k:'研究室の実験台', rate:.25, win:2500, lose:0,
+   d:'一撃はあるが、4回に3回は無報酬',
+   okTxt:'治験は最後まで完了。破格の謝礼を受け取った。',
+   ngTxt:'途中で体調を崩し、謝礼は出なかった。'}
+];
+const jobEV = j => Math.round(j.rate*j.win + (1-j.rate)*j.lose);
 const ITEMS = [
   {k:'コーヒー',   p:100,  fat:20,  cond:5,  up:1,  mode:'random',
    d:'疲労を20回復し、ランダムな能力が1上がる'},
@@ -1244,9 +1264,11 @@ const V = {
       <p class="muted">出走前にメダルで単勝・複勝を購入。愛馬に賭けても、ライバルに賭けてもよい。賞金と払戻の両方がメダルになる。</p></div>
     <div class="card"><p class="eyebrow">4 / 売店</p>
       <p class="muted">的中で貯めたメダルは売店で<b class="gold">コーヒー・ビール・シャンパン・ブランデー</b>に換えられる。週を使わずに能力を伸ばせるが、上限＋${ITEM_OVER}までしか効かない。</p></div>
-    <div class="card"><p class="eyebrow">5 / レース操作</p>
+    <div class="card"><p class="eyebrow">5 / アルバイト</p>
+      <p class="muted">メダルが尽きたら<b class="gold">アルバイト</b>で立て直せる。${WORK_WEEKS}週のあいだ調教も出走もできない代わりに、皿洗い・ピザの配達・研究室の実験台で稼ぐ。安全に取るか一撃を狙うかは自由だが、稼ぎ続けると馬が仕上がらない。</p></div>
+    <div class="card"><p class="eyebrow">6 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
-    <div class="card"><p class="eyebrow">6 / コース</p>
+    <div class="card"><p class="eyebrow">7 / コース</p>
       <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
       ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
       ・小回りはコーナーで振られるので<b>賢さ</b>が要る。差し・追込は外を回らされる<br>
@@ -1303,7 +1325,8 @@ const V = {
       return `<p class="eyebrow">${G.year}歳 第${G.week}週</p>
         <h2 class="head hot">休養中</h2>
         <div class="card"><p class="muted">${esc(h.name)}は放牧に出ている。あと <b class="gold num">${h.rest}</b> 週で復帰予定。</p></div>
-        <button class="btn primary center wide" data-act="advance">週を進める</button>`;
+        <button class="btn primary center wide" data-act="advance" style="margin-bottom:7px">週を進める</button>
+        <button class="btn ghost center wide" data-act="work">アルバイトに出る<small>${WORK_WEEKS}週・待つあいだに稼ぐ</small></button>`;
     }
     const rs=racesFor(G);
     const fat = Math.round(h.fatigue);
@@ -1350,6 +1373,17 @@ const V = {
       <div class="grid2" style="margin-bottom:9px">${menus}
         <button class="btn" data-act="rest"><span>休養</span><small>疲労-28・調子回復</small></button>
       </div>
+      ${G.medals<500?`
+        <div class="card tight" style="border-color:#5c4a1e;background:#1e1a0d">
+          <div class="row between" style="margin-bottom:6px">
+            <b style="font-size:12px" class="gold">メダルが心細い</b>
+            <span class="num" style="font-size:11px;color:var(--gold)">◉ ${yen(G.medals)}</span>
+          </div>
+          <p class="muted" style="margin:0 0 7px;font-size:11px">馬券も売店もメダルが要る。${WORK_WEEKS}週を使えばアルバイトで立て直せる。</p>
+          <button class="btn primary center wide" data-act="work" style="min-height:38px">アルバイトに出る</button>
+        </div>`:`
+        <button class="btn center wide" data-act="work" style="min-height:40px;margin-bottom:7px">
+          アルバイトに出る<small>${WORK_WEEKS}週・育成を止めてメダルを稼ぐ</small></button>`}
       <button class="btn ghost center wide" data-act="save" style="min-height:40px">
         セーブする<small>進行は自動でも保存される</small></button>`;
   },
@@ -1393,6 +1427,61 @@ const V = {
         <div class="sep"></div>
         <div class="row between"><span class="muted">ファン</span><b class="num">${yen(h.fans)}人</b></div>
       </div>`;
+  },
+  /* ---- アルバイト ---- */
+  work(){
+    // この4週で取り逃がすレースを先に見せる（育成より痛い場合がある）
+    const miss=[];
+    for(let k=0;k<WORK_WEEKS;k++){
+      const t=G.week+k-1;
+      const week=t%WEEKS_PER_YEAR+1, year=G.year+Math.floor(t/WEEKS_PER_YEAR);
+      if(year>5) break;
+      racesFor({horse:G.horse, year, week}).forEach(r=>miss.push({r,week,year}));
+    }
+    const cards=JOBS.map((j,i)=>`
+      <div class="card tight">
+        <div class="row between" style="margin-bottom:4px">
+          <b style="font-size:13.5px">${j.k}</b>
+          <span class="dot" style="font-size:11px;color:var(--cyan)">成功率 ${Math.round(j.rate*100)}%</span>
+        </div>
+        <p class="muted" style="margin:0 0 6px;font-size:11px">${j.d}</p>
+        <div class="row between" style="font-size:11px;margin-bottom:3px">
+          <span class="muted">成功</span><b class="num gold">+${yen(j.win)}</b></div>
+        <div class="row between" style="font-size:11px;margin-bottom:3px">
+          <span class="muted">失敗</span><b class="num ${j.lose?'':'hot'}">+${yen(j.lose)}</b></div>
+        <div class="row between" style="font-size:11px;margin-bottom:7px">
+          <span class="muted">平均</span><b class="num cyan">${yen(jobEV(j))}</b></div>
+        <button class="btn primary center wide" data-act="dojob" data-i="${i}" style="min-height:38px">${j.k}をやる</button>
+      </div>`).join('');
+    return `<div class="row between" style="margin-bottom:6px">
+        <p class="eyebrow" style="margin:0">PART-TIME / アルバイト</p>
+        <span class="dot gold" style="font-size:12px">◉ ${yen(G.medals)}</span>
+      </div>
+      <h2 class="head">${WORK_WEEKS}週を売ってメダルに換える</h2>
+      <p class="muted" style="margin:-4px 0 9px">その間は調教も出走もできない。愛馬の疲労だけは20抜ける。</p>
+      ${miss.length?`<div class="card tight" style="border-color:#5c2b28">
+        <p class="eyebrow" style="color:#ff9f8b">見送ることになるレース</p>
+        ${miss.slice(0,5).map(m=>`<div class="row between" style="font-size:11px;padding:2px 0">
+          <span>${esc(m.r.n)}</span>
+          <span class="dot" style="color:var(--ink-3)">${m.year}歳${m.week}週</span></div>`).join('')}
+      </div>`:''}
+      ${cards}
+      <button class="btn ghost center wide" data-act="backhome">やめて厩舎へもどる</button>`;
+  },
+  /* ---- アルバイトの結果 ---- */
+  workresult(d){
+    return `<div class="center pop" style="margin-bottom:10px">
+        <p class="eyebrow">${esc(d.job.k)}</p>
+        <div class="rank ${d.ok?'gold':''}" style="font-size:38px">+${yen(d.pay)}</div>
+        <p class="${d.ok?'ok':'hot'}" style="margin:4px 0 0;font-size:12px;font-weight:700">${d.ok?'成功':'失敗'}</p>
+      </div>
+      <div class="card"><p class="muted" style="margin:0">${d.ok?d.job.okTxt:d.job.ngTxt}</p></div>
+      <div class="card tight">
+        <div class="row between"><span class="muted">メダル残高</span><b class="num gold">${yen(G.medals)}</b></div>
+        <div class="sep"></div>
+        <div class="row between"><span class="muted">経過</span><b class="num">${WORK_WEEKS}週</b></div>
+      </div>
+      <button class="btn primary center wide" data-act="backhome">厩舎へもどる</button>`;
   },
   /* ---- 売店 ---- */
   shop(){
@@ -1640,7 +1729,8 @@ function tickerStep(){
    ======================================================================= */
 function logLine(t){ G.log.unshift(t); G.log.length=Math.min(G.log.length,30); }
 
-function advanceWeek(){
+/* silent=true のときは画面を書き換えない（アルバイトでまとめて週を送る用） */
+function advanceWeek(silent){
   const h=G.horse;
   h.fatigue=clamp(h.fatigue-2.5,0,100);
   h.cond=clamp(h.cond + (h.fatigue>70?-5:h.fatigue<25?4:1) + rint(-3,3), 5, 100);
@@ -1649,9 +1739,28 @@ function advanceWeek(){
   if(G.week>WEEKS_PER_YEAR){ G.week=1; G.year++; }
   if(G.year>5){ return retire(); }
   save();
-  show('home');
-  drawScene();
+  if(!silent){ show('home'); drawScene(); }
   return true;
+}
+/* まとめて週を送る。引退に達したら false（引退画面がすでに出ている）。 */
+function advanceWeeks(n){
+  for(let i=0;i<n;i++){ if(advanceWeek(true)===false) return false; }
+  return true;
+}
+function doWork(i){
+  const j=JOBS[i], h=G.horse;
+  if(!j||!h) return;
+  const ok = Math.random() < j.rate;
+  const pay = ok ? j.win : j.lose;
+  G.medals += pay;
+  h.fatigue = clamp(h.fatigue-20,0,100);   // 馬は4週間ゆっくり休める
+  logLine(`${j.k} +${pay}枚`);
+  ok ? SFX.coin() : SFX.err();
+  say(`${j.k}のアルバイト。${ok?j.okTxt:j.ngTxt} ${pay}枚。`, ok);
+  if(advanceWeeks(WORK_WEEKS)===false) return;   // 途中で引退した
+  save();
+  show('workresult',{job:j, ok, pay});
+  drawScene();
 }
 
 function doTrain(i){
@@ -1854,6 +1963,9 @@ const ACT = {
     show('home'); save(); drawScene();
   },
   save(){ save(); SFX.coin(); toast('セーブしました'); },
+  work(){ SFX.tap(); show('work'); },
+  dojob(d){ doWork(+d.i); },
+  backhome(){ SFX.tap(); show('home'); },
   buy(d){ buyItem(+d.i); },
   pickstat(d){ app.shopStat=d.k; SFX.tap(); show('shop'); },
   train(d){ doTrain(+d.i); },
@@ -2047,7 +2159,7 @@ function boot(){
   requestAnimationFrame(t=>{ last=t; loop(t); });
 }
 /* バランス調整・検証用のフック（走破時計や着差を外から測れるようにする） */
-window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, ITEMS, blank,
+window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
                       get state(){ return G; } };
 
 try{ boot(); }
