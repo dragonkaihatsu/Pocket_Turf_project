@@ -190,7 +190,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;font-f
   box-shadow:0 0 0 1px #000 inset;
 }
 .toast{
-  position:absolute; left:50%; top:12px; z-index:5;
+  position:absolute; left:50%; top:12px; z-index:5; max-width:86%; text-align:center;
   transform:translateX(-50%) translateY(-8px); opacity:0;
   background:#1d2431; border:1px solid var(--gold); color:var(--gold);
   padding:8px 16px; border-radius:99px; font-size:12px; font-weight:700;
@@ -378,6 +378,7 @@ label.fld{display:block;font-size:11px;color:var(--ink-2);margin:0 0 4px}
       <nav class="tabs" id="tabs" hidden>
         <button data-tab="home" aria-selected="true">行動</button>
         <button data-tab="horse" aria-selected="false">愛馬</button>
+        <button data-tab="shop" aria-selected="false">売店</button>
         <button data-tab="record" aria-selected="false">記録</button>
       </nav>
     </div>
@@ -484,80 +485,112 @@ const courseLine = r => `${r.c||'東京'} 直線${courseOf(r).straight}m ${cours
 
 const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:26000};
 const COND_PRIZE  = [900,1600,2400,3400];
+/* 1年＝50週。w がそのレースの開催週（1〜50）。 */
+const WEEKS_PER_YEAR = 50;
 const RACES = [
   // 3歳限定
-  {n:'共同通信杯',      m:2,  d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'東京'},
-  {n:'弥生賞',          m:3,  d:2000, s:'芝', g:'G2', cls:1, age:[3], c:'中山'},
-  {n:'皐月賞',          m:4,  d:2000, s:'芝', g:'G1', cls:1, age:[3], c:'中山'},
-  {n:'日本ダービー',    m:5,  d:2400, s:'芝', g:'G1', cls:1, age:[3], c:'東京'},
-  {n:'ユニコーンS',     m:6,  d:1600, s:'ダート', g:'G3', cls:1, age:[3], c:'東京'},
-  {n:'ラジオNIKKEI賞',  m:7,  d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'福島'},
-  {n:'セントライト記念',m:9,  d:2200, s:'芝', g:'G2', cls:1, age:[3], c:'中山'},
-  {n:'菊花賞',          m:10, d:3000, s:'芝', g:'G1', cls:1, age:[3], c:'京都'},
+  {n:'共同通信杯',      w:7,  d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'東京'},
+  {n:'弥生賞',          w:10, d:2000, s:'芝', g:'G2', cls:1, age:[3], c:'中山'},
+  {n:'皐月賞',          w:15, d:2000, s:'芝', g:'G1', cls:1, age:[3], c:'中山'},
+  {n:'日本ダービー',    w:20, d:2400, s:'芝', g:'G1', cls:1, age:[3], c:'東京'},
+  {n:'ユニコーンS',     w:24, d:1600, s:'ダート', g:'G3', cls:1, age:[3], c:'東京'},
+  {n:'ラジオNIKKEI賞',  w:27, d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'福島'},
+  {n:'セントライト記念',w:37, d:2200, s:'芝', g:'G2', cls:1, age:[3], c:'中山'},
+  {n:'菊花賞',          w:42, d:3000, s:'芝', g:'G1', cls:1, age:[3], c:'京都'},
   // 古馬・オープン
-  {n:'日経新春杯',      m:1,  d:2400, s:'芝', g:'G2', cls:4, age:[4,5], c:'京都'},
-  {n:'フェブラリーS',   m:2,  d:1600, s:'ダート', g:'G1', cls:4, age:[4,5], c:'東京'},
-  {n:'中山記念',        m:2,  d:1800, s:'芝', g:'G2', cls:4, age:[4,5], c:'中山'},
-  {n:'高松宮記念',      m:3,  d:1200, s:'芝', g:'G1', cls:4, age:[4,5], c:'中京'},
-  {n:'金鯱賞',          m:3,  d:2000, s:'芝', g:'G2', cls:4, age:[4,5], c:'中京'},
-  {n:'大阪杯',          m:4,  d:2000, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神'},
-  {n:'マイラーズC',     m:4,  d:1600, s:'芝', g:'G2', cls:3, age:[4,5], c:'京都'},
-  {n:'天皇賞（春）',    m:5,  d:3200, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
-  {n:'安田記念',        m:6,  d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
-  {n:'宝塚記念',        m:6,  d:2200, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神'},
-  {n:'函館記念',        m:7,  d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'函館'},
-  {n:'アイビスSD',      m:7,  d:1000, s:'芝', g:'G3', cls:3, age:[4,5], c:'新潟'},
-  {n:'札幌記念',        m:8,  d:2000, s:'芝', g:'G2', cls:4, age:[4,5], c:'札幌'},
-  {n:'エルムS',         m:8,  d:1700, s:'ダート', g:'G3', cls:3, age:[4,5], c:'札幌'},
-  {n:'オールカマー',    m:9,  d:2200, s:'芝', g:'G2', cls:4, age:[4,5], c:'中山'},
-  {n:'スプリンターズS', m:9,  d:1200, s:'芝', g:'G1', cls:4, age:[4,5], c:'中山'},
-  {n:'毎日王冠',        m:10, d:1800, s:'芝', g:'G2', cls:4, age:[4,5], c:'東京'},
-  {n:'天皇賞（秋）',    m:10, d:2000, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
-  {n:'ジャパンカップ',  m:11, d:2400, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
-  {n:'マイルCS',        m:11, d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
-  {n:'福島記念',        m:11, d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'福島'},
-  {n:'チャンピオンズC', m:12, d:1800, s:'ダート', g:'G1', cls:4, age:[4,5], c:'中京'},
-  {n:'有馬記念',        m:12, d:2500, s:'芝', g:'G1', cls:4, age:[3,4,5], c:'中山'}
+  {n:'日経新春杯',      w:3,  d:2400, s:'芝', g:'G2', cls:4, age:[4,5], c:'京都'},
+  {n:'中山記念',        w:6,  d:1800, s:'芝', g:'G2', cls:4, age:[4,5], c:'中山'},
+  {n:'フェブラリーS',   w:8,  d:1600, s:'ダート', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'金鯱賞',          w:11, d:2000, s:'芝', g:'G2', cls:4, age:[4,5], c:'中京'},
+  {n:'高松宮記念',      w:13, d:1200, s:'芝', g:'G1', cls:4, age:[4,5], c:'中京'},
+  {n:'大阪杯',          w:14, d:2000, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神'},
+  {n:'マイラーズC',     w:17, d:1600, s:'芝', g:'G2', cls:3, age:[4,5], c:'京都'},
+  {n:'天皇賞（春）',    w:19, d:3200, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
+  {n:'安田記念',        w:23, d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'宝塚記念',        w:26, d:2200, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神'},
+  {n:'函館記念',        w:29, d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'函館'},
+  {n:'アイビスSD',      w:30, d:1000, s:'芝', g:'G3', cls:3, age:[4,5], c:'新潟'},
+  {n:'エルムS',         w:32, d:1700, s:'ダート', g:'G3', cls:3, age:[4,5], c:'札幌'},
+  {n:'札幌記念',        w:34, d:2000, s:'芝', g:'G2', cls:4, age:[4,5], c:'札幌'},
+  {n:'オールカマー',    w:38, d:2200, s:'芝', g:'G2', cls:4, age:[4,5], c:'中山'},
+  {n:'スプリンターズS', w:39, d:1200, s:'芝', g:'G1', cls:4, age:[4,5], c:'中山'},
+  {n:'毎日王冠',        w:41, d:1800, s:'芝', g:'G2', cls:4, age:[4,5], c:'東京'},
+  {n:'天皇賞（秋）',    w:43, d:2000, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'マイルCS',        w:45, d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
+  {n:'福島記念',        w:46, d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'福島'},
+  {n:'ジャパンカップ',  w:47, d:2400, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'チャンピオンズC', w:48, d:1800, s:'ダート', g:'G1', cls:4, age:[4,5], c:'中京'},
+  {n:'有馬記念',        w:50, d:2500, s:'芝', g:'G1', cls:4, age:[3,4,5], c:'中山'}
 ];
 /* 条件戦は毎月生成（クラスに応じて距離・馬場をローテーション） */
 function condRaces(g){
   const h=g.horse, out=[];
   const dists = [1200,1400,1600,1800,2000,2200,2400];
-  const seed = (g.year*13+g.month*7);
+  const seed = (g.year*13+g.week*7);
   const d1 = dists[(seed)%dists.length], d2 = dists[(seed+3)%dists.length];
   const surf = ((seed>>1)%3===0)?'ダート':'芝';
   // 開催場も月ごとに替える（同じ条件戦でもコース適性で結果が変わる）
   const c1 = COURSE_LIST[seed%COURSE_LIST.length];
   const c2 = COURSE_LIST[(seed+4)%COURSE_LIST.length];
   if(h.cls===0){
-    if(h.races===0 && g.year===3 && g.month<=6)
-      out.push({n:'新馬戦', m:g.month, d:d1, s:surf, g:'jo', cls:0, lv:0, c:c1});
-    out.push({n:'未勝利戦', m:g.month, d:d2, s:'芝', g:'jo', cls:0, lv:0, c:c2});
-    if(g.year>3){ out.length=0; out.push({n:'1勝クラス', m:g.month, d:d2, s:'芝', g:'jo', cls:0, lv:1, c:c2}); }
+    if(h.races===0 && g.year===3 && g.week<=26)
+      out.push({n:'新馬戦', w:g.week, d:d1, s:surf, g:'jo', cls:0, lv:0, c:c1});
+    out.push({n:'未勝利戦', w:g.week, d:d2, s:'芝', g:'jo', cls:0, lv:0, c:c2});
+    if(g.year>3){ out.length=0; out.push({n:'1勝クラス', w:g.week, d:d2, s:'芝', g:'jo', cls:0, lv:1, c:c2}); }
   }else if(h.cls<4){
-    out.push({n:h.cls+'勝クラス', m:g.month, d:d1, s:'芝', g:'jo', cls:h.cls, lv:h.cls, c:c1});
-    out.push({n:h.cls+'勝クラス', m:g.month, d:d2, s:surf, g:'jo', cls:h.cls, lv:h.cls, c:c2});
+    out.push({n:h.cls+'勝クラス', w:g.week, d:d1, s:'芝', g:'jo', cls:h.cls, lv:h.cls, c:c1});
+    out.push({n:h.cls+'勝クラス', w:g.week, d:d2, s:surf, g:'jo', cls:h.cls, lv:h.cls, c:c2});
   }else{
-    out.push({n:'オープン特別', m:g.month, d:d1, s:'芝', g:'op', cls:4, lv:4, c:c1});
+    out.push({n:'オープン特別', w:g.week, d:d1, s:'芝', g:'op', cls:4, lv:4, c:c1});
   }
   return out;
 }
 function racesFor(g){
   const h=g.horse;
-  const list = RACES.filter(r=> r.m===g.month && r.age.includes(g.year) && h.cls>=r.cls);
-  return condRaces(g).concat(list);
+  const list = RACES.filter(r=> r.w===g.week && r.age.includes(g.year) && h.cls>=r.cls);
+  // 条件戦は隔週開催。毎週使えると連闘し放題になり、調教する週がなくなる
+  const cond = (g.week%2===1) ? condRaces(g) : [];
+  return cond.concat(list);
 }
 const prizeOf = r => r.g==='jo' ? COND_PRIZE[clamp(r.lv||0,0,3)] : GRADE_PRIZE[r.g];
+/* 次に出走できる週を先読みする（50週あるので目安がないと待ち方が分からない） */
+function nextRaceInfo(){
+  for(let k=1;k<=WEEKS_PER_YEAR*3;k++){
+    const t=G.week+k-1;
+    const week=t%WEEKS_PER_YEAR+1, year=G.year+Math.floor(t/WEEKS_PER_YEAR);
+    if(year>5) return null;
+    const rs=racesFor({horse:G.horse, year, week});
+    if(rs.length){
+      const top=rs.slice().sort((a,b)=>prizeOf(b)-prizeOf(a))[0];
+      return {in:k, week, year, top};
+    }
+  }
+  return null;
+}
 
 /* 調教メニュー */
 const TRAIN = [
-  {k:'坂路',   d:'スピード・パワー',   f:16, up:{sp:2.0,pw:1.2}},
-  {k:'ダート', d:'パワー・根性',       f:18, up:{pw:2.0,gt:1.1}},
-  {k:'プール', d:'スタミナ（疲労小）', f:9,  up:{st:2.2}},
-  {k:'併せ馬', d:'根性・スピード',     f:20, up:{gt:2.0,sp:0.9}},
-  {k:'ゲート', d:'賢さ（疲労小）',     f:7,  up:{wt:2.2}}
+  {k:'坂路',   d:'スピード・パワー',   f:9,  up:{sp:2.0,pw:1.2}},
+  {k:'ダート', d:'パワー・根性',       f:10, up:{pw:2.0,gt:1.1}},
+  {k:'プール', d:'スタミナ（疲労小）', f:5,  up:{st:2.2}},
+  {k:'併せ馬', d:'根性・スピード',     f:11, up:{gt:2.0,sp:0.9}},
+  {k:'ゲート', d:'賢さ（疲労小）',     f:4,  up:{wt:2.2}}
 ];
 const STAT_KEYS = [['sp','スピード'],['st','スタミナ'],['pw','パワー'],['gt','根性'],['wt','賢さ']];
+/* --- 売店のアイテム ---
+   馬券の的中で増えたメダルを能力に還元する。調教と違い週を消費しない代わりに、
+   伸ばせるのは成長上限＋ITEM_OVER まで。ここが青天井だとレースが壊れる。 */
+const ITEM_OVER = 20;
+const ITEMS = [
+  {k:'コーヒー',   p:100,  fat:20,  cond:5,  up:1,  mode:'random',
+   d:'疲労を20回復し、ランダムな能力が1上がる'},
+  {k:'ビール',     p:500,  fat:30,  cond:8,  up:4,  mode:'pick',
+   d:'疲労を30回復し、選んだ能力が4上がる'},
+  {k:'シャンパン', p:1000, fat:45,  cond:15, up:10, mode:'pick',
+   d:'疲労を45回復し、選んだ能力が10上がる'},
+  {k:'ブランデー', p:2500, fat:100, cond:40, up:8,  mode:'all',
+   d:'疲労が完全に抜けて絶好調になり、全能力が8上がる'}
+];
 const CLASS_NAME = ['未勝利','1勝クラス','2勝クラス','3勝クラス','オープン'];
 const COND_NAME = [
   {t:'絶好調', m:1.06, c:'var(--ok)'},
@@ -1134,7 +1167,7 @@ function drawPodium(field, res, mePos, t){
 /* =======================================================================
    5. ゲーム状態
    ======================================================================= */
-const SAVE_KEY='pocketturf.v1';
+const SAVE_KEY='pocketturf.v2';   // 月→週カレンダー化で旧セーブとは互換がない
 let G = null;
 const app = {
   scene:'title',      // title|stable|training|race|podium
@@ -1143,7 +1176,7 @@ const app = {
 };
 function blank(){
   return {
-    medals:3000, year:3, month:1, horse:null, cands:null,
+    medals:3000, year:3, week:1, horse:null, cands:null,
     log:[], history:[], careers:[], legacy:0, tab:'home'
   };
 }
@@ -1204,14 +1237,16 @@ const V = {
   help(){
     return `<h2 class="head">あそびかた</h2>
     <div class="card"><p class="eyebrow">1 / 育成</p>
-      <p class="muted">毎月「調教」か「休養」を選び、愛馬の5つの能力を伸ばす。疲労が溜まるとコンディションが落ち、故障の危険もある。</p></div>
+      <p class="muted">1年は50週。毎週「調教」か「休養」を選び、3歳から5歳までの150週で愛馬を仕上げる。1回の伸びは小さいので、疲労を溜めずに積み重ねるほど強くなる。</p></div>
     <div class="card"><p class="eyebrow">2 / 出走</p>
-      <p class="muted">出走できる月にはレース一覧が出る。条件戦に勝つとクラスが上がり、オープンまで昇ればG1に挑戦できる。</p></div>
+      <p class="muted">条件戦は隔週、重賞は決まった週に開催される。条件戦に勝つとクラスが上がり、オープンまで昇ればG1に挑戦できる。</p></div>
     <div class="card"><p class="eyebrow">3 / 馬券</p>
       <p class="muted">出走前にメダルで単勝・複勝を購入。愛馬に賭けても、ライバルに賭けてもよい。賞金と払戻の両方がメダルになる。</p></div>
-    <div class="card"><p class="eyebrow">4 / レース操作</p>
+    <div class="card"><p class="eyebrow">4 / 売店</p>
+      <p class="muted">的中で貯めたメダルは売店で<b class="gold">コーヒー・ビール・シャンパン・ブランデー</b>に換えられる。週を使わずに能力を伸ばせるが、上限＋${ITEM_OVER}までしか効かない。</p></div>
+    <div class="card"><p class="eyebrow">5 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
-    <div class="card"><p class="eyebrow">5 / コース</p>
+    <div class="card"><p class="eyebrow">6 / コース</p>
       <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
       ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
       ・小回りはコーナーで振られるので<b>賢さ</b>が要る。差し・追込は外を回らされる<br>
@@ -1261,14 +1296,14 @@ const V = {
         <div class="row between"><span class="muted">騎手</span><b>${h.jockey} 騎手</b></div>
       </div>`;
   },
-  /* ---- ホーム（毎月の行動） ---- */
+  /* ---- ホーム（毎週の行動） ---- */
   home(){
     const h=G.horse;
     if(h.rest>0){
-      return `<p class="eyebrow">${G.year}歳 ${G.month}月</p>
+      return `<p class="eyebrow">${G.year}歳 第${G.week}週</p>
         <h2 class="head hot">休養中</h2>
-        <div class="card"><p class="muted">${esc(h.name)}は放牧に出ている。あと <b class="gold num">${h.rest}</b> ヶ月で復帰予定。</p></div>
-        <button class="btn primary center wide" data-act="advance">月を進める</button>`;
+        <div class="card"><p class="muted">${esc(h.name)}は放牧に出ている。あと <b class="gold num">${h.rest}</b> 週で復帰予定。</p></div>
+        <button class="btn primary center wide" data-act="advance">週を進める</button>`;
     }
     const rs=racesFor(G);
     const fat = Math.round(h.fatigue);
@@ -1277,8 +1312,9 @@ const V = {
       <button class="btn" data-act="train" data-i="${i}">
         <span>${t.k}</span><small>${t.d}・疲労+${t.f}</small>
       </button>`).join('');
+    const nx=rs.length?null:nextRaceInfo();
     return `<div class="row between" style="margin-bottom:6px">
-        <p class="eyebrow" style="margin:0">${G.year}歳 ${G.month}月</p>
+        <p class="eyebrow" style="margin:0">${G.year}歳 第${G.week}週 / ${WEEKS_PER_YEAR}</p>
         <span class="dot" style="font-size:11px;color:var(--ink-3)">${CLASS_NAME[h.cls]}・${h.wins}勝</span>
       </div>
       <div class="card tight" style="margin-bottom:9px">
@@ -1292,17 +1328,27 @@ const V = {
         </div>
       </div>
       ${rs.length?`
-        <p class="eyebrow">今月のレース</p>
+        <p class="eyebrow">今週のレース</p>
         <div class="list" style="margin-bottom:10px">
           ${rs.map((r,i)=>`<button class="entry" data-act="entry" data-i="${i}">
             <div class="nm"><b>${esc(r.n)}</b><br><span style="font-size:10px;color:var(--ink-3)">${raceMeta(r)}</span>
               <br><span style="font-size:9.5px;color:var(--ink-3)">${courseLine(r)}</span></div>
             <span class="od">${yen(prizeOf(r))}</span>
           </button>`).join('')}
-        </div>`:`<p class="muted" style="margin:0 0 10px">今月は出走できるレースがない。</p>`}
+        </div>`:`<div class="card tight" style="margin-bottom:9px">
+          <div class="row between">
+            <span class="muted" style="font-size:11.5px">今週は出走できるレースがない</span>
+            ${nx?`<b class="gold num" style="font-size:11.5px">次は${nx.in}週後</b>`:''}
+          </div>
+          ${nx&&nx.top?`<div class="sep" style="margin:6px 0"></div>
+            <div class="row between" style="font-size:11px">
+              <span class="muted">${esc(nx.top.n)}</span>
+              <span class="dot" style="color:var(--ink-3)">${nx.top.s}${nx.top.d}m</span>
+            </div>`:''}
+        </div>`}
       <p class="eyebrow">調教メニュー</p>
       <div class="grid2" style="margin-bottom:9px">${menus}
-        <button class="btn" data-act="rest"><span>休養</span><small>疲労-40・調子回復</small></button>
+        <button class="btn" data-act="rest"><span>休養</span><small>疲労-28・調子回復</small></button>
       </div>
       <button class="btn ghost center wide" data-act="save" style="min-height:40px">
         セーブする<small>進行は自動でも保存される</small></button>`;
@@ -1348,11 +1394,46 @@ const V = {
         <div class="row between"><span class="muted">ファン</span><b class="num">${yen(h.fans)}人</b></div>
       </div>`;
   },
+  /* ---- 売店 ---- */
+  shop(){
+    const h=G.horse, lim=capOf(h,G.year)+ITEM_OVER;
+    const sel=app.shopStat||'sp';
+    const selName=STAT_KEYS.find(s=>s[0]===sel)[1];
+    const chips=STAT_KEYS.map(([k,lb])=>`
+      <button class="btn center" data-act="pickstat" data-k="${k}"
+        style="min-height:44px;font-size:10.5px;padding:5px 2px;${k===sel?'border-color:var(--gold);background:#231d0d;color:var(--gold)':''}">
+        ${lb}<small class="num" style="${k===sel?'color:var(--gold)':''}">${Math.round(h[k])}</small></button>`).join('');
+    const cards=ITEMS.map((it,i)=>{
+      const can=G.medals>=it.p;
+      return `<div class="card tight">
+        <div class="row between" style="margin-bottom:4px">
+          <b style="font-size:13.5px">${it.k}</b>
+          <span class="num" style="font-size:12px;color:${can?'var(--gold)':'var(--ink-3)'}">◉ ${yen(it.p)}</span>
+        </div>
+        <p class="muted" style="margin:0 0 7px;font-size:11px">${it.d}${
+          it.mode==='pick'?`<br><span class="gold">対象：${selName}</span>`:''}</p>
+        <button class="btn ${can?'primary':'ghost'} center wide" data-act="buy" data-i="${i}"
+          style="min-height:38px" ${can?'':'disabled'}>${can?'使う':'メダルが足りない'}</button>
+      </div>`;
+    }).join('');
+    return `<div class="row between" style="margin-bottom:6px">
+        <p class="eyebrow" style="margin:0">SHOP / 売店</p>
+        <span class="dot gold" style="font-size:12px">◉ ${yen(G.medals)}</span>
+      </div>
+      <h2 class="head">メダルを愛馬に還元する</h2>
+      <p class="muted" style="margin:-4px 0 9px">週は消費しない。ただしアイテムで伸ばせるのは
+        成長上限＋${ITEM_OVER}（いま <b class="gold num">${lim}</b>）まで。</p>
+      <div class="card tight">
+        <p class="eyebrow">強化する能力（ビール・シャンパン用）</p>
+        <div class="grid4" style="grid-template-columns:repeat(5,1fr)">${chips}</div>
+      </div>
+      ${cards}`;
+  },
   /* ---- 記録 ---- */
   record(){
     const rows=G.history.slice().reverse().map(r=>`
       <tr class="${r.pos===1?'me':''}">
-        <td class="num">${r.y}/${String(r.m).padStart(2,'0')}</td>
+        <td class="num">${r.y}歳${String(r.w||r.m||0).padStart(2,'0')}週</td>
         <td class="nm">${esc(r.n)}</td>
         <td class="num">${r.pos}着</td>
         <td class="num gold">${r.gain>0?'+'+yen(r.gain):yen(r.gain)}</td>
@@ -1387,7 +1468,7 @@ const V = {
         ${b.type==='win'?'単勝':'複勝'} ${esc(f[b.i].name)}</span>
         <b class="num gold">${yen(b.amt)}</b>
       </div>`).join('');
-    return `<div class="row between"><p class="eyebrow" style="margin:0">${G.year}歳 ${G.month}月</p>
+    return `<div class="row between"><p class="eyebrow" style="margin:0">${G.year}歳 第${G.week}週</p>
         <button class="btn ghost" data-act="cancelrace" style="min-height:0;padding:3px 9px;font-size:11px">出走取消</button></div>
       <h2 class="head">${esc(r.n)} ${raceMeta(r)}</h2>
       <div class="card tight" style="margin-bottom:9px">
@@ -1515,7 +1596,7 @@ function show(v,d){
   view=v; viewData=d;
   panel.innerHTML = V[v] ? V[v](d) : '';
   panel.scrollTop=0;
-  const inGame = ['home','horse','record'].includes(v);
+  const inGame = ['home','horse','shop','record'].includes(v);
   tabs.hidden = !inGame;
   if(inGame){
     [...tabs.children].forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===v)));
@@ -1525,7 +1606,7 @@ function show(v,d){
 }
 function syncMeters(){
   $('#mMedal').textContent = G? yen(G.medals) : '0';
-  $('#mDate').textContent  = G&&G.horse? `${G.year}歳${G.month}月` : '--';
+  $('#mDate').textContent  = G&&G.horse? `${G.year}歳${G.week}週` : '--';
 }
 function setHud(html){ hud.innerHTML=html; }
 let toastTimer=null;
@@ -1559,13 +1640,13 @@ function tickerStep(){
    ======================================================================= */
 function logLine(t){ G.log.unshift(t); G.log.length=Math.min(G.log.length,30); }
 
-function advanceMonth(){
+function advanceWeek(){
   const h=G.horse;
-  h.fatigue=clamp(h.fatigue-4,0,100);
-  h.cond=clamp(h.cond + (h.fatigue>70?-9:h.fatigue<25?6:1) + rint(-5,5), 5, 100);
-  if(h.rest>0){ h.rest--; h.fatigue=clamp(h.fatigue-26,0,100); h.cond=clamp(h.cond+16,0,100); }
-  G.month++;
-  if(G.month>12){ G.month=1; G.year++; }
+  h.fatigue=clamp(h.fatigue-2.5,0,100);
+  h.cond=clamp(h.cond + (h.fatigue>70?-5:h.fatigue<25?4:1) + rint(-3,3), 5, 100);
+  if(h.rest>0){ h.rest--; h.fatigue=clamp(h.fatigue-9,0,100); h.cond=clamp(h.cond+6,0,100); }
+  G.week++;
+  if(G.week>WEEKS_PER_YEAR){ G.week=1; G.year++; }
   if(G.year>5){ return retire(); }
   save();
   show('home');
@@ -1575,45 +1656,75 @@ function advanceMonth(){
 
 function doTrain(i){
   const h=G.horse, m=TRAIN[i];
-  if(h.fatigue>82 && Math.random()<0.20){
-    h.rest=rint(2,3); h.fatigue=clamp(h.fatigue-10,0,100);
+  if(h.fatigue>82 && Math.random()<0.12){
+    h.rest=rint(5,9); h.fatigue=clamp(h.fatigue-10,0,100);
     STAT_KEYS.forEach(([k])=>{ h[k]=Math.max(10,h[k]-rnd(3,1)); });
     SFX.err();
     logLine('故障');
     app.trainMenu=null;
     show('home');
-    say(`${h.name}が脚元に不安を訴えた…… ${h.rest}ヶ月の休養へ。`, true);
+    say(`${h.name}が脚元に不安を訴えた…… ${h.rest}週の休養へ。`, true);
     save(); drawScene();
     return;
   }
+  /* 1年50週＝キャリア150ターン。1回あたりの上がり幅を小さくして、
+     3年かけて伸びる曲線にする（係数を上げると1年目で頭打ちになる）。 */
   const cap=capOf(h,G.year), cm=COND_NAME[condIdx(h)].m;
   const gains=[];
   for(const [k,mul] of Object.entries(m.up)){
-    const room=clamp(1-h[k]/cap,0.06,1);
-    const g0 = mul*3.0*room*cm*rnd(1.35,.7);
-    h[k]=Math.min(cap+4,h[k]+g0);
+    const room=clamp(1-h[k]/cap,0.05,1);
+    const g0 = mul*1.55*room*cm*rnd(1.35,.7);
+    h[k]=Math.min(cap+2,h[k]+g0);
     gains.push([k,g0]);
   }
-  h.fatigue=clamp(h.fatigue+m.f+rint(-2,3),0,100);
-  h.cond=clamp(h.cond-(m.f>15?4:1)+rint(-2,3),5,100);
+  h.fatigue=clamp(h.fatigue+m.f+rint(-1,2),0,100);
+  h.cond=clamp(h.cond-(m.f>9?3:1)+rint(-2,3),5,100);
   app.trainMenu=m.k; app.trainT=0; app.scene='training';
   app.gains=gains;
   SFX.tap();
   const txt = gains.map(([k,v])=>`${STAT_KEYS.find(s=>s[0]===k)[1]}+${v.toFixed(1)}`).join('　');
   say(`${m.k}調教。${txt}`);
-  setTimeout(()=>{ app.scene='stable'; advanceMonth(); }, REDUCE?60:1500);
-  panel.innerHTML=`<div class="center" style="padding:26px 8px">
+  // 週ターンは回数が多いので演出は短く。タップで即スキップできる。
+  app.trainDone=()=>{ app.trainDone=null; app.scene='stable'; advanceWeek(); };
+  setTimeout(()=>{ if(app.trainDone) app.trainDone(); }, REDUCE?60:750);
+  panel.innerHTML=`<div class="center" style="padding:24px 8px">
     <p class="eyebrow">TRAINING</p><h2 class="big gold">${m.k}</h2>
-    <p class="muted" style="margin-top:8px">${esc(txt)}</p></div>`;
+    <p class="muted" style="margin-top:8px">${esc(txt)}</p>
+    <p class="dot" style="margin-top:10px;font-size:10px;color:var(--ink-3)">タップでスキップ</p></div>`;
   tabs.hidden=true;
+}
+function buyItem(i){
+  const it=ITEMS[i], h=G.horse;
+  if(!h||!it) return;
+  if(G.medals<it.p){ SFX.err(); toast('メダルが足りない'); return; }
+  const lim=capOf(h,G.year)+ITEM_OVER;
+  G.medals-=it.p;
+  h.fatigue=clamp(h.fatigue-it.fat,0,100);
+  h.cond=clamp(h.cond+it.cond,5,100);
+  const ups=[];
+  const bump=k=>{
+    const before=h[k];
+    h[k]=Math.min(lim,h[k]+it.up);
+    if(h[k]-before>0.05) ups.push(`${STAT_KEYS.find(s=>s[0]===k)[1]}+${(h[k]-before).toFixed(1)}`);
+  };
+  if(it.mode==='all') STAT_KEYS.forEach(([k])=>bump(k));
+  else if(it.mode==='random') bump(pick(STAT_KEYS)[0]);
+  else bump(app.shopStat||'sp');
+  SFX.coin();
+  const msg = ups.length ? ups.join('　') : '能力はもう上限に届いている';
+  toast(`${it.k}　${msg}`);
+  say(`${h.name}に${it.k}。${msg}`);
+  logLine(`${it.k}を使った`);
+  save();
+  show('shop');
 }
 function doRest(){
   const h=G.horse;
-  h.fatigue=clamp(h.fatigue-40,0,100);
-  h.cond=clamp(h.cond+18,5,100);
+  h.fatigue=clamp(h.fatigue-28,0,100);
+  h.cond=clamp(h.cond+12,5,100);
   SFX.ok();
   say(`${h.name}はゆっくりと休んだ。疲労が抜けていく。`);
-  advanceMonth();
+  advanceWeek();
 }
 
 /* --- 出走 --- */
@@ -1674,7 +1785,7 @@ function finishRace(){
   }
   G.medals+=prize+pay;
   h.races++; h.earned+=prize;
-  h.fatigue=clamp(h.fatigue+rint(26,34),0,100);
+  h.fatigue=clamp(h.fatigue+rint(22,30),0,100);
   h.cond=clamp(h.cond-rint(4,12),5,100);
   h.fans+=Math.round(prize/12 + (me.pos===1?400:0));
   let up=null;
@@ -1684,7 +1795,7 @@ function finishRace(){
     if(r.g==='G1'||r.g==='G2'||r.g==='G3') h.g1++;
     SFX.win();
   }else if(me.pos<=3) SFX.ok(); else SFX.lose();
-  G.history.push({y:G.year,m:G.month,n:r.n,pos:me.pos,gain:prize+pay-spent});
+  G.history.push({y:G.year,w:G.week,n:r.n,pos:me.pos,gain:prize+pay-spent});
   logLine(`${r.n} ${me.pos}着`);
   app.scene='podium'; app.podT=0; app.podRes=res; app.podPos=me.pos;
   tmap.hidden=true;
@@ -1713,7 +1824,7 @@ function retire(){
   tabs.hidden=true;
   /* 世代交代の状態はここで確定させる（引退画面の内容は上の d から描画済み）。
      こうしないと「6歳・引退済みの馬」がセーブに残ってしまう。 */
-  G.horse=null; G.history=[]; G.year=3; G.month=1; G.cands=null; G.tab='home';
+  G.horse=null; G.history=[]; G.year=3; G.week=1; G.cands=null; G.tab='home';
   syncMeters();
   save();
   return false;
@@ -1743,9 +1854,11 @@ const ACT = {
     show('home'); save(); drawScene();
   },
   save(){ save(); SFX.coin(); toast('セーブしました'); },
+  buy(d){ buyItem(+d.i); },
+  pickstat(d){ app.shopStat=d.k; SFX.tap(); show('shop'); },
   train(d){ doTrain(+d.i); },
   rest(){ doRest(); },
-  advance(){ SFX.tap(); advanceMonth(); },
+  advance(){ SFX.tap(); advanceWeek(); },
   entry(d){ openEntry(+d.i); },
   pickhorse(d){ app.betSel=+d.i; SFX.tap(); show('bet'); },
   bet(d){ placeBet(d.t,+d.a); },
@@ -1773,15 +1886,17 @@ const ACT = {
     const b=$('#skipBtn'); if(b) b.textContent='結果へ';
     if(s.done) finishRace();
   },
-  afterrace(){ app.scene='stable'; app.sim=null; SFX.tap(); advanceMonth(); },
+  afterrace(){ app.scene='stable'; app.sim=null; SFX.tap(); advanceWeek(); },
   nextgen(){ app.scene='stable'; SFX.tap(); show('pick'); save(); },
   reset(){ if(!confirm('セーブデータを消して最初からやり直す？')) return; wipe(); G=blank(); app.scene='title'; tmap.hidden=true; show('title'); }
 };
 panel.addEventListener('click',e=>{
+  if(app.trainDone){ app.trainDone(); return; }   // 調教演出はタップで飛ばせる
   const b=e.target.closest('[data-act]'); if(!b) return;
   SFX.boot();
   const fn=ACT[b.dataset.act]; if(fn) fn(b.dataset);
 });
+$('.top').addEventListener('click',()=>{ if(app.trainDone) app.trainDone(); });
 tabs.addEventListener('click',e=>{
   const b=e.target.closest('[data-tab]'); if(!b) return;
   SFX.tap(); show(b.dataset.tab);
@@ -1932,7 +2047,8 @@ function boot(){
   requestAnimationFrame(t=>{ last=t; loop(t); });
 }
 /* バランス調整・検証用のフック（走破時計や着差を外から測れるようにする） */
-window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, blank };
+window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, ITEMS, blank,
+                      get state(){ return G; } };
 
 try{ boot(); }
 catch(err){
