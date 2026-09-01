@@ -3034,10 +3034,13 @@ panel.addEventListener('click',e=>{
   const fn=ACT[b.dataset.act]; if(fn) fn(b.dataset);
 });
 $('.top').addEventListener('click',()=>{ if(app.trainDone) app.trainDone(); });
-/* 合言葉の入力：かなだけ残し、4文字で次の欄へ送る。12文字まとめ貼りにも対応。 */
-panel.addEventListener('input',e=>{
-  const el=e.target;
-  if(!el.classList||!el.classList.contains('pw')) return;
+/* 合言葉の入力：かなだけ残し、4文字で次の欄へ送る。12文字まとめ貼りにも対応。
+   かな入力はIMEの変換を通るので、変換が確定するまで value に触ってはいけない。
+   変換中に el.value を書き換えるとIMEの未確定文字列と二重になり、
+   「あいうえ」が「ああうえ」になって合言葉が入らなくなる。          */
+const isPwBox = el => !!(el && el.classList && el.classList.contains('pw'));
+let pwComposing=false;
+function pwInput(el){
   const boxes=['#p1','#p2','#p3'].map(s=>$(s));
   if(boxes.some(b=>!b)) return;
   const v=normPass(el.value);
@@ -3054,6 +3057,18 @@ panel.addEventListener('input',e=>{
     if(v.length>4 && boxes[i+1].value.length<4) boxes[i+1].value=normPass(v.slice(4)+boxes[i+1].value).slice(0,4);
     boxes[i+1].focus();
   }
+}
+panel.addEventListener('compositionstart',e=>{ if(isPwBox(e.target)) pwComposing=true; });
+panel.addEventListener('compositionend',e=>{
+  if(!isPwBox(e.target)) return;
+  pwComposing=false;
+  pwInput(e.target);            // 確定した文字列をここで整える
+});
+panel.addEventListener('input',e=>{
+  if(!isPwBox(e.target)) return;
+  // isComposing を見ない古いIME（一部のAndroid）向けに自前のフラグも併用する
+  if(e.isComposing || pwComposing) return;
+  pwInput(e.target);
 });
 tabs.addEventListener('click',e=>{
   const b=e.target.closest('[data-tab]'); if(!b) return;
