@@ -353,12 +353,25 @@ input[type=text]{
   width:100%;padding:9px 10px;border-radius:8px;background:#07190f;
   border:1px solid var(--line);color:var(--ink);font-size:15px;font-family:inherit;
 }
-textarea{
-  width:100%;padding:9px 10px;border-radius:8px;background:#07190f;
-  border:1px solid var(--line);color:var(--ink);font-size:12px;
-  font-family:"DotGothic16",monospace;line-height:1.5;resize:vertical;
-  word-break:break-all;
+/* 合言葉の入力（4文字×3）と表示 */
+.pwrow{display:flex;align-items:center;gap:5px}
+.pw{
+  flex:1;min-width:0;width:auto;text-align:center;letter-spacing:.10em;
+  padding:10px 4px;border-radius:8px;background:#07190f;
+  border:1px solid var(--line);color:var(--ink);
+  font-family:"DotGothic16",monospace;font-size:17px;
 }
+.pw:focus{border-color:var(--gold);outline:none}
+.pwsep{color:var(--ink-3);font-family:"DotGothic16",monospace}
+.passbox{
+  display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;
+  font-family:"DotGothic16",monospace;
+}
+.passbox b{
+  font-weight:400;font-size:17px;letter-spacing:.06em;color:var(--gold);
+  background:#07190f;border:1px solid var(--gold-2);border-radius:6px;padding:7px 6px;
+}
+.passbox i{color:var(--ink-3);font-style:normal}
 label.fld{display:block;font-size:11px;color:var(--ink-2);margin:0 0 4px}
 
 .center{text-align:center}
@@ -1290,24 +1303,63 @@ function storageOK(){
   try{ localStorage.setItem('__pt_probe','1'); localStorage.removeItem('__pt_probe'); return true; }
   catch(e){ return false; }
 }
-function encodeSave(o){
-  try{
-    const bytes=new TextEncoder().encode(JSON.stringify(o||G));
-    let bin=''; bytes.forEach(b=>{ bin+=String.fromCharCode(b); });
-    return 'PT2-'+btoa(bin);
-  }catch(e){ return ''; }
+function validSave(o){
+  return !!o && typeof o==='object'
+    && typeof o.week==='number' && typeof o.year==='number'
+    && typeof o.medals==='number' && o.horse!==undefined;
 }
-function decodeSave(code){
+/* --- 合言葉（12文字のひらがな・4-4-4） ---
+   セーブ本体は合言葉には入らない（44^12 ≒ 65ビットしかない）。合言葉は
+   保存済みデータを引き出す「鍵」で、アーケードのICカードと同じ役目。    */
+const KANA='あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわ'.split('');
+const PASS_LEN=12;
+function newPass(){
+  let buf;
+  try{ buf=new Uint32Array(PASS_LEN); crypto.getRandomValues(buf); }
+  catch(e){ buf=Array.from({length:PASS_LEN},()=>Math.floor(Math.random()*4294967296)); }
+  let s='';
+  for(let i=0;i<PASS_LEN;i++) s+=KANA[buf[i]%KANA.length];
+  return s;
+}
+/* 保存先のIDに使えるのは英数字だけなので、かなを2桁の36進数に落とす */
+const passId = p => p.split('').map(c=>KANA.indexOf(c).toString(36).padStart(2,'0')).join('');
+const toHira = s => String(s||'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+const normPass = s => toHira(s).replace(/[^ぁ-ゖ]/g,'');
+const validPass = p => p.length===PASS_LEN && p.split('').every(c=>KANA.indexOf(c)>=0);
+const passGroups = p => [p.slice(0,4),p.slice(4,8),p.slice(8,12)];
+
+let DB=null, dbTried=false;
+async function getDB(){
+  if(dbTried) return DB;
+  dbTried=true;
+  try{ if(window.claude && claude.use) DB=await claude.use('db'); }catch(e){ DB=null; }
+  return DB;
+}
+async function passPut(pass, data){
+  const id=passId(pass);
+  let cloud=false;
+  const db=await getDB();
+  if(db){
+    try{ await db.doc('saves/'+id).set({v:2, at:Date.now(), save:data}); cloud=true; }
+    catch(e){ cloud=false; }
+  }
+  try{ localStorage.setItem('pocketturf.pass.'+id, JSON.stringify(data)); }catch(e){}
+  return cloud;
+}
+async function passGet(pass){
+  const id=passId(pass);
+  const db=await getDB();
+  if(db){
+    try{
+      const snap=await db.doc('saves/'+id).get();
+      if(snap&&snap.exists){ const d=snap.data(); if(d&&d.save) return d.save; }
+    }catch(e){}
+  }
   try{
-    const b64=String(code||'').trim().replace(/^PT2-/i,'').replace(/\s+/g,'');
-    if(!b64) return null;
-    const bin=atob(b64);
-    const o=JSON.parse(new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0))));
-    if(!o||typeof o!=='object') return null;
-    if(typeof o.week!=='number'||typeof o.year!=='number'||typeof o.medals!=='number') return null;
-    if(o.horse===undefined) return null;
-    return o;
-  }catch(e){ return null; }
+    const s=localStorage.getItem('pocketturf.pass.'+id);
+    if(s) return JSON.parse(s);
+  }catch(e){}
+  return null;
 }
 /* セーブデータの1行要約（どれを読み込むのか分かるように） */
 function saveSummary(o){
@@ -1360,14 +1412,14 @@ const V = {
         <button class="btn ${slot?'primary':''} center wide" data-act="continue" ${slot?'':'disabled'}>
           つづきから<small>${slot?esc(sum):'セーブデータがありません'}</small></button>
         <button class="btn center wide" data-act="loadscreen">
-          データを読み込む<small>セーブコードから復元する</small></button>
+          データを読み込む<small>12文字の合言葉から呼び出す</small></button>
         <button class="btn ${slot?'':'primary'} center wide" data-act="newgame">
           はじめから<small>新しい愛馬を迎える</small></button>
         <button class="btn ghost center wide" data-act="help">あそびかた</button>
       </div>
       ${ok?'':`<div class="card tight" style="margin-top:10px;border-color:#6b332e;text-align:left">
         <p class="muted" style="margin:0;font-size:11px">この環境では自動セーブが使えない設定になっている。
-        記録タブの<b class="gold">セーブコード</b>を控えておけば、いつでもここから読み込める。</p></div>`}
+        記録タブの<b class="gold">合言葉</b>を控えておけば、いつでもここから呼び出せる。</p></div>`}
     </div>`;
   },
   /* ---- データの読み込み ---- */
@@ -1379,27 +1431,44 @@ const V = {
         <p class="eyebrow">この端末の保存データ</p>
         ${slot?`<p class="muted" style="margin:0 0 8px;font-size:11.5px">${esc(sum)}</p>
           <button class="btn primary center wide" data-act="continue" style="min-height:40px">このデータで再開する</button>`
-          :`<p class="muted" style="margin:0;font-size:11.5px">保存データが見つからない。下のセーブコードから復元できる。</p>`}
+          :`<p class="muted" style="margin:0;font-size:11.5px">保存データが見つからない。下の合言葉から呼び出せる。</p>`}
       </div>
       <div class="card">
-        <p class="eyebrow">セーブコードから復元</p>
-        <label class="fld" for="code">記録タブで表示したコードを貼り付ける</label>
-        <textarea id="code" rows="4" placeholder="PT2-..."></textarea>
-        <button class="btn primary center wide" data-act="loadcode" style="min-height:40px;margin-top:8px">読み込む</button>
+        <p class="eyebrow">合言葉でよびだす</p>
+        <label class="fld">12文字のひらがなを4文字ずつ（この端末で発行したもの）</label>
+        <div class="pwrow">
+          <input type="text" class="pw" id="p1"
+            autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="○○○○">
+          <span class="pwsep">-</span>
+          <input type="text" class="pw" id="p2"
+            autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="○○○○">
+          <span class="pwsep">-</span>
+          <input type="text" class="pw" id="p3"
+            autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="○○○○">
+        </div>
+        <button class="btn primary center wide" data-act="loadpass" style="min-height:40px;margin-top:9px">よびだす</button>
       </div>
       <button class="btn ghost center wide" data-act="back">タイトルへもどる</button>`;
   },
-  /* ---- セーブコードの書き出し ---- */
-  savecode(){
-    const code=encodeSave();
-    return `<p class="eyebrow">SAVE CODE / セーブコード</p>
-      <h2 class="head">今のデータを持ち出す</h2>
-      <p class="muted" style="margin:-4px 0 9px">このコードを控えておけば、端末を変えても、保存が消えても
-        タイトルの<b class="gold">データを読み込む</b>から元に戻せる。</p>
-      <div class="card">
-        <textarea id="outcode" rows="6" readonly>${esc(code)}</textarea>
-        <button class="btn primary center wide" data-act="copycode" style="min-height:40px;margin-top:8px">コピーする</button>
+  /* ---- 合言葉の発行 ---- */
+  passcode(){
+    const p=G.pass, gr=p?passGroups(p):null;
+    return `<p class="eyebrow">PASSWORD / 合言葉</p>
+      <h2 class="head">${p?'この愛馬の合言葉':'合言葉を発行する'}</h2>
+      <p class="muted" style="margin:-4px 0 9px">${p
+        ?'この12文字を控えておけば、タイトルの<b class="gold">データを読み込む</b>から呼び出せる。<br><span style="font-size:10.5px">記録はこの端末（同じブラウザ）に残る。</span>'
+        :'12文字のひらがなを発行する。控えておけば、あとからこのデータを呼び出せる。<br><span style="font-size:10.5px">記録はこの端末（同じブラウザ）に残る。</span>'}</p>
+      ${p?`<div class="card center">
+        <div class="passbox">${gr.map(x=>`<b>${esc(x)}</b>`).join('<i>-</i>')}</div>
+        <button class="btn primary center wide" data-act="copypass" style="min-height:40px;margin-top:10px">コピーする</button>
       </div>
+      <div class="card tight">
+        <button class="btn center wide" data-act="syncpass" style="min-height:40px;margin-bottom:7px">いまの状態を記録する</button>
+        <p class="muted" style="margin:0;font-size:11px">合言葉には「記録した時点」のデータが入る。
+        セーブするたびに自動で書き込まれる。</p>
+      </div>
+      <button class="btn ghost center wide" data-act="newpass" style="margin-bottom:7px">新しい合言葉に変える</button>`
+      :`<button class="btn primary center wide" data-act="newpass" style="min-height:46px;margin-bottom:7px">合言葉を発行する</button>`}
       <button class="btn ghost center wide" data-act="backrecord">もどる</button>`;
   },
   help(){
@@ -1412,11 +1481,13 @@ const V = {
       <p class="muted">出走前にメダルで単勝・複勝を購入。愛馬に賭けても、ライバルに賭けてもよい。賞金と払戻の両方がメダルになる。</p></div>
     <div class="card"><p class="eyebrow">4 / 売店</p>
       <p class="muted">的中で貯めたメダルは売店で<b class="gold">コーヒー・ビール・シャンパン・ブランデー</b>に換えられる。週を使わずに能力を伸ばせるが、上限＋${ITEM_OVER}までしか効かない。</p></div>
-    <div class="card"><p class="eyebrow">5 / アルバイト</p>
+    <div class="card"><p class="eyebrow">5 / 合言葉</p>
+      <p class="muted">記録タブで<b class="gold">12文字のひらがな</b>の合言葉を発行できる。控えておけば、タイトルの「データを読み込む」からいつでも呼び出せる。合言葉ごとに別のデータを持てるので、育成をやり直したいときの控えにもなる。記録はこの端末に残る。</p></div>
+    <div class="card"><p class="eyebrow">6 / アルバイト</p>
       <p class="muted">メダルが尽きたら<b class="gold">アルバイト</b>で立て直せる。${WORK_WEEKS}週のあいだ調教も出走もできない代わりに、皿洗い・ピザの配達・研究室の実験台で稼ぐ。安全に取るか一撃を狙うかは自由だが、稼ぎ続けると馬が仕上がらない。</p></div>
-    <div class="card"><p class="eyebrow">6 / レース操作</p>
+    <div class="card"><p class="eyebrow">7 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
-    <div class="card"><p class="eyebrow">7 / コース</p>
+    <div class="card"><p class="eyebrow">8 / コース</p>
       <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
       ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
       ・小回りはコーナーで振られるので<b>賢さ</b>が要る。差し・追込は外を回らされる<br>
@@ -1688,7 +1759,7 @@ const V = {
       ${past?`<p class="eyebrow">歴代の愛馬</p>${past}`:''}
       <div class="sep"></div>
       <button class="btn center wide" data-act="save" style="margin-bottom:7px">セーブする</button>
-      <button class="btn center wide" data-act="showcode" style="margin-bottom:7px">セーブコードを表示</button>
+      <button class="btn center wide" data-act="showcode" style="margin-bottom:7px">${G.pass?'合言葉を見る':'合言葉を発行する'}</button>
       <button class="btn danger center wide" data-act="reset">セーブデータを消す</button>`;
   },
   /* ---- 出走登録・馬券 ---- */
@@ -2179,25 +2250,39 @@ function retire(){
 const ACT = {
   newgame(){ G=blank(); SFX.boot(); SFX.tap(); show('pick'); app.scene='stable'; },
   loadscreen(){ SFX.tap(); show('loadscreen'); },
-  loadcode(){
-    const el=$('#code'), o=decodeSave(el&&el.value);
-    if(!o){ SFX.err(); toast('コードを読み取れなかった'); return; }
-    G=o; SFX.boot(); SFX.ok(); save();
-    toast('データを読み込んだ');
+  async loadpass(){
+    const p=normPass(['#p1','#p2','#p3'].map(s=>{const e=$(s);return e?e.value:'';}).join(''));
+    if(!validPass(p)){ SFX.err(); toast('合言葉は12文字のひらがな'); return; }
+    toast('合言葉をさがしています…');
+    const data=await passGet(p);
+    if(!validSave(data)){ SFX.err(); toast('その合言葉のデータが見つからない'); return; }
+    G=data; G.pass=p; SFX.boot(); SFX.ok(); save();
+    toast('データをよびだした');
     enterGame();
   },
-  showcode(){ SFX.tap(); show('savecode'); },
+  showcode(){ SFX.tap(); show('passcode'); },
   backrecord(){ SFX.tap(); show('record'); },
-  copycode(){
-    const el=$('#outcode'); if(!el) return;
-    el.select(); el.setSelectionRange(0,999999);
+  async newpass(){
+    const p=newPass();
+    G.pass=p; save();
+    const cloud=await passPut(p,G);
+    SFX.coin();
+    toast(cloud?'合言葉を発行した':'この端末に記録した');
+    show('passcode');
+  },
+  async syncpass(){
+    if(!G.pass){ return ACT.newpass(); }
+    const cloud=await passPut(G.pass,G);
+    SFX.coin();
+    toast(cloud?'合言葉に記録した':'この端末に記録した');
+    show('passcode');
+  },
+  copypass(){
+    const p=G.pass; if(!p) return;
     const done=()=>{ SFX.coin(); toast('コピーした'); };
     if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(el.value).then(done,()=>{ toast('長押しでコピーしてください'); });
-    }else{
-      try{ document.execCommand('copy'); done(); }
-      catch(e){ toast('長押しでコピーしてください'); }
-    }
+      navigator.clipboard.writeText(p).then(done,()=>{ toast('画面の文字を長押しでコピーしてください'); });
+    }else{ toast('画面の文字を長押しでコピーしてください'); }
   },
   continue(){ const s=load(); if(!s){SFX.err();return;} G=s; SFX.boot(); SFX.ok();
     if(!G.horse){ show('pick'); } else { app.scene='stable'; show(G.tab||'home'); }
@@ -2217,7 +2302,11 @@ const ACT = {
     say(`${G.horse.name}が厩舎にやってきた。デビューを目指そう。`);
     show('home'); save(); drawScene();
   },
-  save(){ save(); SFX.coin(); toast('セーブしました'); },
+  save(){
+    save(); SFX.coin();
+    if(G.pass){ passPut(G.pass,G); toast('セーブして合言葉に記録した'); }
+    else toast('セーブしました');
+  },
   work(){ SFX.tap(); show('work'); },
   dojob(d){ doWork(+d.i); },
   backhome(){ SFX.tap(); show('home'); },
@@ -2266,6 +2355,27 @@ panel.addEventListener('click',e=>{
   const fn=ACT[b.dataset.act]; if(fn) fn(b.dataset);
 });
 $('.top').addEventListener('click',()=>{ if(app.trainDone) app.trainDone(); });
+/* 合言葉の入力：かなだけ残し、4文字で次の欄へ送る。12文字まとめ貼りにも対応。 */
+panel.addEventListener('input',e=>{
+  const el=e.target;
+  if(!el.classList||!el.classList.contains('pw')) return;
+  const boxes=['#p1','#p2','#p3'].map(s=>$(s));
+  if(boxes.some(b=>!b)) return;
+  const v=normPass(el.value);
+  if(v.length>4){
+    const all=v.slice(0,PASS_LEN), gr=passGroups(all);
+    boxes[0].value=gr[0]; boxes[1].value=gr[1]; boxes[2].value=gr[2];
+    const last=Math.min(2,Math.max(0,Math.ceil(all.length/4)-1));
+    boxes[last].focus();
+    return;
+  }
+  el.value=v.slice(0,4);
+  const i=boxes.indexOf(el);
+  if(v.length>=4 && i>=0 && i<2){
+    if(v.length>4 && boxes[i+1].value.length<4) boxes[i+1].value=normPass(v.slice(4)+boxes[i+1].value).slice(0,4);
+    boxes[i+1].focus();
+  }
+});
 tabs.addEventListener('click',e=>{
   const b=e.target.closest('[data-tab]'); if(!b) return;
   SFX.tap(); show(b.dataset.tab);
