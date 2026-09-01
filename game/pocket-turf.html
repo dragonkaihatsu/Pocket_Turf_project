@@ -562,6 +562,10 @@ const KOTOWAZA = [
   'ワラウカドニハフク','ナセバナル','カテバカングン','コイノタキノボリ','ケイゾクハチカラ','イシノウエニモ','サイオウガウマ'];
 const NAME_POOL = YOJI.concat(KOTOWAZA);
 const JOCKEY = ['黒川','早坂','鷲見','片桐','天野','日下部','桐生','榊','南雲','剣持','鏑木','八神','相良'];
+/* 海外カップ限定の欧米人騎手。国内の条件戦・G1には出てこない。 */
+const JOCKEY_INT = ['デニーロ','ロメール','ドンペリ','アントニ','メンディ','マイケル','ドナルド','フレディ','ブライアン'];
+/* SG_RACES の c に使われる海外の舞台。この舞台のNPCだけ JOCKEY_INT を引く。 */
+const INTL_COURSES = new Set(['チャイナ','アメリカ','ブリテン','パリ','レジェンド']);
 /* 出走表に混ざる名物馬たち。半分ほどのNPCがこの名前を名乗る。 */
 const MOB_NAMES = ['ドネルケバブ','モヤシセイカツ','オッタマゲ','パニックパニック','ヨルノテイオー',
   'ヤッタルデー','コトネヌイ','キラメキラリ','メトメガアウトキ','ポッチャマ','ヤキニクヤキニク',
@@ -870,6 +874,7 @@ function makeField(g, race){
     r.cond = rint(45,92);
     r.fatigue = rint(0,25);
     r.npc = true;
+    if(INTL_COURSES.has(race.c)) r.jockey = pick(JOCKEY_INT);   // 海外カップは欧米人騎手に差し替え
     if(Math.random()<0.45) r.name = pick(MOB_NAMES);
     // 同じ名前が2頭並ぶと着順表が読めなくなる
     for(let t=0; t<12 && used.has(r.name); t++) r.name = pick(MOB_NAMES);
@@ -889,6 +894,7 @@ function makeWatchField(race){
   for(let i=0;i<8;i++){
     const r=newHorse({base:clamp(lvl+rint(-9,9),22,108)});
     r.cond=rint(45,92); r.fatigue=rint(0,25); r.npc=true;
+    if(INTL_COURSES.has(race.c)) r.jockey = pick(JOCKEY_INT);
     if(Math.random()<0.45) r.name = pick(MOB_NAMES);
     for(let t=0; t<12 && used.has(r.name); t++) r.name = pick(MOB_NAMES);
     used.add(r.name);
@@ -3209,9 +3215,10 @@ function boot(){
   requestAnimationFrame(t=>{ last=t; loop(t); });
 }
 /* バランス調整・検証用のフック（走破時計や着差を外から測れるようにする） */
-window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
+window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
                       SG_RACES, racesFor, sgOpen, sgReady, legendReady, tourWon, SG_TOUR,
                       seasonOf, SG_NEED_G1, GRADE_PRIZE, prizeOf, fieldLevel,
+                      JOCKEY, JOCKEY_INT, INTL_COURSES,
                       get state(){ return G; } };
 
 try{ boot(); }
