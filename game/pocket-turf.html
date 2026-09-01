@@ -628,9 +628,10 @@ const courseTags = r => {
 };
 const courseLine = r => `${r.c||'東京'} 直線${courseOf(r).straight}m ${courseTags(r).join('・')}`;
 
-/* 賞金はメダルの蛇口。G1を半分に、SGを1割に絞ってある。ここを緩めると
-   売店のブランデーが無限に買えるようになり、育成そのものが要らなくなる。 */
-const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:13000, SG:6000};
+/* 賞金はメダルの蛇口。SGを25,000に戻し、G1・G2は絞ってある。ここを緩めると
+   売店のブランデーが無限に買えるようになり、育成そのものが要らなくなる。
+   有馬記念・ジャパンカップ・宝塚記念は別格として race.prize で上書きする（prizeOf）。 */
+const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:5000, G1:7000, SG:25000};
 const COND_PRIZE  = [900,1600,2400,3400];
 /* 1年＝50週。w がそのレースの開催週（1〜50）。 */
 const WEEKS_PER_YEAR = 50;
@@ -662,7 +663,7 @@ const RACES = [
   {n:'マイラーズC',     w:17, d:1600, s:'芝', g:'G2', cls:3, age:[4,5], c:'京都'},
   {n:'天皇賞（春）',    w:19, d:3200, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
   {n:'安田記念',        w:23, d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
-  {n:'宝塚記念',        w:26, d:2200, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神'},
+  {n:'宝塚記念',        w:26, d:2200, s:'芝', g:'G1', cls:4, age:[4,5], c:'阪神', prize:10000},
   {n:'函館記念',        w:29, d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'函館'},
   {n:'アイビスSD',      w:30, d:1000, s:'芝', g:'G3', cls:3, age:[4,5], c:'新潟'},
   {n:'エルムS',         w:32, d:1700, s:'ダート', g:'G3', cls:3, age:[4,5], c:'札幌'},
@@ -673,9 +674,9 @@ const RACES = [
   {n:'天皇賞（秋）',    w:43, d:2000, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
   {n:'マイルCS',        w:45, d:1600, s:'芝', g:'G1', cls:4, age:[4,5], c:'京都'},
   {n:'福島記念',        w:46, d:2000, s:'芝', g:'G3', cls:3, age:[4,5], c:'福島'},
-  {n:'ジャパンカップ',  w:47, d:2400, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京'},
+  {n:'ジャパンカップ',  w:47, d:2400, s:'芝', g:'G1', cls:4, age:[4,5], c:'東京', prize:10000},
   {n:'チャンピオンズC', w:48, d:1800, s:'ダート', g:'G1', cls:4, age:[4,5], c:'中京'},
-  {n:'有馬記念',        w:50, d:2500, s:'芝', g:'G1', cls:4, age:[3,4,5], c:'中山'}
+  {n:'有馬記念',        w:50, d:2500, s:'芝', g:'G1', cls:4, age:[3,4,5], c:'中山', prize:12500}
 ];
 /* --- 隠しレース（SG） ---
    カレンダーには載らない。条件を満たした愛馬だけが、その週に招待される。
@@ -2017,7 +2018,7 @@ const V = {
     <div class="card"><p class="eyebrow">7 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
     <div class="card"><p class="eyebrow">8 / 招待状</p>
-      <p class="muted"><b class="gold">G1を${SG_NEED_G1}勝</b>した馬のもとには招待状が届く。カレンダーに載っていない各国のカップに、<b class="gold">春・夏・秋・冬</b>と巡って挑めるようになる。四季の4つを<b class="gold">すべて制覇</b>すると、年の暮れに<b class="gold">レジェンドカップ</b>が現れる。相手は上限いっぱいの最強馬ばかりで、賞金では割に合わない。名前を残すためだけの一戦。条件は愛馬ごとに数えるので、代が替わればまた一からになる。</p></div>
+      <p class="muted"><b class="gold">G1を${SG_NEED_G1}勝</b>した馬のもとには招待状が届く。カレンダーに載っていない各国のカップに、<b class="gold">春・夏・秋・冬</b>と巡って挑めるようになる。四季の4つを<b class="gold">すべて制覇</b>すると、年の暮れに<b class="gold">レジェンドカップ</b>が現れる。相手は上限いっぱいの最強馬ばかりで、賞金は他のカップと変わらない。仕上げきった馬だけが挑める、ここでしか見られない一戦。条件は愛馬ごとに数えるので、代が替わればまた一からになる。</p></div>
     <div class="card"><p class="eyebrow">9 / コース</p>
       <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
       ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
@@ -2528,7 +2529,7 @@ const V = {
             四季のカップを<b class="gold">すべて制した</b>馬のもとに、最後の一戦の報せが届いた。
             年の暮れ・第${lg.w}週、<b style="color:${lg.ink}">${esc(lg.n)}</b>。
             ${lg.c}競馬場の${lg.s}${lg.d}m、小回りの急坂。集まるのは上限いっぱいまで仕上げた馬ばかりで、
-            賞金は <b class="num">${yen(prizeOf(lg))}</b> しかない。それでも勝てば、名前だけが残る。</p>
+            賞金は他の四季のカップと変わらず <b class="num">${yen(prizeOf(lg))}</b>。それでも、勝てるのはひと握り。</p>
         </div>`;
       })()}
       ${(d.unlocked&&d.unlocked.filter(n=>n!=='レジェンドカップ').length)?`
@@ -2536,7 +2537,7 @@ const V = {
           <p class="eyebrow gold">INVITATION / 招待状</p>
           <p class="muted" style="margin:0 0 8px;font-size:11.5px">
             G1を${SG_NEED_G1}勝した馬にだけ届く。四季を巡る4つのカップに出走できる。
-            1着賞金は <b class="gold num">${yen(GRADE_PRIZE.SG)}</b> と軽い。稼ぐ場ではなく、名を残す場。
+            1着賞金は <b class="gold num">${yen(GRADE_PRIZE.SG)}</b> とG1をはるかに上回る、格別の一戦。
             4つすべて勝てば、年の暮れに最後の一戦が待っている。</p>
           ${SG_RACES.filter(x=>x.theme!=='legend').sort((a,b)=>a.w-b.w).map(sg=>`
             <div class="row between" style="font-size:11.5px;padding:3px 0">
