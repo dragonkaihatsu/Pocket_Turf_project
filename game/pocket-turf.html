@@ -284,6 +284,11 @@ h2.head{
   font-size:10.5px;font-weight:600;border:1px solid;
 }
 .pill.g1{color:#ffd76e;border-color:#7a5f16;background:#2a2208}
+.pill.sg{
+  color:#1d1403;border-color:#ffe9a8;
+  background:linear-gradient(#ffe08a,#e0a52c);font-weight:700;
+  box-shadow:0 0 10px rgba(244,196,74,.45);
+}
 .pill.g2{color:#d6e2ff;border-color:#46578a;background:#1a2340}
 .pill.g3{color:#cdf3dc;border-color:#3a7a58;background:#123526}
 .pill.op{color:#ead9ff;border-color:#5b4c82;background:#221a3a}
@@ -509,7 +514,14 @@ const COURSES = {
   札幌:{straight:266, curve:0.85, slope:0.10},
   函館:{straight:262, curve:0.95, slope:0.20}
 };
-const COURSE_LIST = Object.keys(COURSES);
+/* 隠しレース（SG）の舞台。国ごとに性格を変えてある。 */
+COURSES.アラビア={straight:600, curve:0.15, slope:0.10};  // 広く平坦、長い直線
+COURSES.ニューヨーク={straight:320, curve:0.90, slope:0.05}; // 小回りの平坦オーバル
+COURSES.チャイナ={straight:430, curve:0.50, slope:0.30};
+COURSES.パリ={straight:533, curve:0.35, slope:0.60};      // 長い直線に急坂
+COURSES.ブリテン={straight:500, curve:0.25, slope:0.55};  // 起伏の大きい大回り
+/* 条件戦の開催地に海外コースが混ざらないよう、国内だけを別に持つ */
+const COURSE_LIST = ['東京','中山','阪神','京都','中京','新潟','福島','小倉','札幌','函館'];
 const courseOf = r => COURSES[r&&r.c] || COURSES.東京;
 const courseTags = r => {
   const c=courseOf(r);
@@ -518,7 +530,7 @@ const courseTags = r => {
 };
 const courseLine = r => `${r.c||'東京'} 直線${courseOf(r).straight}m ${courseTags(r).join('・')}`;
 
-const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:26000};
+const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:26000, SG:60000};
 const COND_PRIZE  = [900,1600,2400,3400];
 /* 1年＝50週。w がそのレースの開催週（1〜50）。 */
 const WEEKS_PER_YEAR = 50;
@@ -557,6 +569,36 @@ const RACES = [
   {n:'チャンピオンズC', w:48, d:1800, s:'ダート', g:'G1', cls:4, age:[4,5], c:'中京'},
   {n:'有馬記念',        w:50, d:2500, s:'芝', g:'G1', cls:4, age:[3,4,5], c:'中山'}
 ];
+/* --- 隠しレース（SG） ---
+   カレンダーには載らない。条件を満たした愛馬だけが、その週に招待される。
+   クラス条件は課さない（重賞を勝った事実そのものが出走資格）。
+   達成は愛馬ごとに持つので、代が替わればまた一から挑むことになる。 */
+const wonRace = (h,n) => !!(h && h.won && h.won[n]);
+/* theme: 上画面の背景。omen はごく稀に現れる吉兆で、出たらその日は勝ちやすい。 */
+const OMEN_RATE = 0.18;
+const SG_RACES = [
+  {n:'チャイナカップ',     w:1,  d:1200, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'チャイナ',
+   theme:'china',   logo:'China CUP',   ink:'#ff8fc0', omen:'パンダ',
+   cond:'有馬記念を勝つ',
+   test:h=>wonRace(h,'有馬記念')},
+  {n:'アラビアンカップ',   w:12, d:2000, s:'ダート', g:'SG', cls:1, age:[4,5],   c:'アラビア',
+   theme:'arabian', logo:'Arabian CUP', ink:'#ffd23f', omen:'スフィンクス',
+   cond:'フェブラリーSとチャンピオンズCを勝つ',
+   test:h=>wonRace(h,'フェブラリーS')&&wonRace(h,'チャンピオンズC')},
+  {n:'ブリテンカップ',     w:33, d:2400, s:'芝',     g:'SG', cls:1, age:[3,4,5], c:'ブリテン',
+   theme:'britain', logo:'Britain CUP', ink:'#ff9ad2', omen:'金のビッグベン',
+   cond:'無敗で日本ダービーを勝つ',
+   test:h=>!!(h&&h.derbyUnbeaten)},
+  {n:'パリカップ',         w:43, d:3600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'パリ',
+   theme:'paris',   logo:'Paris CUP',   ink:'#1667c8', omen:'オレンジの飛行機',
+   cond:'天皇賞（春）と天皇賞（秋）を制覇する',
+   test:h=>wonRace(h,'天皇賞（春）')&&wonRace(h,'天皇賞（秋）')},
+  {n:'ニューヨークカップ', w:46, d:1600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'ニューヨーク',
+   theme:'ny',      logo:'NY CUP',      ink:'#d8ecff', omen:'黄色いタクシー',
+   cond:'ジャパンカップを勝つ',
+   test:h=>wonRace(h,'ジャパンカップ')}
+];
+const sgOpen = h => SG_RACES.filter(r=>r.test(h)).map(r=>r.n);
 /* 条件戦は毎月生成（クラスに応じて距離・馬場をローテーション） */
 function condRaces(g){
   const h=g.horse, out=[];
@@ -583,9 +625,11 @@ function condRaces(g){
 function racesFor(g){
   const h=g.horse;
   const list = RACES.filter(r=> r.w===g.week && r.age.includes(g.year) && h.cls>=r.cls);
+  // 隠しレースは条件を満たした馬にだけ見える
+  const sg = SG_RACES.filter(r=> r.w===g.week && r.age.includes(g.year) && r.test(h));
   // 条件戦は隔週開催。毎週使えると連闘し放題になり、調教する週がなくなる
   const cond = (g.week%2===1) ? condRaces(g) : [];
-  return cond.concat(list);
+  return sg.concat(cond, list);
 }
 const prizeOf = r => r.g==='jo' ? COND_PRIZE[clamp(r.lv||0,0,3)] : GRADE_PRIZE[r.g];
 /* 次に出走できる週を先読みする（50週あるので目安がないと待ち方が分からない） */
@@ -703,7 +747,7 @@ function ratingOf(h, race){
 
 /* ライバル生成：クラスに応じた地力 */
 function makeField(g, race){
-  const lvl = race.g==='jo' ? 34+ (race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89})[race.g];
+  const lvl = race.g==='jo' ? 34+ (race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g];
   const field=[];
   for(let i=0;i<7;i++){
     const b = clamp(lvl + rint(-9,9), 22, 108);
@@ -721,7 +765,7 @@ function makeField(g, race){
 }
 /* 観戦専用：愛馬を含まない8頭立てを作る */
 function makeWatchField(race){
-  const lvl = race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89})[race.g];
+  const lvl = race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g];
   const field=[];
   for(let i=0;i<8;i++){
     const r=newHorse({base:clamp(lvl+rint(-9,9),22,108)});
@@ -945,7 +989,208 @@ function roundRect(x,y,w,h,r){
   g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
 }
 /* 背景：スタンド・照明・空 */
-function drawBack(camX, surface){
+/* --- 隠しレースの舞台 ---
+   sg があるときは通常のスタンドではなく、その国の景色を描く。
+   omen（吉兆）はごく稀にしか出ない代わりに、出た日は本当に勝ちやすい。 */
+function drawTheme(sg, camX, omen){
+  const t=performance.now();
+  const HZ=H*.56;                                   // 地平線
+  const par=f=>-((camX*f)%(W*1.5));
+  const sky=g.createLinearGradient(0,0,0,HZ);
+
+  if(sg.theme==='arabian'){
+    sky.addColorStop(0,'#3b2a5e'); sky.addColorStop(.55,'#c96a3c'); sky.addColorStop(1,'#efc07a');
+    g.fillStyle=sky; g.fillRect(0,0,W,HZ);
+    g.fillStyle='rgba(255,220,140,.9)';
+    g.beginPath(); g.arc(W*.80,HZ*.62,H*.05,0,7); g.fill();
+    const ox=par(0.10);
+    for(let k=-1;k<2;k++){
+      const bx=ox+k*W*1.5;
+      const pyr=(cx,w,hh)=>{
+        g.fillStyle='#7a4f2c';
+        g.beginPath(); g.moveTo(cx,HZ-hh); g.lineTo(cx-w,HZ); g.lineTo(cx+w,HZ); g.closePath(); g.fill();
+        g.fillStyle='rgba(255,214,150,.30)';
+        g.beginPath(); g.moveTo(cx,HZ-hh); g.lineTo(cx+w,HZ); g.lineTo(cx,HZ); g.closePath(); g.fill();
+      };
+      pyr(bx+W*.24,W*.20,H*.25); pyr(bx+W*.58,W*.13,H*.16);
+      if(omen){                                      // スフィンクス
+        const sx=bx+W*.78, sy=HZ-H*.03;
+        g.fillStyle='#8d5f34';
+        g.beginPath(); g.ellipse(sx,sy-H*.05,W*.115,H*.05,0,0,7); g.fill();
+        g.beginPath(); g.arc(sx+W*.082,sy-H*.125,H*.045,0,7); g.fill();
+        g.fillStyle='#6d4526';                       // ネメス頭巾
+        g.beginPath(); g.moveTo(sx+W*.038,sy-H*.150); g.lineTo(sx+W*.130,sy-H*.150);
+        g.lineTo(sx+W*.120,sy-H*.070); g.lineTo(sx+W*.048,sy-H*.070); g.closePath(); g.fill();
+        g.fillStyle='#3a2515';
+        g.beginPath(); g.arc(sx+W*.095,sy-H*.130,H*.008,0,7); g.fill();
+      }
+    }
+    g.fillStyle='#cf9a5c';
+    g.beginPath(); g.moveTo(0,HZ);
+    for(let x=0;x<=W;x+=W/8) g.lineTo(x,HZ-H*.012+Math.sin(x/W*4+1)*H*.012);
+    g.lineTo(W,HZ+H*.05); g.lineTo(0,HZ+H*.05); g.closePath(); g.fill();
+  }
+
+  else if(sg.theme==='china'){
+    sky.addColorStop(0,'#20081c'); sky.addColorStop(1,'#5b1030');
+    g.fillStyle=sky; g.fillRect(0,0,W,HZ);
+    for(let i=0;i<4;i++){                            // 赤い花火
+      const ph=((t/1400)+i*0.37)%1;
+      const fx=W*(0.13+0.25*i), fy=H*(0.10+0.07*(i%2));
+      g.globalAlpha=Math.max(0,1-ph)*0.95;
+      g.strokeStyle=i%2?'#ff4d6d':'#ffb03a'; g.lineWidth=2;
+      for(let a=0;a<12;a++){
+        const r0=H*.02+ph*H*.10, ang=a/12*Math.PI*2;
+        g.beginPath();
+        g.moveTo(fx+Math.cos(ang)*r0*0.55, fy+Math.sin(ang)*r0*0.55);
+        g.lineTo(fx+Math.cos(ang)*r0, fy+Math.sin(ang)*r0); g.stroke();
+      }
+      g.globalAlpha=1;
+    }
+    const ox=par(0.30);
+    for(let k=-1;k<2;k++){                           // ピンクのネオン街
+      const bx=ox+k*W*1.5;
+      for(let i=0;i<5;i++){
+        const x=bx+i*W*.31, hh=H*(0.13+0.05*((i*7)%3));
+        g.fillStyle='#2a0a20'; g.fillRect(x,HZ-hh,W*.22,hh);
+        g.strokeStyle='#ff5fae'; g.lineWidth=2;
+        g.strokeRect(x+3,HZ-hh+4,W*.22-6,hh-8);
+        g.fillStyle='rgba(255,95,174,.55)';
+        for(let r=0;r<3;r++) g.fillRect(x+8,HZ-hh+12+r*10,W*.22-16,3);
+      }
+    }
+    if(omen){                                        // パンダ
+      const px=W*.16+Math.sin(t/2200)*W*.02, py=HZ-H*.10;
+      g.fillStyle='#f4f4f0';
+      g.beginPath(); g.ellipse(px,py,H*.048,H*.044,0,0,7); g.fill();
+      g.fillStyle='#141414';
+      g.beginPath(); g.arc(px-H*.036,py-H*.034,H*.017,0,7); g.fill();
+      g.beginPath(); g.arc(px+H*.036,py-H*.034,H*.017,0,7); g.fill();
+      g.beginPath(); g.ellipse(px-H*.017,py-H*.004,H*.011,H*.014,.3,0,7); g.fill();
+      g.beginPath(); g.ellipse(px+H*.017,py-H*.004,H*.011,H*.014,-.3,0,7); g.fill();
+      g.beginPath(); g.ellipse(px,py+H*.016,H*.008,H*.006,0,0,7); g.fill();
+    }
+    g.fillStyle='#1a0512'; g.fillRect(0,HZ-2,W,H*.05);
+  }
+
+  else if(sg.theme==='paris'){
+    sky.addColorStop(0,'#4aa8e0'); sky.addColorStop(1,'#bfe3f5');
+    g.fillStyle=sky; g.fillRect(0,0,W,HZ);
+    g.fillStyle='rgba(255,255,255,.75)';
+    for(let i=0;i<3;i++){
+      const cx=(i*W*.42+par(0.05)+W)%(W*1.4), cy=H*(.10+.05*i);
+      g.beginPath(); g.ellipse(cx,cy,W*.09,H*.028,0,0,7); g.fill();
+      g.beginPath(); g.ellipse(cx+W*.05,cy+H*.008,W*.06,H*.022,0,0,7); g.fill();
+    }
+    const ox=par(0.30);
+    for(let k=-1;k<2;k++){                           // 石畳沿いのカフェ
+      const bx=ox+k*W*1.5;
+      for(let i=0;i<5;i++){
+        const x=bx+i*W*.31, hh=H*(0.17+0.03*((i*5)%3));
+        g.fillStyle='#e9dcc6'; g.fillRect(x,HZ-hh,W*.24,hh);
+        g.fillStyle='#8fa8b8';
+        for(let r=0;r<2;r++) for(let c=0;c<2;c++)
+          g.fillRect(x+W*.04+c*W*.09, HZ-hh+H*.02+r*H*.05, W*.05, H*.035);
+        for(let s=0;s<5;s++){                        // 赤白の日よけ
+          g.fillStyle=s%2?'#e04a4a':'#f6f0e6';
+          g.fillRect(x+s*W*.048, HZ-H*.055, W*.048, H*.022);
+        }
+        g.fillStyle='#3a2a1e'; g.fillRect(x+W*.09,HZ-H*.033,W*.06,H*.033);
+      }
+    }
+    g.fillStyle='#9a9088'; g.fillRect(0,HZ-H*.012,W,H*.05);   // 石畳
+    g.fillStyle='rgba(0,0,0,.18)';
+    for(let x=(camX*3)%18-18;x<W;x+=18) g.fillRect(x,HZ-H*.012,2,H*.05);
+    if(omen){                                        // オレンジの飛行機
+      const fx=((t/26)%(W+220))-110, fy=H*.13+Math.sin(t/900)*H*.012;
+      g.fillStyle='#ff8a2b';
+      g.beginPath(); g.ellipse(fx,fy,H*.038,H*.011,0,0,7); g.fill();
+      g.beginPath(); g.moveTo(fx-H*.006,fy); g.lineTo(fx-H*.030,fy-H*.026);
+      g.lineTo(fx+H*.008,fy-H*.004); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(fx-H*.030,fy); g.lineTo(fx-H*.042,fy-H*.018);
+      g.lineTo(fx-H*.022,fy-H*.002); g.closePath(); g.fill();
+      g.strokeStyle='rgba(255,255,255,.5)'; g.lineWidth=2;
+      g.beginPath(); g.moveTo(fx-H*.045,fy+H*.004); g.lineTo(fx-H*.16,fy+H*.010); g.stroke();
+    }
+  }
+
+  else if(sg.theme==='ny'){
+    sky.addColorStop(0,'#090a20'); sky.addColorStop(1,'#2b1150');
+    g.fillStyle=sky; g.fillRect(0,0,W,HZ);
+    const ox=par(0.22);
+    for(let k=-1;k<2;k++){                           // ラスベガスの夜
+      const bx=ox+k*W*1.5;
+      for(let i=0;i<6;i++){
+        const x=bx+i*W*.26, hh=H*(0.14+0.09*((i*3)%4)/3);
+        g.fillStyle='#10112a'; g.fillRect(x,HZ-hh,W*.20,hh);
+        for(let r=0;r<Math.floor(hh/12);r++) for(let c=0;c<3;c++){
+          if(((i*7+r*3+c)%4)===0) continue;
+          g.fillStyle=(r+c)%3===0?'rgba(255,210,120,.85)':'rgba(150,220,255,.7)';
+          g.fillRect(x+W*.03+c*W*.055, HZ-hh+8+r*12, W*.035, 6);
+        }
+        g.fillStyle=i%2?'#ff3fa0':'#3fd8ff';
+        g.fillRect(x+W*.02,HZ-hh-4,W*.16,3);
+      }
+    }
+    g.fillStyle='rgba(255,80,170,.14)'; g.fillRect(0,HZ-H*.10,W,H*.10);
+    g.fillStyle='#0a0b18'; g.fillRect(0,HZ-2,W,H*.05);
+    if(omen){                                        // 黄色いタクシー
+      const tx=((t/9)%(W+200))-100, ty=HZ-H*.028;
+      g.fillStyle='#ffd21e';
+      roundRect(tx,ty-H*.026,H*.115,H*.026,3); g.fill();
+      roundRect(tx+H*.022,ty-H*.046,H*.058,H*.024,3); g.fill();
+      g.fillStyle='#1b1b1b';
+      g.beginPath(); g.arc(tx+H*.024,ty,H*.011,0,7); g.fill();
+      g.beginPath(); g.arc(tx+H*.090,ty,H*.011,0,7); g.fill();
+      g.fillStyle='#fff8c8'; g.fillRect(tx+H*.108,ty-H*.020,H*.010,H*.008);
+    }
+  }
+
+  else if(sg.theme==='britain'){
+    sky.addColorStop(0,'#2d3c52'); sky.addColorStop(1,'#7d8ea3');
+    g.fillStyle=sky; g.fillRect(0,0,W,HZ);
+    const ox=par(0.16);
+    for(let k=-1;k<2;k++){
+      const bx=ox+k*W*1.5;
+      g.fillStyle='#3b4658';
+      for(let i=0;i<6;i++) g.fillRect(bx+i*W*.26, HZ-H*(0.10+0.03*((i*5)%3)), W*.20, H*.16);
+      // ビッグベン（吉兆のときは金になる）
+      const tx=bx+W*.62, tw=W*.085, th=H*.34;
+      g.fillStyle = omen ? '#e8b83c' : '#5d6779';
+      g.fillRect(tx,HZ-th,tw,th);
+      g.fillStyle = omen ? '#f6d878' : '#6f7a8d';
+      g.fillRect(tx-tw*.12,HZ-th-H*.03,tw*1.24,H*.03);
+      g.beginPath(); g.moveTo(tx-tw*.12,HZ-th-H*.03);
+      g.lineTo(tx+tw/2,HZ-th-H*.11); g.lineTo(tx+tw*1.12,HZ-th-H*.03); g.closePath(); g.fill();
+      g.fillStyle = omen ? '#fff4c8' : '#c9d2de';   // 文字盤
+      g.beginPath(); g.arc(tx+tw/2,HZ-th+H*.045,tw*.34,0,7); g.fill();
+      g.strokeStyle='#2c3444'; g.lineWidth=2;
+      g.beginPath(); g.moveTo(tx+tw/2,HZ-th+H*.045);
+      g.lineTo(tx+tw/2+Math.cos(t/2400)*tw*.24, HZ-th+H*.045+Math.sin(t/2400)*tw*.24); g.stroke();
+      if(omen){
+        g.globalAlpha=.35+Math.sin(t/380)*.18;
+        g.fillStyle='#ffdf7a';
+        g.beginPath(); g.arc(tx+tw/2,HZ-th+H*.02,tw*1.5,0,7); g.fill();
+        g.globalAlpha=1;
+      }
+    }
+    g.fillStyle='#2b3546'; g.fillRect(0,HZ-2,W,H*.05);
+  }
+
+  // 大会名のレタリング
+  g.save();
+  g.textAlign='center'; g.textBaseline='middle';
+  const fs=Math.max(16,Math.min(30,W*0.075));
+  g.font=`${fs}px "Dela Gothic One", sans-serif`;
+  g.lineWidth=Math.max(3,fs*0.16); g.strokeStyle='rgba(0,0,0,.55)';
+  g.strokeText(sg.logo, W/2, H*0.135);
+  g.fillStyle=sg.ink;
+  g.fillText(sg.logo, W/2, H*0.135);
+  g.restore();
+}
+
+function drawBack(camX, surface, sg, omen){
+  if(sg){ drawTheme(sg, camX, omen); return; }
   const sky=g.createLinearGradient(0,0,0,H*.55);
   sky.addColorStop(0,'#0c2419'); sky.addColorStop(1,'#1c4b35');
   g.fillStyle=sky; g.fillRect(0,0,W,H*.56);
@@ -1280,7 +1525,7 @@ const app = {
 };
 function blank(){
   return {
-    medals:3000, year:3, week:1, horse:null, cands:null,
+    medals:3000, year:3, week:1, horse:null, cands:null, sgFound:[],
     log:[], history:[], careers:[], legacy:0, tab:'home'
   };
 }
@@ -1407,7 +1652,7 @@ function condBadge(h){
   return `<span class="pill jo" style="color:${c.c};border-color:${c.c}44">${c.t}</span>`;
 }
 function gradePill(r){
-  const cls = r.g==='G1'?'g1':r.g==='G2'?'g2':r.g==='G3'?'g3':r.g==='op'?'op':'jo';
+  const cls = r.g==='SG'?'sg':r.g==='G1'?'g1':r.g==='G2'?'g2':r.g==='G3'?'g3':r.g==='op'?'op':'jo';
   const lb = r.g==='jo'?'条件':r.g==='op'?'OP':r.g;
   return `<span class="pill ${cls}">${lb}</span>`;
 }
@@ -1502,7 +1747,9 @@ const V = {
       <p class="muted">メダルが尽きたら<b class="gold">アルバイト</b>で立て直せる。${WORK_WEEKS}週のあいだ調教も出走もできない代わりに、皿洗い・ピザの配達・研究室の実験台で稼ぐ。安全に取るか一撃を狙うかは自由だが、稼ぎ続けると馬が仕上がらない。</p></div>
     <div class="card"><p class="eyebrow">7 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
-    <div class="card"><p class="eyebrow">8 / コース</p>
+    <div class="card"><p class="eyebrow">8 / 招待状</p>
+      <p class="muted">特別な条件を満たした馬のもとには、カレンダーに載っていないレースの<b class="gold">招待状</b>が届くことがある。条件は愛馬ごとに数える。</p></div>
+    <div class="card"><p class="eyebrow">9 / コース</p>
       <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
       ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
       ・小回りはコーナーで振られるので<b>賢さ</b>が要る。差し・追込は外を回らされる<br>
@@ -1771,6 +2018,18 @@ const V = {
     return `<h2 class="head">記録</h2>
       ${rows?`<div class="card"><table class="res"><thead><tr><th>日付</th><th>レース</th><th>着順</th><th>収支</th></tr></thead><tbody>${rows}</tbody></table></div>`
             :`<p class="muted">まだ出走記録がない。</p>`}
+      ${(G.sgFound&&G.sgFound.length)?`<p class="eyebrow">隠しレース</p>
+        <div class="card tight">${SG_RACES.map(r=>{
+          const found=G.sgFound.indexOf(r.n)>=0;
+          const open=r.test(G.horse);
+          return `<div class="row between" style="font-size:11.5px;padding:3px 0">
+            <span>${found?`<b class="${open?'gold':''}">${esc(r.n)}</b>
+              <br><span style="font-size:9.5px;color:var(--ink-3)">${esc(r.cond)}</span>`
+              :'<span style="color:var(--ink-3)">？？？</span>'}</span>
+            <span class="dot" style="font-size:10px;color:${open?'var(--gold)':'var(--ink-3)'}">${
+              found?(open?'出走可':'条件未達'):'未発見'}</span>
+          </div>`;
+        }).join('')}</div>`:''}
       ${past?`<p class="eyebrow">歴代の愛馬</p>${past}`:''}
       <div class="sep"></div>
       <button class="btn center wide" data-act="save" style="margin-bottom:7px">セーブする</button>
@@ -1799,6 +2058,16 @@ const V = {
         <button class="btn ghost" data-act="cancelrace" style="min-height:0;padding:3px 9px;font-size:11px">${sp?'観戦をやめる':'出走取消'}</button></div>
       <h2 class="head">${esc(r.n)} ${raceMeta(r)}</h2>
       ${sp?`<p class="muted" style="margin:-4px 0 9px">愛馬は出走しない。馬券だけで勝負する一戦。<b class="gold">1週</b>を使う。</p>`:''}
+      ${app.sgTheme?`<div class="card tight ${app.omen?'pop':''}" style="margin-bottom:9px;${
+        app.omen?'border-color:var(--gold);background:#241d0b':''}">
+        <div class="row between">
+          <b style="font-size:12px;color:${app.sgTheme.ink}">${esc(app.sgTheme.logo)}</b>
+          <span class="pill sg">SG</span>
+        </div>
+        <p class="muted" style="margin:5px 0 0;font-size:11px">${app.omen
+          ? `<b class="gold">${esc(app.sgTheme.omen)}が見えている。今日はいける。</b>`
+          : '招待制の一戦。滅多に見られないものが見えた日は、勝機がある。'}</p>
+      </div>`:''}
       <div class="card tight" style="margin-bottom:9px">
         <div class="row between" style="margin-bottom:5px">
           <b style="font-size:12.5px">${esc(r.c||'東京')}競馬場</b>
@@ -1927,6 +2196,16 @@ const V = {
         <div class="row between"><b>収支</b><b class="num ${d.net>=0?'ok':'hot'}">${d.net>=0?'+':''}${yen(d.net)}</b></div>
       </div>
       ${d.up?`<div class="card tight"><p class="eyebrow">昇級</p><p style="margin:0;font-size:12.5px" class="gold">${esc(d.up)}</p></div>`:''}
+      ${(d.unlocked&&d.unlocked.length)?d.unlocked.map(n=>{
+        const sg=SG_RACES.find(x=>x.n===n);
+        return `<div class="card pop" style="border-color:var(--gold);background:#241d0b">
+          <p class="eyebrow gold">INVITATION / 招待状</p>
+          <b class="gold" style="font-size:15px">${esc(n)}</b>
+          <p class="muted" style="margin:5px 0 0;font-size:11.5px">
+            ${esc(sg.c)}・${sg.s}${sg.d}m／${G.year===sg.age[0]&&G.week<sg.w?'今年':'次の'}第${sg.w}週に出走できる。
+            1着賞金 <b class="gold num">${yen(GRADE_PRIZE.SG)}</b></p>
+        </div>`;
+      }).join(''):''}
       <div class="card"><table class="res">
         <thead><tr><th>着</th><th></th><th>馬名</th><th>タイム</th><th>上り</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
@@ -2128,6 +2407,9 @@ function openEntry(i){
   app.field=makeField(G,r);
   app.odds=makeOdds(app.field,r);
   app.bets=[]; app.betSel=null;
+  // 隠しレースなら舞台を決め、吉兆が現れるかをここで引く（パドックから見える）
+  app.sgTheme = r.g==='SG' ? SG_RACES.find(x=>x.n===r.n) : null;
+  app.omen = !!(app.sgTheme && Math.random()<OMEN_RATE);
   const meIdx=app.field.findIndex(h=>!h.npc);
   app.sim=new RaceSim(r,app.field,meIdx);
   app.scene='paddock';
@@ -2142,6 +2424,7 @@ function openWatch(){
   app.field=makeWatchField(r);
   app.odds=makeOdds(app.field,r);
   app.bets=[]; app.betSel=null; app.spectate=true;
+  app.sgTheme=null; app.omen=false;
   app.sim=new RaceSim(r,app.field,0);
   app.scene='paddock';
   SFX.gate();
@@ -2199,6 +2482,10 @@ function startRace(){
     app.sim.me=app.sim.run[+idx];
   }
   app.sim.me.whip=3;
+  if(app.omen && !app.spectate){        // 吉兆は演出だけでなく実際に効く
+    app.sim.me.cap   *= 1.030;
+    app.sim.me.stFac *= 1.25;
+  }
   app.mapBase=buildMapBase(app.sim);
   tmap.hidden=false;
   SFX.gate();
@@ -2223,24 +2510,35 @@ function finishRace(){
   h.fatigue=clamp(h.fatigue+rint(22,30),0,100);
   h.cond=clamp(h.cond-rint(4,12),5,100);
   h.fans+=Math.round(prize/12 + (me.pos===1?400:0));
-  let up=null;
+  let up=null, unlocked=[];
   if(me.pos===1){
+    const openBefore=sgOpen(h);        // 勝つ前に開いていた隠しレース
     h.wins++;
+    h.won=h.won||{}; h.won[r.n]=true;
+    // ダービーを無敗で勝ったか（この勝利まで全戦全勝）
+    if(r.n==='日本ダービー' && h.races===h.wins) h.derbyUnbeaten=true;
     if(r.g==='jo' && h.cls<4){ h.cls++; up=`${CLASS_NAME[h.cls]}に昇級した！`; }
-    if(r.g==='G1'||r.g==='G2'||r.g==='G3') h.g1++;
+    if(r.g!=='jo' && r.g!=='op') h.g1++;
+    if(r.g==='SG') h.sg=(h.sg||0)+1;
+    unlocked=sgOpen(h).filter(n=>openBefore.indexOf(n)<0);
+    if(unlocked.length){
+      G.sgFound=G.sgFound||[];
+      unlocked.forEach(n=>{ if(G.sgFound.indexOf(n)<0) G.sgFound.push(n); });
+    }
     SFX.win();
   }else if(me.pos<=3) SFX.ok(); else SFX.lose();
   G.history.push({y:G.year,w:G.week,n:r.n,pos:me.pos,gain:prize+pay-spent});
   logLine(`${r.n} ${me.pos}着`);
   app.scene='podium'; app.podT=0; app.podRes=res; app.podPos=me.pos;
   tmap.hidden=true;
-  say(me.pos===1?`${h.name}、${r.n}制覇！`:`${h.name}は${me.pos}着でゴール。`, me.pos===1);
-  show('result',{res,race:r,mePos:me.pos,prize,pay,spent,net:prize+pay-spent,up});
+  say(unlocked.length ? `${r.n}制覇！ 招待状が届いた——${unlocked[0]}。`
+      : me.pos===1 ? `${h.name}、${r.n}制覇！` : `${h.name}は${me.pos}着でゴール。`, me.pos===1);
+  show('result',{res,race:r,mePos:me.pos,prize,pay,spent,net:prize+pay-spent,up,unlocked});
   save();
 }
 function retire(){
   const h=G.horse;
-  const score = h.wins*10 + h.g1*45 + h.earned/2600 + G.medals/5200;
+  const score = h.wins*10 + h.g1*45 + (h.sg||0)*80 + h.earned/2600 + G.medals/5200;
   const rank = score>=150?'S' : score>=100?'A' : score>=62?'B' : score>=30?'C' : 'D';
   const comment = ({
     S:'ターフの歴史に名を刻む名馬となった。',
@@ -2340,7 +2638,7 @@ const ACT = {
   pickhorse(d){ app.betSel=+d.i; SFX.tap(); show('bet'); },
   bet(d){ placeBet(d.t,+d.a); },
   clearbet(){ for(const b of app.bets) G.medals+=b.amt; app.bets=[]; SFX.tap(); show('bet'); },
-  cancelrace(){ app.scene='stable'; app.sim=null; app.spectate=false;
+  cancelrace(){ app.scene='stable'; app.sim=null; app.spectate=false; app.sgTheme=null; app.omen=false;
     for(const b of app.bets) G.medals+=b.amt; app.bets=[];
     tmap.hidden=true; SFX.tap(); show('home'); drawScene(); },
   watch(){ openWatch(); },
@@ -2365,7 +2663,8 @@ const ACT = {
     const b=$('#skipBtn'); if(b) b.textContent='結果へ';
     if(s.done) (app.spectate?finishWatch:finishRace)();
   },
-  afterrace(){ app.scene='stable'; app.sim=null; app.spectate=false; SFX.tap(); advanceWeek(); },
+  afterrace(){ app.scene='stable'; app.sim=null; app.spectate=false; app.sgTheme=null; app.omen=false;
+    SFX.tap(); advanceWeek(); },
   nextgen(){ app.scene='stable'; SFX.tap(); show('pick'); save(); },
   reset(){ if(!confirm('セーブデータを消して最初からやり直す？')) return; wipe(); G=blank(); app.scene='title'; tmap.hidden=true; show('title'); }
 };
@@ -2460,7 +2759,7 @@ function render(now, dt){
     }
   }
   else if(app.scene==='paddock'){
-    drawBack(now*0.002,app.race.s); drawTrack(0,app.race.s,99999);
+    drawBack(now*0.002,app.race.s,app.sgTheme,app.omen); drawTrack(0,app.race.s,99999);
     const sel=app.betSel;
     if(sel!=null && app.field[sel]){
       // 馬を選んだら、その1頭を枠色の勝負服つきで大きく見せる
@@ -2492,7 +2791,7 @@ function render(now, dt){
     }
     const me=sim.me, D=sim.D;
     const camX=clamp(me.x-16, 0, D+20);
-    drawBack(camX,app.race.s);
+    drawBack(camX,app.race.s,app.sgTheme,app.omen);
     drawTrack(camX,app.race.s,D,sim.bendAt(me.x));
     drawField(sim,camX);
     const rem=Math.max(0,Math.round((D-me.x)/10)*10);
@@ -2540,7 +2839,7 @@ function render(now, dt){
     const sim=app.sim;
     if(sim){
       const camX=clamp(sim.me.x-16,0,sim.D+20);
-      drawBack(camX,app.race.s); drawTrack(camX,app.race.s,sim.D,0);
+      drawBack(camX,app.race.s,app.sgTheme,app.omen); drawTrack(camX,app.race.s,sim.D,0);
       drawField(sim,camX);
     }
     setHud(`<span class="chip gold">GOAL!</span>`);
@@ -2567,6 +2866,7 @@ function boot(){
 }
 /* バランス調整・検証用のフック（走破時計や着差を外から測れるようにする） */
 window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
+                      SG_RACES, racesFor, sgOpen, GRADE_PRIZE,
                       get state(){ return G; } };
 
 try{ boot(); }
