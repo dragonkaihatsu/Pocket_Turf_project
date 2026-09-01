@@ -276,7 +276,7 @@ h2.head{
 .stat .bar{height:7px;border-radius:4px;background:#07190f;overflow:hidden;box-shadow:0 0 0 1px #24583a inset}
 .stat .bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#2f9a63,#6ff0a0)}
 .stat .vl{font-size:11px;text-align:right;color:var(--ink)}
-.gauge{height:9px;border-radius:5px;background:#07190f;overflow:hidden;box-shadow:0 0 0 1px #24583a inset}
+.gauge{display:block;height:9px;border-radius:5px;background:#07190f;overflow:hidden;box-shadow:0 0 0 1px #24583a inset}
 .gauge i{display:block;height:100%;transition:width .25s ease}
 
 .pill{
@@ -574,29 +574,29 @@ const RACES = [
    クラス条件は課さない（重賞を勝った事実そのものが出走資格）。
    達成は愛馬ごとに持つので、代が替わればまた一から挑むことになる。 */
 const wonRace = (h,n) => !!(h && h.won && h.won[n]);
-/* theme: 上画面の背景。omen はごく稀に現れる吉兆で、出たらその日は勝ちやすい。 */
+/* theme: 上画面の背景。omen はごく稀に現れる吉兆で、出たらその日は勝ちやすい。
+   出走条件は全レース共通で「G1を2勝」。満たした時点で招待状が届き、あとは
+   季節ごとに巡ってくる各国のカップに挑んでいく。 */
 const OMEN_RATE = 0.18;
+const SG_NEED_G1 = 2;
+const seasonOf = w => (w>=9&&w<=21)?'春' : (w>=22&&w<=34)?'夏' : (w>=35&&w<=47)?'秋' : '冬';
+const sgReady = h => (h && (h.g1w||0) >= SG_NEED_G1);
 const SG_RACES = [
   {n:'チャイナカップ',     w:1,  d:1200, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'チャイナ',
    theme:'china',   logo:'China CUP',   ink:'#ff8fc0', omen:'パンダ',
-   cond:'有馬記念を勝つ',
-   test:h=>wonRace(h,'有馬記念')},
+   cond:'G1を2勝する', test:sgReady},
   {n:'アラビアンカップ',   w:12, d:2000, s:'ダート', g:'SG', cls:1, age:[4,5],   c:'アラビア',
    theme:'arabian', logo:'Arabian CUP', ink:'#ffd23f', omen:'スフィンクス',
-   cond:'フェブラリーSとチャンピオンズCを勝つ',
-   test:h=>wonRace(h,'フェブラリーS')&&wonRace(h,'チャンピオンズC')},
+   cond:'G1を2勝する', test:sgReady},
   {n:'ブリテンカップ',     w:33, d:2400, s:'芝',     g:'SG', cls:1, age:[3,4,5], c:'ブリテン',
    theme:'britain', logo:'Britain CUP', ink:'#ff9ad2', omen:'金のビッグベン',
-   cond:'無敗で日本ダービーを勝つ',
-   test:h=>!!(h&&h.derbyUnbeaten)},
+   cond:'G1を2勝する', test:sgReady},
   {n:'パリカップ',         w:40, d:3600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'パリ',
    theme:'paris',   logo:'Paris CUP',   ink:'#1667c8', omen:'オレンジの飛行機',
-   cond:'天皇賞（春）と天皇賞（秋）を制覇する',
-   test:h=>wonRace(h,'天皇賞（春）')&&wonRace(h,'天皇賞（秋）')},
+   cond:'G1を2勝する', test:sgReady},
   {n:'アメリカンカップ',   w:18, d:1600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'アメリカ',
    theme:'ny',      logo:'American CUP', ink:'#d8ecff', omen:'黄色いタクシー',
-   cond:'ジャパンカップを勝つ',
-   test:h=>wonRace(h,'ジャパンカップ')}
+   cond:'G1を2勝する', test:sgReady}
 ];
 const sgOpen = h => SG_RACES.filter(r=>r.test(h)).map(r=>r.n);
 /* 条件戦は毎月生成（クラスに応じて距離・馬場をローテーション） */
@@ -1748,7 +1748,7 @@ const V = {
     <div class="card"><p class="eyebrow">7 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
     <div class="card"><p class="eyebrow">8 / 招待状</p>
-      <p class="muted">特別な条件を満たした馬のもとには、カレンダーに載っていないレースの<b class="gold">招待状</b>が届くことがある。条件は愛馬ごとに数える。</p></div>
+      <p class="muted"><b class="gold">G1を${SG_NEED_G1}勝</b>した馬のもとには招待状が届く。カレンダーに載っていない各国のカップに、<b class="gold">春・夏・秋・冬</b>と巡って挑めるようになる。1着賞金はG1の2倍以上。条件は愛馬ごとに数えるので、代が替わればまた一からになる。</p></div>
     <div class="card"><p class="eyebrow">9 / コース</p>
       <p class="muted">競馬場ごとに<b class="gold">直線距離</b>・<b class="gold">小回り</b>・<b class="gold">急坂</b>が違う。<br>
       ・直線が短い中山や札幌は、前にいる馬が有利。新潟の659mなら追込でも届く<br>
@@ -2018,18 +2018,32 @@ const V = {
     return `<h2 class="head">記録</h2>
       ${rows?`<div class="card"><table class="res"><thead><tr><th>日付</th><th>レース</th><th>着順</th><th>収支</th></tr></thead><tbody>${rows}</tbody></table></div>`
             :`<p class="muted">まだ出走記録がない。</p>`}
-      ${(G.sgFound&&G.sgFound.length)?`<p class="eyebrow">隠しレース</p>
-        <div class="card tight">${SG_RACES.map(r=>{
-          const found=G.sgFound.indexOf(r.n)>=0;
-          const open=r.test(G.horse);
-          return `<div class="row between" style="font-size:11.5px;padding:3px 0">
-            <span>${found?`<b class="${open?'gold':''}">${esc(r.n)}</b>
-              <br><span style="font-size:9.5px;color:var(--ink-3)">${esc(r.cond)}</span>`
-              :'<span style="color:var(--ink-3)">？？？</span>'}</span>
-            <span class="dot" style="font-size:10px;color:${open?'var(--gold)':'var(--ink-3)'}">${
-              found?(open?'出走可':'条件未達'):'未発見'}</span>
-          </div>`;
-        }).join('')}</div>`:''}
+      ${(()=>{
+        const h=G.horse, g1w=h?(h.g1w||0):0, open=sgReady(h);
+        const seen=(G.sgFound&&G.sgFound.length)>0;
+        if(!seen && !g1w) return '';                 // 何も知らないうちは伏せておく
+        return `<p class="eyebrow">四季のカップ</p>
+        <div class="card tight">
+          <div class="row between" style="margin-bottom:6px">
+            <span class="muted" style="font-size:11px">招待状</span>
+            <b class="num ${open?'gold':''}" style="font-size:11.5px">${
+              open?'受け取り済み':`G1 ${g1w} / ${SG_NEED_G1}勝`}</b>
+          </div>
+          <span class="gauge"><i style="width:${clamp(g1w/SG_NEED_G1*100,0,100)}%;background:${
+            open?'var(--gold)':'linear-gradient(90deg,#2f9a63,#6ff0a0)'}"></i></span>
+          <div class="sep"></div>
+          ${SG_RACES.slice().sort((a,b)=>a.w-b.w).map(r=>{
+            const found=(G.sgFound||[]).indexOf(r.n)>=0;
+            return `<div class="row between" style="font-size:11.5px;padding:3px 0">
+              <span><span class="pill jo" style="margin-right:5px">${seasonOf(r.w)}</span>
+                ${open||found?`<b style="color:${r.ink}">${esc(r.n)}</b>`
+                  :'<span style="color:var(--ink-3)">？？？</span>'}</span>
+              <span class="dot" style="font-size:10px;color:${found?'var(--gold)':'var(--ink-3)'}">${
+                found?'制覇':(open?`第${r.w}週`:'未招待')}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      })()}
       ${past?`<p class="eyebrow">歴代の愛馬</p>${past}`:''}
       <div class="sep"></div>
       <button class="btn center wide" data-act="save" style="margin-bottom:7px">セーブする</button>
@@ -2062,7 +2076,8 @@ const V = {
         app.omen?'border-color:var(--gold);background:#241d0b':''}">
         <div class="row between">
           <b style="font-size:12px;color:${app.sgTheme.ink}">${esc(app.sgTheme.logo)}</b>
-          <span class="pill sg">SG</span>
+          <span class="row" style="gap:4px"><span class="pill jo">${seasonOf(app.sgTheme.w)}</span>
+            <span class="pill sg">SG</span></span>
         </div>
         <p class="muted" style="margin:5px 0 0;font-size:11px">${app.omen
           ? `<b class="gold">${esc(app.sgTheme.omen)}が見えている。今日はいける。</b>`
@@ -2196,16 +2211,19 @@ const V = {
         <div class="row between"><b>収支</b><b class="num ${d.net>=0?'ok':'hot'}">${d.net>=0?'+':''}${yen(d.net)}</b></div>
       </div>
       ${d.up?`<div class="card tight"><p class="eyebrow">昇級</p><p style="margin:0;font-size:12.5px" class="gold">${esc(d.up)}</p></div>`:''}
-      ${(d.unlocked&&d.unlocked.length)?d.unlocked.map(n=>{
-        const sg=SG_RACES.find(x=>x.n===n);
-        return `<div class="card pop" style="border-color:var(--gold);background:#241d0b">
+      ${(d.unlocked&&d.unlocked.length)?`
+        <div class="card pop" style="border-color:var(--gold);background:#241d0b">
           <p class="eyebrow gold">INVITATION / 招待状</p>
-          <b class="gold" style="font-size:15px">${esc(n)}</b>
-          <p class="muted" style="margin:5px 0 0;font-size:11.5px">
-            ${esc(sg.c)}・${sg.s}${sg.d}m／${G.year===sg.age[0]&&G.week<sg.w?'今年':'次の'}第${sg.w}週に出走できる。
-            1着賞金 <b class="gold num">${yen(GRADE_PRIZE.SG)}</b></p>
-        </div>`;
-      }).join(''):''}
+          <p class="muted" style="margin:0 0 8px;font-size:11.5px">
+            G1を${SG_NEED_G1}勝した馬にだけ届く。四季を巡る5つのカップに出走できる。
+            どれも1着賞金 <b class="gold num">${yen(GRADE_PRIZE.SG)}</b>。</p>
+          ${SG_RACES.slice().sort((a,b)=>a.w-b.w).map(sg=>`
+            <div class="row between" style="font-size:11.5px;padding:3px 0">
+              <span><span class="pill jo" style="margin-right:5px">${seasonOf(sg.w)}</span>
+                <b style="color:${sg.ink}">${esc(sg.n)}</b></span>
+              <span class="dot" style="font-size:10px;color:var(--ink-3)">第${sg.w}週・${sg.s}${sg.d}m</span>
+            </div>`).join('')}
+        </div>`:''}
       <div class="card"><table class="res">
         <thead><tr><th>着</th><th></th><th>馬名</th><th>タイム</th><th>上り</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
@@ -2519,11 +2537,12 @@ function finishRace(){
     if(r.n==='日本ダービー' && h.races===h.wins) h.derbyUnbeaten=true;
     if(r.g==='jo' && h.cls<4){ h.cls++; up=`${CLASS_NAME[h.cls]}に昇級した！`; }
     if(r.g!=='jo' && r.g!=='op') h.g1++;
+    if(r.g==='G1'||r.g==='SG') h.g1w=(h.g1w||0)+1;   // 招待状はG1勝利数で数える
     if(r.g==='SG') h.sg=(h.sg||0)+1;
     unlocked=sgOpen(h).filter(n=>openBefore.indexOf(n)<0);
-    if(unlocked.length){
+    if(r.g==='SG'){                                   // 制覇したカップを記録に残す
       G.sgFound=G.sgFound||[];
-      unlocked.forEach(n=>{ if(G.sgFound.indexOf(n)<0) G.sgFound.push(n); });
+      if(G.sgFound.indexOf(r.n)<0) G.sgFound.push(r.n);
     }
     SFX.win();
   }else if(me.pos<=3) SFX.ok(); else SFX.lose();
@@ -2866,7 +2885,7 @@ function boot(){
 }
 /* バランス調整・検証用のフック（走破時計や着差を外から測れるようにする） */
 window.PocketTurf = { RaceSim, newHorse, makeField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
-                      SG_RACES, racesFor, sgOpen, GRADE_PRIZE,
+                      SG_RACES, racesFor, sgOpen, sgReady, seasonOf, SG_NEED_G1, GRADE_PRIZE,
                       get state(){ return G; } };
 
 try{ boot(); }
