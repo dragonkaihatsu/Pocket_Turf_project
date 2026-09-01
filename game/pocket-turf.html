@@ -1643,7 +1643,7 @@ const STABLE = [
   {wall:['#3a2c1c','#453522'], damp:false, floor:'#3a2d1a', straw:'#7d6231',
    plate:'#6b5323', ink:'#f0e0b8', tilt:-0.025, glow:.30},
   {wall:['#e6e0d2','#f4f0e4'], damp:false, floor:'#c6b99e', straw:'#dcc890',
-   plate:'#f7f3e7', ink:'#4a3a1c', tilt:0, glow:.34, lux:true}
+   plate:'#f7f3e7', ink:'#4a3a1c', tilt:0, glow:.34, lux:true, throne:true}
 ];
 function drawStable(h, t){
   const rk=stableRank(h), S=STABLE[rk];
@@ -1682,18 +1682,42 @@ function drawStable(h, t){
   g.lineWidth=1;
   g.beginPath(); g.moveTo(wx+ww/2,wy); g.lineTo(wx+ww/2,wy+wh);
   g.moveTo(wx,wy+wh/2); g.lineTo(wx+ww,wy+wh/2); g.stroke();
-  // 床（藁）
+  // 床
   g.fillStyle=S.floor; g.fillRect(0,H*.62,W,H*.38);
-  g.globalAlpha=.5;
-  for(let i=0;i<70;i++){
-    const x=(i*79)%W, y=H*.63+((i*53)%(H*.35));
-    g.strokeStyle=S.straw; g.lineWidth=1;
-    g.beginPath(); g.moveTo(x,y); g.lineTo(x+7,y+2); g.stroke();
+  if(S.throne){
+    // 磨いた石床の映り込み
+    g.globalAlpha=.14; g.fillStyle='#ffffff';
+    for(let i=0;i<7;i++) g.fillRect(0, H*.64+i*(H*.05), W, 2);
+    g.globalAlpha=1;
+    // レッドカーペット（奥の玉座から手前へ末広がり）
+    const cc=W*.56;
+    g.fillStyle='#8e1226';
+    g.beginPath();
+    g.moveTo(cc-W*.14,H*.655); g.lineTo(cc+W*.14,H*.655);
+    g.lineTo(cc+W*.32,H);      g.lineTo(cc-W*.32,H);
+    g.closePath(); g.fill();
+    g.fillStyle='rgba(255,255,255,.07)';        // 起毛の照り
+    g.beginPath();
+    g.moveTo(cc-W*.05,H*.655); g.lineTo(cc+W*.02,H*.655);
+    g.lineTo(cc+W*.05,H);      g.lineTo(cc-W*.12,H);
+    g.closePath(); g.fill();
+    g.strokeStyle='#d8b048'; g.lineWidth=Math.max(2,W*.007);   // 金の縁取り
+    g.beginPath();
+    g.moveTo(cc-W*.125,H*.66); g.lineTo(cc-W*.295,H);
+    g.moveTo(cc+W*.125,H*.66); g.lineTo(cc+W*.295,H);
+    g.stroke();
+  }else{
+    g.globalAlpha=.5;
+    for(let i=0;i<70;i++){
+      const x=(i*79)%W, y=H*.63+((i*53)%(H*.35));
+      g.strokeStyle=S.straw; g.lineWidth=1;
+      g.beginPath(); g.moveTo(x,y); g.lineTo(x+7,y+2); g.stroke();
+    }
+    g.globalAlpha=1;
+    // 飼い葉桶
+    g.fillStyle='#2f2417'; roundRect(W*.06,H*.72,W*.16,H*.10,3); g.fill();
+    g.fillStyle='#6b5323'; roundRect(W*.07,H*.725,W*.14,H*.035,2); g.fill();
   }
-  g.globalAlpha=1;
-  // 飼い葉桶
-  g.fillStyle= rk===2?'#8a6a3a':'#2f2417'; roundRect(W*.06,H*.72,W*.16,H*.10,3); g.fill();
-  g.fillStyle= rk===2?'#d8bb70':'#6b5323'; roundRect(W*.07,H*.725,W*.14,H*.035,2); g.fill();
   // 吊りランプ。馬体が壁に沈まないよう、光だまりで浮かせる
   const lx=W*.52;
   const lamp=g.createRadialGradient(lx,H*.085,3,lx,H*.72,W*.55);
@@ -1708,11 +1732,121 @@ function drawStable(h, t){
   // 特別レースを勝った証のレイ（赤と金の糸）
   if((h.sg||0)>0) drawLei(W*.10, H*.10, W*.44, H*.09, t);
   // ネームプレート（格が低いうちは傾いている）
-  drawPlate(h, S, W*.09, H*.30);
+  // 玉座は背もたれが高いので、ぶつからない高さへ寄せる
+  if(S.throne) drawPlate(h, S, W*.04, H*.22);
+  else         drawPlate(h, S, W*.09, H*.30);
   // 馬（呼吸で上下）
   const s=Math.min(W*0.26,H*0.38);
   const breathe=Math.sin(t/900)*s*0.012;
-  drawHorse(W*0.52,H*0.74+breathe,s,h.coat,0,0,Math.sin(t/700)*0.18,false,false);
+  if(S.throne){
+    const seatY=H*0.66, ts=s*0.80, cx=W*0.56;
+    drawThrone(cx, seatY, ts, t);
+    // 暗い毛色が赤い張り地に沈むので、馬の後ろに光だまりを置く
+    const hl=g.createRadialGradient(cx,seatY-ts*0.35,ts*0.10,cx,seatY-ts*0.20,ts*1.25);
+    hl.addColorStop(0,'rgba(255,236,190,.42)');
+    hl.addColorStop(1,'rgba(255,226,170,0)');
+    g.fillStyle=hl; g.fillRect(0,0,W,H);
+    drawHorseSeated(cx-ts*0.03, seatY, ts*1.05, h.coat, t);
+  }else{
+    drawHorse(W*0.52,H*0.74+breathe,s,h.coat,0,0,Math.sin(t/700)*0.18,false,false);
+  }
+}
+/* 玉座。厩舎の最終段階は馬房ではなく謁見の間になる。 */
+function drawThrone(cx, seatY, s, t){
+  const bw=s*0.62;                                   // 背もたれの半幅
+  const bh=s*1.18;                                   // 背もたれの高さ
+  const gold=(x0,y0,x1,y1)=>{
+    const q=g.createLinearGradient(x0,y0,x1,y1);
+    q.addColorStop(0,'#f8e6a6'); q.addColorStop(.45,'#d2a52c'); q.addColorStop(1,'#8a6512');
+    return q;
+  };
+  // 台座（2段）
+  g.fillStyle='#6d5116'; roundRect(cx-s*1.05, seatY+s*0.42, s*2.10, s*0.13, 3); g.fill();
+  g.fillStyle=gold(cx-s,seatY,cx+s,seatY+s*0.5);
+  roundRect(cx-s*0.86, seatY+s*0.30, s*1.72, s*0.13, 3); g.fill();
+  // 背もたれ
+  g.fillStyle=gold(cx-bw,seatY-bh,cx+bw,seatY);
+  roundRect(cx-bw, seatY-bh, bw*2, bh, s*0.13); g.fill();
+  g.fillStyle='#8e1226';                             // 赤い張り地
+  roundRect(cx-bw*0.76, seatY-bh*0.90, bw*1.52, bh*0.80, s*0.09); g.fill();
+  g.fillStyle='rgba(255,255,255,.09)';
+  roundRect(cx-bw*0.70, seatY-bh*0.86, bw*0.55, bh*0.70, s*0.07); g.fill();
+  // 頂点の飾り玉
+  g.fillStyle=gold(cx-s*0.2,seatY-bh-s*0.2,cx+s*0.2,seatY-bh);
+  g.beginPath(); g.arc(cx, seatY-bh-s*0.055, s*0.085, 0, 7); g.fill();
+  [-1,1].forEach(d=>{
+    g.beginPath(); g.arc(cx+d*bw*0.86, seatY-bh*0.94, s*0.055, 0, 7); g.fill();
+  });
+  // 肘掛け
+  [-1,1].forEach(d=>{
+    g.fillStyle=gold(cx,seatY-s*0.2,cx+d*s*0.9,seatY+s*0.1);
+    roundRect(cx+d*bw*0.82-s*0.10, seatY-s*0.10, s*0.20, s*0.44, s*0.05); g.fill();
+    roundRect(cx+(d>0?bw*0.44:-bw*1.24), seatY-s*0.16, bw*0.80, s*0.11, s*0.05); g.fill();
+  });
+  // 座面
+  g.fillStyle=gold(cx-s*0.8,seatY,cx+s*0.8,seatY+s*0.3);
+  roundRect(cx-s*0.78, seatY, s*1.56, s*0.30, s*0.06); g.fill();
+  g.fillStyle='#a01530';
+  roundRect(cx-s*0.70, seatY+s*0.03, s*1.40, s*0.15, s*0.04); g.fill();
+}
+/* 玉座に腰を下ろした愛馬。走る型の drawHorse とは別に、座り姿を描く。
+   seatY は座面の高さ。尻がそこへ沈むよう原点を決め、肢は座面より下に出さない
+   （下に伸ばすと立っているように見えてしまう）。 */
+function drawHorseSeated(x,seatY,s,coat,t){
+  const c=COATS[coat]||COATS[0];
+  const dark=c.m||'#2b1a10';
+  const legCol = coat===3 ? '#8d8781' : dark;
+  const breathe=Math.sin(t/900)*s*0.008;
+  g.save(); g.translate(x, seatY-0.24*s+breathe);
+  g.lineCap='round'; g.lineJoin='round';
+  const rest=0.28*s;                     // 蹄が乗る座面の高さ
+  // 尾は座面へ流す
+  g.strokeStyle=dark; g.lineWidth=s*0.070;
+  g.beginPath(); g.moveTo(-0.34*s,-0.02*s);
+  g.quadraticCurveTo(-0.52*s,0.16*s,-0.44*s,rest); g.stroke();
+  // 奥側の前肢
+  g.globalAlpha=.70; g.strokeStyle=legCol; g.lineWidth=s*0.050;
+  g.beginPath(); g.moveTo(0.18*s,-0.06*s); g.lineTo(0.24*s,0.11*s); g.lineTo(0.22*s,rest-0.01*s); g.stroke();
+  g.globalAlpha=1;
+  // 胴：後躯を座面へ落とし、胸を起こす
+  g.fillStyle=c.c;
+  g.beginPath(); g.ellipse(-0.19*s, 0.04*s,0.255*s,0.200*s, 0.10,0,7); g.fill();
+  g.beginPath(); g.ellipse( 0.02*s,-0.07*s,0.280*s,0.180*s,-0.16,0,7); g.fill();
+  g.beginPath(); g.ellipse( 0.22*s,-0.18*s,0.180*s,0.165*s,-0.24,0,7); g.fill();
+  // 後肢：寛→膝→飛節と深く折りたたむ。胴の手前に描いて折れ方を見せる。
+  g.strokeStyle=legCol; g.lineWidth=s*0.082;
+  g.beginPath();
+  g.moveTo(-0.21*s,-0.01*s);           // 寛
+  g.lineTo( 0.01*s, 0.15*s);           // 膝（前へ張り出す）
+  g.lineTo(-0.15*s, 0.25*s);           // 飛節（後ろへ折り返す）
+  g.lineTo( 0.03*s, rest);             // 蹄は前へ
+  g.stroke();
+  // 首を高く起こす
+  const nx=0.46, ny=-0.54;
+  g.beginPath();
+  g.moveTo(0.24*s,-0.30*s);
+  g.quadraticCurveTo(0.39*s,-0.39*s,nx*s,ny*s);
+  g.lineTo((nx+0.110)*s,(ny+0.04)*s);
+  g.quadraticCurveTo(0.50*s,-0.25*s,0.35*s,-0.09*s);
+  g.closePath(); g.fill();
+  // 頭（やや上向き＝誇らしげ）
+  g.save(); g.translate((nx+0.050)*s,(ny-0.015)*s); g.rotate(0.12);
+  g.fillStyle=c.c;
+  g.beginPath(); g.ellipse(0,0,0.122*s,0.063*s,0,0,7); g.fill();
+  g.fillStyle=dark;
+  g.beginPath(); g.ellipse(0.105*s,0.010*s,0.029*s,0.038*s,0,0,7); g.fill();
+  g.beginPath(); g.moveTo(-0.086*s,-0.040*s); g.lineTo(-0.117*s,-0.130*s); g.lineTo(-0.036*s,-0.058*s); g.closePath(); g.fill();
+  g.fillStyle='#0c0a08';
+  g.beginPath(); g.ellipse(-0.019*s,-0.025*s,0.014*s,0.014*s,0,0,7); g.fill();
+  g.restore();
+  // たてがみ
+  g.strokeStyle=dark; g.lineWidth=s*0.052;
+  g.beginPath(); g.moveTo(0.28*s,-0.29*s);
+  g.quadraticCurveTo(0.40*s,-0.43*s,(nx+0.01)*s,(ny-0.01)*s); g.stroke();
+  // 手前の前肢：まっすぐ突っ張って上体を支える
+  g.strokeStyle=legCol; g.lineWidth=s*0.068;
+  g.beginPath(); g.moveTo(0.24*s,-0.04*s); g.lineTo(0.30*s,0.12*s); g.lineTo(0.28*s,rest); g.stroke();
+  g.restore();
 }
 /* 壁に掲げられたレイ。赤と金の糸を撚った祝いの輪。 */
 function drawLei(x,y,w,sag,t){
