@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## リポジトリの性質
 
-このリポジトリの中身は以下の3つ:
+プロジェクト名は **Pocket TURF project**（旧 RYUJI）。中身は以下の3つ:
 
-- `CLAUDE.md`（本ファイル） — JRA中央競馬・地方競馬の重賞レースを100点満点でスコアリングし、印と買い目プランをHTML形式で出力するための**タスク仕様書**（このリポジトリの主目的）
+- `README.md` — プロジェクトの入口。名前と構成、ゲームの遊べる内容をまとめてある
+- `CLAUDE.md`（本ファイル） — JRA中央競馬・地方競馬の重賞レースを100点満点でスコアリングし、印と買い目プランをHTML形式で出力するための**タスク仕様書**
 - `data/` — 出走馬データ・過去データのCSVを置くディレクトリ
 - `game/` — 競馬育成ゲーム（下記）
 
