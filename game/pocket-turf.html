@@ -2707,6 +2707,9 @@ function doTrain(i){
   SFX.tap();
   const txt = gains.map(([k,v])=>`${STAT_KEYS.find(s=>s[0]===k)[1]}+${v.toFixed(1)}`).join('　');
   say(`${m.k}調教。${txt}`);
+  // メダルと能力はここで確定している。演出中に閉じられても週送り前の
+  // この時点までは残るよう、advanceWeek を待たずにここで一度保存する。
+  save();
   // 週ターンは回数が多いので演出は短く。タップで即スキップできる。
   app.trainDone=()=>{ app.trainDone=null; app.scene='stable'; advanceWeek(); };
   setTimeout(()=>{ if(app.trainDone) app.trainDone(); }, REDUCE?60:750);
