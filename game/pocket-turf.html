@@ -358,6 +358,56 @@ input[type=text]{
   width:100%;padding:9px 10px;border-radius:8px;background:#07190f;
   border:1px solid var(--line);color:var(--ink);font-size:15px;font-family:inherit;
 }
+/* 馬券のマークシート。式別→馬番→金額の順に「塗って」買う */
+.sheet{background:#0a2317}
+.sheetrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sheetlab{
+  flex:0 0 30px;font-family:"DotGothic16",monospace;font-size:10px;
+  color:var(--ink-3);letter-spacing:.08em;
+}
+.marks{display:flex;gap:6px;flex:1}
+.marks .mark{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
+  min-height:38px;border-radius:6px;border:1px solid var(--line);
+  background:#07190f;color:var(--ink-2);font-size:11.5px;
+  font-family:"DotGothic16",monospace;
+}
+.marks .mark i{
+  width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ink-3);
+  display:block;flex:0 0 auto;
+}
+.marks .mark.on{border-color:var(--gold);color:var(--gold);background:#241d0b}
+.marks .mark.on i{background:var(--gold);border-color:var(--gold)}
+.marks .mark:active{filter:brightness(1.3)}
+.marks .mark[disabled]{opacity:.3}
+.waku{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;flex:1}
+.wcell{
+  min-height:42px;border-radius:6px;border:2px solid rgba(0,0,0,.45);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.wcell b{font-family:"DotGothic16",monospace;font-size:15px;font-weight:400;line-height:1}
+.wcell small{font-family:"DotGothic16",monospace;font-size:9.5px;opacity:.85;line-height:1.4}
+.wcell.on{box-shadow:0 0 0 3px var(--gold);border-color:#fff}
+.wcell.c1{background:var(--w1);color:#141414}
+.wcell.c2{background:var(--w2);color:#fff}
+.wcell.c3{background:var(--w3);color:#fff}
+.wcell.c4{background:var(--w4);color:#fff}
+.wcell.c5{background:var(--w5);color:#141414}
+.wcell.c6{background:var(--w6);color:#fff}
+.wcell.c7{background:var(--w7);color:#141414}
+.wcell.c8{background:var(--w8);color:#3a1220}
+.readout{
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;min-height:44px;
+  padding:7px 8px;border-radius:6px;background:#07190f;border:1px solid var(--line);
+}
+.readout.empty{justify-content:center}
+.ro-name{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3}
+.ro-name b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ro-name small{font-size:9.5px;color:var(--ink-3)}
+.ro-odds{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.ro-odds b{font-family:"DotGothic16",monospace;font-size:16px;color:var(--cyan)}
+.ro-odds small{font-size:9px;color:var(--ink-3)}
+
 /* 合言葉の入力（4文字×3）と表示 */
 .pwrow{display:flex;align-items:center;gap:5px}
 .pw{
@@ -481,6 +531,13 @@ const COATS = [
 const P1 = ['サイレント','ゴールド','メジロ','ナリタ','キング','クイーン','シルバー','トウカイ','ヒカル','マチカネ','ヤマニン','エア','ダンス','ノーザン','グラス','シンボリ','ビワ','タニノ','スペシャル','ロード','スター','ドリーム','サクラ','ウイニング','テイエム','マイネル','コスモ','ブラック','セイウン','アドマイヤ'];
 const P2 = ['ウィナー','スズカ','ハヤヒデ','ブライアン','テイオー','ボーイ','フラッシュ','クラウン','ソング','ダンサー','ライト','ストーム','ウェーブ','グロリア','ハート','スピリット','ジャスティス','ホープ','シチー','パレス','リリー','ノヴァ','ゼウス','アロー','ブレイズ','ラン','シャワー','タイフーン','ムーン','ロケット'];
 const JOCKEY = ['黒川','早坂','鷲見','片桐','天野','日下部','桐生','榊','南雲','剣持','鏑木','八神','相良'];
+/* 出走表に混ざる名物馬たち。半分ほどのNPCがこの名前を名乗る。 */
+const MOB_NAMES = ['ドネルケバブ','モヤシセイカツ','オッタマゲ','パニックパニック','ヨルノテイオー',
+  'ヤッタルデー','コトネヌイ','キラメキラリ','メトメガアウトキ','ポッチャマ','ヤキニクヤキニク',
+  'ポテトサラダ','シェンロン','イッテキマース','イッチョアガリ','ベルリンノカベ','チワース',
+  'ドクチワワ','サイゴノギョウザ','オレンジサファイヤ','タンバリン','カスタネット','オムカイサン',
+  'ホームランダービー','モーレスター','アツクナレヨ','ムネオハウス','タンタンメン','キンニクン',
+  'コンヤハオケラ','ネボスケサン'];
 const STYLES = ['逃げ','先行','差し','追込'];
 const GROWTH = ['早熟','普通','普通','晩成'];
 const APT_MULT = {S:1.055,A:1.025,B:1.0,C:.955,D:.90,E:.845};
@@ -534,6 +591,14 @@ const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:13000, G1:26000, SG:60000};
 const COND_PRIZE  = [900,1600,2400,3400];
 /* 1年＝50週。w がそのレースの開催週（1〜50）。 */
 const WEEKS_PER_YEAR = 50;
+/* 50週を12か月に割り振る（合計50）。表示は「1月1週」の形式。 */
+const MONTH_W = [4,4,5,4,4,5,4,4,5,4,4,3];
+function ymOf(w){
+  let m=0, acc=0;
+  while(m<11 && acc+MONTH_W[m] < w){ acc+=MONTH_W[m]; m++; }
+  return {m:m+1, i:Math.max(1,w-acc)};
+}
+const dateLabel = w => { const d=ymOf(w); return `${d.m}月${d.i}週`; };
 const RACES = [
   // 3歳限定
   {n:'共同通信杯',      w:7,  d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'東京'},
@@ -648,12 +713,14 @@ function nextRaceInfo(){
 }
 
 /* 調教メニュー */
+/* cost は1回あたりのメダル。併せ馬は相手を用意するぶん高く、プールは施設代。
+   これがあるので、稼ぎ（賞金・馬券・アルバイト）と育成が地続きになる。 */
 const TRAIN = [
-  {k:'坂路',   d:'スピード・パワー',   f:9,  up:{sp:2.0,pw:1.2}},
-  {k:'ダート', d:'パワー・根性',       f:10, up:{pw:2.0,gt:1.1}},
-  {k:'プール', d:'スタミナ（疲労小）', f:5,  up:{st:2.2}},
-  {k:'併せ馬', d:'根性・スピード',     f:11, up:{gt:2.0,sp:0.9}},
-  {k:'ゲート', d:'賢さ（疲労小）',     f:4,  up:{wt:2.2}}
+  {k:'坂路',   d:'スピード・パワー',   f:9,  cost:50,  up:{sp:2.0,pw:1.2}},
+  {k:'ダート', d:'パワー・根性',       f:10, cost:50,  up:{pw:2.0,gt:1.1}},
+  {k:'プール', d:'スタミナ（疲労小）', f:5,  cost:100, up:{st:2.2}},
+  {k:'併せ馬', d:'根性・スピード',     f:11, cost:300, up:{gt:2.0,sp:0.9}},
+  {k:'ゲート', d:'賢さ（疲労小）',     f:4,  cost:50,  up:{wt:2.2}}
 ];
 const STAT_KEYS = [['sp','スピード'],['st','スタミナ'],['pw','パワー'],['gt','根性'],['wt','賢さ']];
 /* --- 売店のアイテム ---
@@ -755,6 +822,7 @@ function makeField(g, race){
     r.cond = rint(45,92);
     r.fatigue = rint(0,25);
     r.npc = true;
+    if(Math.random()<0.45) r.name = pick(MOB_NAMES);
     field.push(r);
   }
   field.push(g.horse);
@@ -770,6 +838,7 @@ function makeWatchField(race){
   for(let i=0;i<8;i++){
     const r=newHorse({base:clamp(lvl+rint(-9,9),22,108)});
     r.cond=rint(45,92); r.fatigue=rint(0,25); r.npc=true;
+    if(Math.random()<0.45) r.name = pick(MOB_NAMES);
     field.push(r);
   }
   field.forEach((h,i)=>{ h.num=i+1; });
@@ -784,14 +853,29 @@ function pickWatchRace(){
           g:'op', cls:4, lv:4, c:pick(COURSE_LIST)};
 }
 /* オッズ算定 */
-function makeOdds(field, race){
+/* --- 連闘（間隔を詰めた出走） ---
+   前走から何週空いたかで決まる。詰めるほど疲労が乗り、主催者の扱いも渋くなって
+   愛馬に付くオッズ（＝払戻）が削られる。休ませて出すことに意味を持たせるための仕組み。 */
+const absWeek = () => (G.year-3)*WEEKS_PER_YEAR + G.week;
+const raceGap = h => (h && h.lastRace!=null) ? absWeek()-h.lastRace : 99;
+const packOf  = h => { const g=raceGap(h); return g>=6 ? 0 : clamp((6-g)/5,0,1); };
+const packLabel = h => { const g=raceGap(h);
+  return g>=6?'':(g<=1?'連闘':`中${Math.max(0,g-1)}週`); };
+/* 格が上がるほど1戦の消耗が大きい */
+const GRADE_FAT = {jo:1.00, op:1.08, G3:1.18, G2:1.28, G1:1.45, SG:1.60};
+
+function makeOdds(field, race, oddsMul){
   const rs = field.map(h=>Math.pow(Math.max(6,ratingOf(h,race)),4.2));
   const sum = rs.reduce((a,b)=>a+b,0);
   return field.map((h,i)=>{
     const p = clamp(rs[i]/sum, .012, .82);
-    const win = Math.max(1.1, Math.round(78/(p*100)*10)/10);
+    let win = Math.max(1.1, Math.round(78/(p*100)*10)/10);
     const p3  = clamp(p*2.45, .03, .93);
-    const plc = Math.max(1.0, Math.round(80/(p3*100)*10)/10);
+    let plc = Math.max(1.0, Math.round(80/(p3*100)*10)/10);
+    if(!h.npc && oddsMul && oddsMul<1){          // 連闘の愛馬は配当が下がる
+      win = Math.max(1.0, Math.round(win*oddsMul*10)/10);
+      plc = Math.max(1.0, Math.round(plc*oddsMul*10)/10);
+    }
     return {win, plc, p};
   });
 }
@@ -825,10 +909,13 @@ class RaceSim{
          着差が十数秒になり競馬の時計にならないため、主に消耗（下の stFac）で効かせる。 */
       const aptV  = 1+(apt-1)*0.45;
       const condV = 1+(c-1)*0.55;
+      /* オープン特別は勝つたびに斤量を課される。勝ち続けるほど勝ちにくくなり、
+         いつかは重賞へ出ていくしかなくなる。 */
+      const hcpV = (race.g==='op' && !h.npc) ? 1-Math.min(0.10,(h.hcp||0)*0.015) : 1;
       return {
         h, i, x:0, v:0, stam:1, fin:0, rank:0, spurt:false, whip:0, whipT:0,
         trouble:0, phase:Math.random(),
-        cap: BASE_V*(0.930+h.sp/900)*aptV*condV*distF*rnd(1.012,.988),
+        cap: BASE_V*(0.930+h.sp/900)*aptV*condV*distF*hcpV*rnd(1.012,.988),
         accel: 0.9+h.pw/170,
         stFac: (0.52+h.st/115)*apt,   // 適性外の条件では脚が上がる
         guts: h.gt,
@@ -1189,30 +1276,54 @@ function drawTheme(sg, camX, omen){
   g.restore();
 }
 
+/* 観客の服。スタンドを埋めるので、彩度の高い色を散らす。 */
+const CROWD=['#ff5b6e','#ffd23f','#4ad6ff','#7ef07a','#ff9f43','#c98bff','#ffffff','#ff7ac0','#5b8cff'];
+const hash1=n=>{ const s=Math.sin(n*127.1)*43758.5453; return s-Math.floor(s); };
+
 function drawBack(camX, surface, sg, omen){
   if(sg){ drawTheme(sg, camX, omen); return; }
-  const sky=g.createLinearGradient(0,0,0,H*.55);
-  sky.addColorStop(0,'#0c2419'); sky.addColorStop(1,'#1c4b35');
+  // 昼の空
+  const sky=g.createLinearGradient(0,0,0,H*.56);
+  sky.addColorStop(0,'#3fa8d8'); sky.addColorStop(.65,'#8fd2e8'); sky.addColorStop(1,'#cdeaf0');
   g.fillStyle=sky; g.fillRect(0,0,W,H*.56);
+  // 雲
+  g.fillStyle='rgba(255,255,255,.75)';
+  for(let i=0;i<3;i++){
+    const cx=((i*W*.47 - camX*0.04)%(W*1.5)+W*1.5)%(W*1.5)-W*.2, cy=H*(.07+.045*i);
+    g.beginPath(); g.ellipse(cx,cy,W*.10,H*.026,0,0,7); g.fill();
+    g.beginPath(); g.ellipse(cx+W*.055,cy+H*.008,W*.065,H*.021,0,0,7); g.fill();
+  }
   // 照明塔
-  const off=(camX*0.12)%160;
-  for(let i=-1;i<W/160+2;i++){
-    const x=i*160-off;
-    g.fillStyle='#0d1a1c'; g.fillRect(x+28,H*.17,3,H*.28);
-    g.fillStyle='rgba(240,255,220,.16)';
-    g.beginPath(); g.ellipse(x+29,H*.16,17,7,0,0,7); g.fill();
-    g.fillStyle='rgba(240,255,220,.05)';
-    g.beginPath(); g.moveTo(x+29,H*.16); g.lineTo(x-30,H*.56); g.lineTo(x+88,H*.56); g.closePath(); g.fill();
+  const off=(camX*0.12)%170;
+  for(let i=-1;i<W/170+2;i++){
+    const x=i*170-off;
+    g.fillStyle='#7f8fa0'; g.fillRect(x+28,H*.12,3,H*.26);
+    g.fillStyle='#c8d6e2'; g.fillRect(x+18,H*.105,24,7);
+    g.fillStyle='rgba(255,255,255,.9)';
+    for(let k=0;k<4;k++) g.fillRect(x+19.5+k*5.5,H*.107,3.5,4);
   }
-  // スタンド
-  const so=(camX*0.35)%54;
-  g.fillStyle='#14332a'; g.fillRect(0,H*.36,W,H*.20);
-  for(let i=-1;i<W/54+2;i++){
-    const x=i*54-so;
-    g.fillStyle='rgba(255,255,255,.055)'; g.fillRect(x+4,H*.385,44,H*.13);
-    g.fillStyle='rgba(140,255,190,.07)'; g.fillRect(x+4,H*.385,44,3);
+  // スタンド（屋根・段・色とりどりの観客）
+  const top=H*.34, bot=H*.545;
+  g.fillStyle='#dfe6ec'; g.fillRect(0,top-H*.035,W,H*.035);      // 屋根
+  g.fillStyle='#b9c4cd'; g.fillRect(0,top-4,W,4);
+  g.fillStyle='#5d6b78'; g.fillRect(0,top,W,bot-top);            // スタンド本体
+  const rows=6, rowH=(bot-top)/rows, step=7;
+  const ox=(camX*0.35)%step;
+  for(let r=0;r<rows;r++){
+    const y=top+r*rowH+2;
+    g.fillStyle='rgba(0,0,0,.16)'; g.fillRect(0,y+rowH-3,W,2);   // 段の影
+    for(let x=-step;x<W+step;x+=step){
+      const key=Math.round((x+ox+camX*0.35)/step)+r*997;
+      if(hash1(key)<0.12) continue;                              // ところどころ空席
+      g.fillStyle=CROWD[Math.floor(hash1(key+7)*CROWD.length)];
+      const w=step-2.6, hgt=rowH*0.52;
+      g.fillRect(x-ox, y+rowH*0.30, w, hgt);
+      g.fillStyle='rgba(255,224,196,.9)';                        // 顔
+      g.fillRect(x-ox+0.8, y+rowH*0.13, w-1.6, rowH*0.20);
+    }
   }
-  g.fillStyle='#0d2419'; g.fillRect(0,H*.545,W,H*.03);
+  g.fillStyle='#7d8a96'; g.fillRect(0,bot-3,W,3);
+  g.fillStyle='#2f7a48'; g.fillRect(0,bot,W,H*.03);              // 内馬場の緑
 }
 /* 馬（横から見た走行）。s は体長のおおよそのピクセル数。 */
 function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label){
@@ -1336,8 +1447,8 @@ function drawTrack(camX, surface, D, bend){
   bend=bend||0;
   const top=H*.575, bot=H;
   const base = surface==='芝'
-    ? ['#2f9a56','#38b063','#207a41']
-    : ['#9c6d40','#ae7c48','#7b5330'];
+    ? ['#47bd72','#54d182','#34a05a']
+    : ['#b07d4a','#c28c53','#8d6039'];
   const grd=g.createLinearGradient(0,top,0,bot);
   grd.addColorStop(0,base[2]); grd.addColorStop(.35,base[0]); grd.addColorStop(1,base[1]);
   g.fillStyle=grd; g.fillRect(0,top,W,bot-top);
@@ -1428,51 +1539,126 @@ function drawField(sim, camX){
   });
 }
 /* 厩舎シーン */
+/* --- 厩舎の格 ---
+   稼ぎと格が上がると建て替わる。0=じめじめした板張りのぼろ厩舎、
+   1=乾いた木の普通の厩舎、2=白塗りの高級厩舎。ネームプレートの傾きも直る。 */
+function stableRank(h){
+  if(!h) return 0;
+  const s = (h.earned||0)/1000 + (h.wins||0)*3 + (h.cls||0)*4 + (h.g1||0)*10;
+  return s>=60 ? 2 : s>=22 ? 1 : 0;
+}
+const STABLE = [
+  {wall:['#1a140e','#221a12'], damp:true,  floor:'#241c11', straw:'#4e3d20',
+   plate:'#3a2e1e', ink:'#c9b384', tilt:-0.10, glow:.26},
+  {wall:['#3a2c1c','#453522'], damp:false, floor:'#3a2d1a', straw:'#7d6231',
+   plate:'#6b5323', ink:'#f0e0b8', tilt:-0.025, glow:.30},
+  {wall:['#e6e0d2','#f4f0e4'], damp:false, floor:'#c6b99e', straw:'#dcc890',
+   plate:'#f7f3e7', ink:'#4a3a1c', tilt:0, glow:.34, lux:true}
+];
 function drawStable(h, t){
+  const rk=stableRank(h), S=STABLE[rk];
   const grd=g.createLinearGradient(0,0,0,H);
-  grd.addColorStop(0,'#16332a'); grd.addColorStop(1,'#0c1d15');
+  grd.addColorStop(0, rk===2?'#243a30':'#16332a'); grd.addColorStop(1,'#0c1d15');
   g.fillStyle=grd; g.fillRect(0,0,W,H);
   // 板壁
-  g.fillStyle='#1b1611';
-  g.fillRect(0,0,W,H*.62);
   for(let i=0;i<8;i++){
-    g.fillStyle= i%2?'#221b14':'#1d1710';
+    g.fillStyle= i%2?S.wall[1]:S.wall[0];
     g.fillRect(0,i*(H*.62/8),W,H*.62/8-1);
   }
-  // 窓の月明かり
+  if(S.damp){                                   // 湿ったしみと苔
+    g.globalAlpha=.5;
+    for(let i=0;i<9;i++){
+      const x=(i*137)%W, y=(i*61)%(H*.55);
+      g.fillStyle= i%3? 'rgba(30,45,25,.55)':'rgba(20,25,18,.6)';
+      g.beginPath(); g.ellipse(x,y,W*.07,H*.035,0.4,0,7); g.fill();
+    }
+    g.globalAlpha=1;
+    g.strokeStyle='rgba(0,0,0,.45)'; g.lineWidth=1;     // 板の割れ
+    for(let i=0;i<4;i++){
+      const x=(i*97+40)%W;
+      g.beginPath(); g.moveTo(x,H*.06); g.lineTo(x+6,H*.30); g.lineTo(x-3,H*.55); g.stroke();
+    }
+  }
+  if(S.lux){                                    // 白塗りの見切り縁
+    g.fillStyle='#cfc4ad'; g.fillRect(0,H*.585,W,H*.035);
+    g.fillStyle='rgba(255,255,255,.55)'; g.fillRect(0,H*.585,W,3);
+  }
+  // 窓
   const wx=W*.62, wy=H*.10, ww=W*.22, wh=H*.20;
-  g.fillStyle='rgba(150,200,255,.07)'; g.fillRect(wx,wy,ww,wh);
-  g.strokeStyle='rgba(150,200,255,.20)'; g.lineWidth=2; g.strokeRect(wx,wy,ww,wh);
+  g.fillStyle= rk===2?'rgba(190,225,255,.30)':'rgba(150,200,255,.07)';
+  g.fillRect(wx,wy,ww,wh);
+  g.strokeStyle= rk===2?'rgba(120,90,40,.65)':'rgba(150,200,255,.20)';
+  g.lineWidth=2; g.strokeRect(wx,wy,ww,wh);
   g.lineWidth=1;
   g.beginPath(); g.moveTo(wx+ww/2,wy); g.lineTo(wx+ww/2,wy+wh);
   g.moveTo(wx,wy+wh/2); g.lineTo(wx+ww,wy+wh/2); g.stroke();
   // 床（藁）
-  g.fillStyle='#2a2114'; g.fillRect(0,H*.62,W,H*.38);
+  g.fillStyle=S.floor; g.fillRect(0,H*.62,W,H*.38);
   g.globalAlpha=.5;
   for(let i=0;i<70;i++){
     const x=(i*79)%W, y=H*.63+((i*53)%(H*.35));
-    g.strokeStyle='#5a4626'; g.lineWidth=1;
+    g.strokeStyle=S.straw; g.lineWidth=1;
     g.beginPath(); g.moveTo(x,y); g.lineTo(x+7,y+2); g.stroke();
   }
   g.globalAlpha=1;
   // 飼い葉桶
-  g.fillStyle='#2f2417'; roundRect(W*.06,H*.72,W*.16,H*.10,3); g.fill();
-  g.fillStyle='#6b5323'; roundRect(W*.07,H*.725,W*.14,H*.035,2); g.fill();
-  // 吊りランプ。馬体が背景の板壁に沈まないよう、光だまりで浮かせる
-  const lx=W*.52, ly=H*.085;
-  const lamp=g.createRadialGradient(lx,ly,3,lx,H*.72,W*.55);
-  lamp.addColorStop(0,'rgba(255,214,150,.26)');
+  g.fillStyle= rk===2?'#8a6a3a':'#2f2417'; roundRect(W*.06,H*.72,W*.16,H*.10,3); g.fill();
+  g.fillStyle= rk===2?'#d8bb70':'#6b5323'; roundRect(W*.07,H*.725,W*.14,H*.035,2); g.fill();
+  // 吊りランプ。馬体が壁に沈まないよう、光だまりで浮かせる
+  const lx=W*.52;
+  const lamp=g.createRadialGradient(lx,H*.085,3,lx,H*.72,W*.55);
+  lamp.addColorStop(0,`rgba(255,214,150,${S.glow})`);
   lamp.addColorStop(.45,'rgba(255,196,124,.11)');
   lamp.addColorStop(1,'rgba(255,186,110,0)');
   g.fillStyle=lamp; g.fillRect(0,0,W,H);
-  g.fillStyle='#3a3026'; g.fillRect(lx-1,0,2,H*.055);
-  g.fillStyle='#ffd98a';
+  g.fillStyle= rk===2?'#8a7a5a':'#3a3026'; g.fillRect(lx-1,0,2,H*.055);
+  g.fillStyle= rk===2?'#fff0c0':'#ffd98a';
   g.beginPath(); g.moveTo(lx-10,H*.09); g.lineTo(lx+10,H*.09);
   g.lineTo(lx+5,H*.055); g.lineTo(lx-5,H*.055); g.closePath(); g.fill();
+  // 特別レースを勝った証のレイ（赤と金の糸）
+  if((h.sg||0)>0) drawLei(W*.10, H*.10, W*.44, H*.09, t);
+  // ネームプレート（格が低いうちは傾いている）
+  drawPlate(h, S, W*.09, H*.30);
   // 馬（呼吸で上下）
   const s=Math.min(W*0.26,H*0.38);
   const breathe=Math.sin(t/900)*s*0.012;
   drawHorse(W*0.52,H*0.74+breathe,s,h.coat,0,0,Math.sin(t/700)*0.18,false,false);
+}
+/* 壁に掲げられたレイ。赤と金の糸を撚った祝いの輪。 */
+function drawLei(x,y,w,sag,t){
+  const mid=x+w/2, dip=y+sag+Math.sin(t/1600)*2;
+  for(const [col,off,lw] of [['#c0182f',0,3.5],['#f0c24a',3,2.5]]){
+    g.strokeStyle=col; g.lineWidth=lw;
+    g.beginPath(); g.moveTo(x,y+off);
+    g.quadraticCurveTo(mid,dip+off*2,x+w,y+off); g.stroke();
+  }
+  for(let i=0;i<=8;i++){                        // 花の玉
+    const u=i/8, bx=x+w*u;
+    const by=(1-u)*(1-u)*y + 2*(1-u)*u*(dip+2) + u*u*y;
+    g.fillStyle= i%2?'#e8324c':'#ffd45e';
+    g.beginPath(); g.arc(bx,by,4.2,0,7); g.fill();
+    g.fillStyle='rgba(255,255,255,.45)';
+    g.beginPath(); g.arc(bx-1.2,by-1.2,1.4,0,7); g.fill();
+  }
+}
+/* 馬房のネームプレート。ぼろ厩舎では釘が緩んで傾いている。 */
+function drawPlate(h,S,x,y){
+  const w=Math.min(W*0.40,150), hh=Math.max(22,H*0.085);
+  g.save();
+  g.translate(x+w/2,y+hh/2); g.rotate(S.tilt); g.translate(-w/2,-hh/2);
+  g.fillStyle='rgba(0,0,0,.35)'; roundRect(2,3,w,hh,4); g.fill();
+  g.fillStyle=S.plate; roundRect(0,0,w,hh,4); g.fill();
+  g.strokeStyle= S.lux?'#c8a45a':'rgba(0,0,0,.5)'; g.lineWidth=S.lux?2:1;
+  roundRect(0,0,w,hh,4); g.stroke();
+  g.fillStyle='rgba(0,0,0,.35)';                 // 釘
+  g.beginPath(); g.arc(7,hh/2,2,0,7); g.fill();
+  g.beginPath(); g.arc(w-7,hh/2,2,0,7); g.fill();
+  g.fillStyle=S.ink;
+  g.font=`${Math.max(11,Math.min(15,w*0.11))}px "DotGothic16",monospace`;
+  g.textAlign='center'; g.textBaseline='middle';
+  g.fillText(h.name, w/2, hh/2+1);
+  g.restore();
+  g.textAlign='left'; g.textBaseline='alphabetic';
 }
 /* 調教シーン */
 function drawTraining(h, menu, t, prog){
@@ -1803,7 +1989,7 @@ const V = {
   home(){
     const h=G.horse;
     if(h.rest>0){
-      return `<p class="eyebrow">${G.year}歳 第${G.week}週</p>
+      return `<p class="eyebrow">${G.year}歳 ${dateLabel(G.week)}</p>
         <h2 class="head hot">休養中</h2>
         <div class="card"><p class="muted">${esc(h.name)}は放牧に出ている。あと <b class="gold num">${h.rest}</b> 週で復帰予定。</p></div>
         <button class="btn primary center wide" data-act="advance" style="margin-bottom:7px">週を進める</button>
@@ -1813,12 +1999,13 @@ const V = {
     const fat = Math.round(h.fatigue);
     const fatCol = fat>82?'var(--hot)':fat>60?'var(--gold)':'var(--ok)';
     const menus = TRAIN.map((t,i)=>`
-      <button class="btn" data-act="train" data-i="${i}">
-        <span>${t.k}</span><small>${t.d}・疲労+${t.f}</small>
+      <button class="btn" data-act="train" data-i="${i}" ${G.medals<t.cost?'disabled':''}>
+        <span>${t.k} <span class="dot gold" style="font-size:10px">◉${t.cost}</span></span>
+        <small>${t.d}・疲労+${t.f}</small>
       </button>`).join('');
     const nx=rs.length?null:nextRaceInfo();
     return `<div class="row between" style="margin-bottom:6px">
-        <p class="eyebrow" style="margin:0">${G.year}歳 第${G.week}週 / ${WEEKS_PER_YEAR}</p>
+        <p class="eyebrow" style="margin:0">${G.year}歳 ${dateLabel(G.week)}（第${G.week}週）</p>
         <span class="dot" style="font-size:11px;color:var(--ink-3)">${CLASS_NAME[h.cls]}・${h.wins}勝</span>
       </div>
       <div class="card tight" style="margin-bottom:9px">
@@ -2054,12 +2241,6 @@ const V = {
   bet(){
     const r=app.race, f=app.field, o=app.odds;
     const me=f.findIndex(h=>!h.npc);
-    const rows=f.map((h,i)=>`
-      <button class="entry ${h.npc?'':'me'}" data-act="pickhorse" data-i="${i}" aria-pressed="${app.betSel===i}">
-        <span class="uma c${h.num}">${h.num}</span>
-        <span class="nm">${esc(h.name)}<br><span style="font-size:9.5px;color:var(--ink-3)">${h.style}・${h.jockey}</span></span>
-        <span class="od">${o[i].win.toFixed(1)}</span>
-      </button>`).join('');
     const sel=app.betSel;
     const bets=app.bets.map((b,i)=>`
       <div class="row between" style="font-size:11.5px;padding:3px 0">
@@ -2068,7 +2249,7 @@ const V = {
         <b class="num gold">${yen(b.amt)}</b>
       </div>`).join('');
     const sp=app.spectate;
-    return `<div class="row between"><p class="eyebrow" style="margin:0">${G.year}歳 第${G.week}週${sp?' / 観戦':''}</p>
+    return `<div class="row between"><p class="eyebrow" style="margin:0">${G.year}歳 ${dateLabel(G.week)}${sp?' / 観戦':''}</p>
         <button class="btn ghost" data-act="cancelrace" style="min-height:0;padding:3px 9px;font-size:11px">${sp?'観戦をやめる':'出走取消'}</button></div>
       <h2 class="head">${esc(r.n)} ${raceMeta(r)}</h2>
       ${sp?`<p class="muted" style="margin:-4px 0 9px">愛馬は出走しない。馬券だけで勝負する一戦。<b class="gold">1週</b>を使う。</p>`:''}
@@ -2100,22 +2281,54 @@ const V = {
         <div class="row between" style="font-size:11px">
           <span class="muted">想定ペース</span><b>${app.sim.pace}</b>
         </div>
+        ${(!sp&&packOf(G.horse)>0)?`<div class="sep" style="margin:6px 0"></div>
+          <div class="row between" style="font-size:11px">
+            <span class="muted">${packLabel(G.horse)}</span>
+            <b class="hot">疲労が乗る・配当−${Math.round(packOf(G.horse)*35)}%</b>
+          </div>`:''}
+        ${(!sp&&r.g==='op'&&(G.horse.hcp||0)>0)?`<div class="sep" style="margin:6px 0"></div>
+          <div class="row between" style="font-size:11px">
+            <span class="muted">ハンデ</span><b class="hot">斤量+${G.horse.hcp}</b>
+          </div>`:''}
       </div>
-      <p class="eyebrow">出走表（数字は単勝オッズ）</p>
-      <div class="list" style="margin-bottom:9px">${rows}</div>
-      <p class="eyebrow">馬券を買う</p>
-      <div class="card tight">
-        ${sel==null?`<p class="muted" style="margin:0">上の出走表から馬を選ぶ。</p>`:`
-        <div class="row between" style="margin-bottom:7px">
-          <b style="font-size:12.5px">${esc(f[sel].name)}</b>
-          <span class="dot" style="font-size:11px;color:var(--cyan)">単${o[sel].win.toFixed(1)} / 複${o[sel].plc.toFixed(1)}</span>
+      <p class="eyebrow">馬券マークシート</p>
+      <div class="card tight sheet">
+        <div class="sheetrow">
+          <span class="sheetlab">式別</span>
+          <div class="marks">
+            ${[['win','単勝'],['plc','複勝']].map(([k,lb])=>`
+              <button class="mark ${app.betType===k?'on':''}" data-act="picktype" data-t="${k}">
+                <i></i>${lb}</button>`).join('')}
+          </div>
         </div>
-        <div class="grid4" style="margin-bottom:6px">
-          ${[100,500,1000,5000].map(a=>`<button class="btn center" data-act="bet" data-t="win" data-a="${a}" style="min-height:38px;font-size:11px" ${G.medals<a?'disabled':''}>単${a}</button>`).join('')}
+        <div class="sheetrow">
+          <span class="sheetlab">馬番</span>
+          <div class="waku">
+            ${f.map((h,i)=>`
+              <button class="wcell c${h.num} ${sel===i?'on':''}" data-act="pickhorse" data-i="${i}">
+                <b>${h.num}</b><small>${o[i][app.betType==='plc'?'plc':'win'].toFixed(1)}</small></button>`).join('')}
+          </div>
         </div>
-        <div class="grid4">
-          ${[100,500,1000,5000].map(a=>`<button class="btn center" data-act="bet" data-t="plc" data-a="${a}" style="min-height:38px;font-size:11px" ${G.medals<a?'disabled':''}>複${a}</button>`).join('')}
-        </div>`}
+        <div class="readout ${sel==null?'empty':''}">
+          ${sel==null?'<span class="muted" style="font-size:11.5px">馬番を塗ると、その馬が上の画面に出る</span>':`
+            <span class="uma c${f[sel].num}">${f[sel].num}</span>
+            <span class="ro-name">
+              <b>${esc(f[sel].name)}</b>
+              <small>${f[sel].style}・${f[sel].jockey}騎手・${COATS[f[sel].coat].n}</small>
+            </span>
+            <span class="ro-odds">
+              <b class="num">${o[sel][app.betType==='plc'?'plc':'win'].toFixed(1)}</b>
+              <small>${app.betType==='plc'?'複勝':'単勝'}</small>
+            </span>`}
+        </div>
+        <div class="sheetrow">
+          <span class="sheetlab">金額</span>
+          <div class="marks amt">
+            ${[100,500,1000,5000].map(a=>`
+              <button class="mark ${G.medals<a?'off':''}" data-act="bet" data-t="${app.betType||'win'}" data-a="${a}"
+                ${sel==null||G.medals<a?'disabled':''}><i></i>${a}</button>`).join('')}
+          </div>
+        </div>
       </div>
       ${bets?`<div class="card tight"><p class="eyebrow">購入済み</p>${bets}
         <div class="sep"></div><button class="btn ghost center wide" data-act="clearbet" style="min-height:34px">全部取り消す</button></div>`:''}
@@ -2276,7 +2489,7 @@ function show(v,d){
 }
 function syncMeters(){
   $('#mMedal').textContent = G? yen(G.medals) : '0';
-  $('#mDate').textContent  = G&&G.horse? `${G.year}歳${G.week}週` : '--';
+  $('#mDate').textContent  = G&&G.horse? `${G.year}歳 ${dateLabel(G.week)}` : '--';
 }
 function setHud(html){ hud.innerHTML=html; }
 let toastTimer=null;
@@ -2346,6 +2559,11 @@ function doWork(i){
 
 function doTrain(i){
   const h=G.horse, m=TRAIN[i];
+  if(G.medals < m.cost){
+    SFX.err(); toast(`${m.k}には${yen(m.cost)}メダル要る`);
+    return;
+  }
+  G.medals -= m.cost;
   if(h.fatigue>82 && Math.random()<0.12){
     h.rest=rint(5,9); h.fatigue=clamp(h.fatigue-10,0,100);
     STAT_KEYS.forEach(([k])=>{ h[k]=Math.max(10,h[k]-rnd(3,1)); });
@@ -2423,8 +2641,8 @@ function openEntry(i){
   if(!r) return;
   app.race=r;
   app.field=makeField(G,r);
-  app.odds=makeOdds(app.field,r);
-  app.bets=[]; app.betSel=null;
+  app.odds=makeOdds(app.field, r, 1-packOf(G.horse)*0.35);
+  app.bets=[]; app.betSel=null; app.betType='win';
   // 隠しレースなら舞台を決め、吉兆が現れるかをここで引く（パドックから見える）
   app.sgTheme = r.g==='SG' ? SG_RACES.find(x=>x.n===r.n) : null;
   app.omen = !!(app.sgTheme && Math.random()<OMEN_RATE);
@@ -2441,7 +2659,7 @@ function openWatch(){
   app.race=r;
   app.field=makeWatchField(r);
   app.odds=makeOdds(app.field,r);
-  app.bets=[]; app.betSel=null; app.spectate=true;
+  app.bets=[]; app.betSel=null; app.betType='win'; app.spectate=true;
   app.sgTheme=null; app.omen=false;
   app.sim=new RaceSim(r,app.field,0);
   app.scene='paddock';
@@ -2525,8 +2743,10 @@ function finishRace(){
   }
   G.medals+=prize+pay;
   h.races++; h.earned+=prize;
-  h.fatigue=clamp(h.fatigue+rint(22,30),0,100);
-  h.cond=clamp(h.cond-rint(4,12),5,100);
+  const pack=packOf(h);
+  h.fatigue=clamp(h.fatigue + rint(20,26)*(GRADE_FAT[r.g]||1)*(1+pack*0.9), 0, 100);
+  h.cond=clamp(h.cond-rint(4,12)-Math.round(pack*10),5,100);
+  h.lastRace=absWeek();
   h.fans+=Math.round(prize/12 + (me.pos===1?400:0));
   let up=null, unlocked=[];
   if(me.pos===1){
@@ -2536,6 +2756,7 @@ function finishRace(){
     // ダービーを無敗で勝ったか（この勝利まで全戦全勝）
     if(r.n==='日本ダービー' && h.races===h.wins) h.derbyUnbeaten=true;
     if(r.g==='jo' && h.cls<4){ h.cls++; up=`${CLASS_NAME[h.cls]}に昇級した！`; }
+    if(r.g==='op'){ h.hcp=(h.hcp||0)+1; up=up||`ハンデが重くなった（斤量+${h.hcp}）`; }
     if(r.g!=='jo' && r.g!=='op') h.g1++;
     if(r.g==='G1'||r.g==='SG') h.g1w=(h.g1w||0)+1;   // 招待状はG1勝利数で数える
     if(r.g==='SG') h.sg=(h.sg||0)+1;
@@ -2655,6 +2876,7 @@ const ACT = {
   advance(){ SFX.tap(); advanceWeek(); },
   entry(d){ openEntry(+d.i); },
   pickhorse(d){ app.betSel=+d.i; SFX.tap(); show('bet'); },
+  picktype(d){ app.betType=d.t; SFX.tap(); show('bet'); },
   bet(d){ placeBet(d.t,+d.a); },
   clearbet(){ for(const b of app.bets) G.medals+=b.amt; app.bets=[]; SFX.tap(); show('bet'); },
   cancelrace(){ app.scene='stable'; app.sim=null; app.spectate=false; app.sgTheme=null; app.omen=false;
@@ -2758,9 +2980,10 @@ function render(now, dt){
   }
   else if(app.scene==='stable'){
     drawStable(G.horse,now);
-    const h=G.horse, c=COND_NAME[condIdx(h)];
-    setHud(`<span class="chip gold">${esc(h.name)}</span>
-      <span class="chip">${CLASS_NAME[h.cls]} <b>${h.races}戦${h.wins}勝</b></span>`);
+    const h=G.horse;
+    setHud(`<span class="chip gold">${G.year}歳 ${dateLabel(G.week)}</span>
+      <span class="chip">${esc(h.name)}</span>
+      <span class="chip">${CLASS_NAME[h.cls]} <b>${h.wins}勝</b></span>`);
   }
   else if(app.scene==='training'){
     app.trainT+=dt;
