@@ -516,7 +516,7 @@ const COURSES = {
 };
 /* 隠しレース（SG）の舞台。国ごとに性格を変えてある。 */
 COURSES.アラビア={straight:600, curve:0.15, slope:0.10};  // 広く平坦、長い直線
-COURSES.ニューヨーク={straight:320, curve:0.90, slope:0.05}; // 小回りの平坦オーバル
+COURSES.アメリカ={straight:320, curve:0.90, slope:0.05};    // 小回りの平坦オーバル
 COURSES.チャイナ={straight:430, curve:0.50, slope:0.30};
 COURSES.パリ={straight:533, curve:0.35, slope:0.60};      // 長い直線に急坂
 COURSES.ブリテン={straight:500, curve:0.25, slope:0.55};  // 起伏の大きい大回り
@@ -589,12 +589,12 @@ const SG_RACES = [
    theme:'britain', logo:'Britain CUP', ink:'#ff9ad2', omen:'金のビッグベン',
    cond:'無敗で日本ダービーを勝つ',
    test:h=>!!(h&&h.derbyUnbeaten)},
-  {n:'パリカップ',         w:43, d:3600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'パリ',
+  {n:'パリカップ',         w:40, d:3600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'パリ',
    theme:'paris',   logo:'Paris CUP',   ink:'#1667c8', omen:'オレンジの飛行機',
    cond:'天皇賞（春）と天皇賞（秋）を制覇する',
    test:h=>wonRace(h,'天皇賞（春）')&&wonRace(h,'天皇賞（秋）')},
-  {n:'ニューヨークカップ', w:46, d:1600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'ニューヨーク',
-   theme:'ny',      logo:'NY CUP',      ink:'#d8ecff', omen:'黄色いタクシー',
+  {n:'アメリカンカップ',   w:18, d:1600, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'アメリカ',
+   theme:'ny',      logo:'American CUP', ink:'#d8ecff', omen:'黄色いタクシー',
    cond:'ジャパンカップを勝つ',
    test:h=>wonRace(h,'ジャパンカップ')}
 ];
