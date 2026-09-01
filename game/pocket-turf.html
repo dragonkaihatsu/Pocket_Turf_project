@@ -1284,8 +1284,23 @@ function blank(){
     log:[], history:[], careers:[], legacy:0, tab:'home'
   };
 }
+/* 書いたつもりで消えている環境があるので、必ず読み返して確かめる。
+   黙って失敗すると「ページを離れるとデータが消える」形で表面化する。 */
+let saveWarned=false;
 function save(){
-  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){}
+  const before=app.saveFailed;
+  try{
+    const json=JSON.stringify(G);
+    localStorage.setItem(SAVE_KEY, json);
+    if(localStorage.getItem(SAVE_KEY)!==json) throw new Error('readback mismatch');
+    app.saveFailed=false;
+  }catch(e){
+    app.saveFailed=true;
+    if(!saveWarned){ saveWarned=true; toast('この環境では保存できません'); }
+  }
+  // 保存できるかどうかが変わったら、その場で画面に反映する
+  if(app.saveFailed!==before && view) show(view, viewData);
+  return !app.saveFailed;
 }
 function load(){
   try{
@@ -1946,7 +1961,13 @@ const V = {
 let view='title', viewData=null;
 function show(v,d){
   view=v; viewData=d;
-  panel.innerHTML = V[v] ? V[v](d) : '';
+  const warn = app.saveFailed
+    ? `<div class="card tight" style="border-color:#6b332e;background:#26160f;margin-bottom:9px">
+        <b class="hot" style="font-size:12px">保存できていません</b>
+        <p class="muted" style="margin:4px 0 0;font-size:11px">このブラウザがこのページのデータ保存を止めているため、
+        ページを離れると進行が消えます。プライベートウィンドウを解除するか、別のブラウザでお試しください。</p>
+      </div>` : '';
+  panel.innerHTML = warn + (V[v] ? V[v](d) : '');
   panel.scrollTop=0;
   const inGame = ['home','horse','shop','record'].includes(v);
   tabs.hidden = !inGame;
@@ -2529,6 +2550,14 @@ function render(now, dt){
 /* =======================================================================
    11. 起動
    ======================================================================= */
+/* ページを離れる瞬間にも書き出す。タブを閉じる・アプリを切り替える・
+   スマホで別画面へ移る、のいずれでも直前の状態が残るようにする。
+   愛馬がいるときだけ書くので、タイトル画面を閉じても既存データは壊れない。 */
+function autoSave(){ if(G && G.horse) save(); }
+addEventListener('pagehide', autoSave);
+addEventListener('beforeunload', autoSave);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') autoSave(); });
+
 function boot(){
   resize();
   G = blank();
