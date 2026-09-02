@@ -111,13 +111,15 @@ def cmd_collect(args) -> None:
         print(f"{args.month} の{args.venue}のレース結果を取得します")
         collected = collect_month(
             year=year, month=month, venue=args.venue, race_numbers=numbers,
-            outdir=Path(args.outdir), cache_dir=Path(args.cache_dir), interval=args.interval,
+            outdir=Path(args.outdir), cache_dir=Path(args.cache_dir),
+            interval=args.interval, force=args.force,
         )
     else:
         print(f"{args.date} {args.venue} のレース結果を取得します（{len(numbers)}レース）")
         collected = collect_day(
             date=args.date, venue=args.venue, race_numbers=numbers,
-            outdir=Path(args.outdir), cache_dir=Path(args.cache_dir), interval=args.interval,
+            outdir=Path(args.outdir), cache_dir=Path(args.cache_dir),
+            interval=args.interval, force=args.force,
         )
     print(f"\n取得完了: {len(collected)}レース → {args.outdir}")
 
@@ -174,6 +176,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_collect.add_argument("--outdir", default="data/collected", help="CSV出力先")
     p_collect.add_argument("--cache-dir", default="data/raw", help="取得HTMLのキャッシュ先")
     p_collect.add_argument("--interval", type=float, default=1.5, help="リクエスト間隔(秒)")
+    p_collect.add_argument("--force", action="store_true",
+                           help="取得済みのレースも再取得する（既定はスキップ）")
     p_collect.set_defaults(func=cmd_collect)
 
     p_course = sub.add_parser("course", help="収集した結果からコース傾向を集計")

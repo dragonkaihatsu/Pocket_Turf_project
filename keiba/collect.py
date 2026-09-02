@@ -403,6 +403,7 @@ def collect_month(
     outdir: Path,
     cache_dir: Path,
     interval: float = REQUEST_INTERVAL,
+    force: bool = False,
 ) -> list[RaceData]:
     """その月の開催日をカレンダーから調べ、全開催日分をまとめて取得する。"""
     fetcher = Fetcher(cache_dir, interval)
@@ -415,8 +416,17 @@ def collect_month(
     collected = []
     for day in days:
         print(f"\n  [{day}]")
-        collected += collect_day(day, venue, race_numbers, outdir, cache_dir, interval, fetcher)
+        collected += collect_day(day, venue, race_numbers, outdir, cache_dir,
+                                 interval, fetcher, force)
     return collected
+
+
+def _already_collected(outdir: Path, date: str, venue: str, race_no: int) -> bool:
+    """そのレースの結果CSVと出走馬CSVが両方そろっているか。"""
+    prefix = f"{date}_{venue}{race_no:02d}R_"
+    has_result = any(outdir.glob(f"{prefix}*_結果.csv"))
+    has_entries = any(outdir.glob(f"{prefix}*_出走馬.csv"))
+    return has_result and has_entries
 
 
 def collect_day(
@@ -427,12 +437,18 @@ def collect_day(
     cache_dir: Path,
     interval: float = REQUEST_INTERVAL,
     fetcher: "Fetcher | None" = None,
+    force: bool = False,
 ) -> list[RaceData]:
     fetcher = fetcher or Fetcher(cache_dir, interval)
     collected = []
+    outdir = Path(outdir)
 
     for no in race_numbers:
         race_id = build_race_id(date, venue, no)
+        # 既に保存済みなら通信しない（中断したところから再開できるようにする）
+        if not force and _already_collected(outdir, date, venue, no):
+            print(f"  {venue}{no:>2}R → 取得済みのためスキップ")
+            continue
         print(f"  {venue}{no:>2}R (race_id={race_id})", end=" ")
         html = fetcher.get(RESULT_URL.format(race_id=race_id), race_id)
         if html is None:
