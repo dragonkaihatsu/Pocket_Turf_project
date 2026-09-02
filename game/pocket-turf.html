@@ -401,6 +401,11 @@ input[type=text]{
 }
 .wcell b{font-family:"DotGothic16",monospace;font-size:15px;font-weight:400;line-height:1}
 .wcell small{font-family:"DotGothic16",monospace;font-size:9.5px;opacity:.85;line-height:1.4}
+/* 短評の色帯。枠色は馬番の情報なので潰さず、下に細く敷いて信頼度を示す */
+.wcell i.hyobar{
+  display:block;width:72%;height:3px;border-radius:2px;margin-top:3px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35);
+}
 .wcell.on{box-shadow:0 0 0 3px var(--gold);border-color:#fff}
 .wcell.c1{background:var(--w1);color:#141414}
 .wcell.c2{background:var(--w2);color:#fff}
@@ -421,6 +426,12 @@ input[type=text]{
 .ro-odds{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
 .ro-odds b{font-family:"DotGothic16",monospace;font-size:16px;color:var(--cyan)}
 .ro-odds small{font-size:9px;color:var(--ink-3)}
+/* 短評。信頼度の虹色（赤＝高い／青＝低い）を文字と枠に載せる */
+.hyo{
+  flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.02em;
+  padding:3px 6px;border-radius:4px;border:1px solid currentColor;
+  background:rgba(0,0,0,.30);white-space:nowrap;
+}
 
 /* 合言葉の入力（4文字×3）と表示 */
 .pwrow{display:flex;align-items:center;gap:5px}
@@ -956,6 +967,26 @@ function makeOdds(field, race, oddsMul){
 /* =======================================================================
    3. レースシミュレーション
    ======================================================================= */
+/* --- 短評 ---
+   出馬表の一言コメント。単勝オッズ（＝公表実績から作った人気）だけで決まり、
+   当日の気配や決め手といった隠し値は見ない。人気を裏切るのがレースなので、
+   ここが当たらないこと自体が波乱の味になる。
+   色は信頼度の虹色。高いほど赤、低いほど青。 */
+const HYO = [
+  {max:1.6,  t:'歴史創る', c:'#ff2d2d'},
+  {max:2.2,  t:'絶対王者', c:'#ff5f1f'},
+  {max:3.0,  t:'連軸視',   c:'#ff8c1a'},
+  {max:4.5,  t:'イケイケ', c:'#ffb020'},
+  {max:6.5,  t:'ノリノリ', c:'#f2d029'},
+  {max:9.0,  t:'3着まで',  c:'#b9d92c'},
+  {max:13.0, t:'穴の気配', c:'#5ec94f'},
+  {max:20.0, t:'波乱含み', c:'#33c9a4'},
+  {max:35.0, t:'不気味だ', c:'#33b0d8'},
+  {max:60.0, t:'完走願う', c:'#4286e0'},
+  {max:1e9,  t:'数合わせ', c:'#5a5fd8'}
+];
+const hyoOf = win => HYO.find(x=>win<x.max) || HYO[HYO.length-1];
+
 const BASE_V = 16.0;
 /* 距離が延びるほど平均速度は落ちる。実際の持久曲線（Riegel則 v∝d^-k）に合わせる。 */
 const distFactor = d => 1.035*Math.pow(d/1200,-0.095);
@@ -2609,7 +2640,8 @@ const V = {
           <div class="waku">
             ${f.map((h,i)=>`
               <button class="wcell c${h.num} ${sel===i?'on':''}" data-act="pickhorse" data-i="${i}">
-                <b>${h.num}</b><small>${o[i][app.betType==='plc'?'plc':'win'].toFixed(1)}</small></button>`).join('')}
+                <b>${h.num}</b><small>${o[i][app.betType==='plc'?'plc':'win'].toFixed(1)}</small>
+                <i class="hyobar" style="background:${hyoOf(o[i].win).c}"></i></button>`).join('')}
           </div>
         </div>
         <div class="readout ${sel==null?'empty':''}">
@@ -2619,6 +2651,8 @@ const V = {
               <b>${esc(f[sel].name)}</b>
               <small>${f[sel].style}・${f[sel].jockey}騎手・${COATS[f[sel].coat].n}</small>
             </span>
+            ${(()=>{ const hy=hyoOf(o[sel].win);
+              return `<span class="hyo" style="color:${hy.c};border-color:${hy.c}">${hy.t}</span>`; })()}
             <span class="ro-odds">
               <b class="num">${o[sel][app.betType==='plc'?'plc':'win'].toFixed(1)}</b>
               <small>${app.betType==='plc'?'複勝':'単勝'}</small>
@@ -3454,7 +3488,7 @@ function boot(){
 window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
                       SG_RACES, racesFor, sgOpen, sgReady, legendReady, tourWon, SG_TOUR,
                       seasonOf, SG_NEED_G1, GRADE_PRIZE, prizeOf, fieldLevel,
-                      JOCKEY, JOCKEY_INT, INTL_COURSES,
+                      JOCKEY, JOCKEY_INT, INTL_COURSES, HYO, hyoOf, makeOdds,
                       get state(){ return G; } };
 
 try{ boot(); }
