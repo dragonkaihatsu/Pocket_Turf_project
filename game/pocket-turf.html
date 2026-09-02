@@ -170,6 +170,13 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;font-f
 .lv .d{color:var(--cyan)}
 .lv.me .n{color:var(--gold);font-weight:700}
 .lv.me .p{color:var(--gold)}
+/* 脚が上がった馬。馬群に飲み込まれていくのが隊列でも分かるようにする */
+.lv .bust{
+  font-size:9px;padding:0 3px;border-radius:2px;flex:0 0 auto;
+  background:#5b1414;color:#ff9a86;border:1px solid #8d2020;
+}
+.lv.gone .n{color:#a08278}
+.lv.gone .d{color:#c8705c}
 
 /* ---------- ヒンジ ---------- */
 .hinge{
@@ -978,12 +985,36 @@ class RaceSim{
       /* オープン特別は勝つたびに斤量を課される。勝ち続けるほど勝ちにくくなり、
          いつかは重賞へ出ていくしかなくなる。 */
       const hcpV = (race.g==='op' && !h.npc) ? 1-Math.min(0.10,(h.hcp||0)*0.015) : 1;
+      /* 当日の気配。オッズは公表実績（ratingOf）だけで決まるので、この値は
+         人気に反映されない＝ここが波乱の源になる。上振れした人気薄が突き抜け、
+         下振れした人気馬が直線で伸びない。幅を広げすぎると実績が無意味になる。 */
+      const roll=Math.random();
+      let form, mood=null;
+      if(roll<0.08)      { form=rnd(1.036,1.021); mood='気配良'; }
+      else if(roll<0.25) { form=rnd(1.019,1.007); }
+      else if(roll<0.75) { form=rnd(1.005,0.995); }
+      else if(roll<0.92) { form=rnd(0.993,0.981); }
+      else               { form=rnd(0.979,0.962); mood='気配悪'; }
+      /* 決め手＝直線でどれだけ伸びるか。これも人気には表れない。
+         全体の最高速をいじるより、直線だけを動かすほうが着順は大きく変わり、
+         それでいて走破時計は壊れない。「突然加速した」「伸びなかった」の正体。 */
+      const kq=Math.random();
+      let kick, kmood=null;
+      if(kq<0.10)      { kick=rnd(1.070,1.040); kmood='鬼脚'; }
+      else if(kq<0.30) { kick=rnd(1.030,1.012); }
+      else if(kq<0.72) { kick=rnd(1.008,0.992); }
+      else if(kq<0.90) { kick=rnd(0.988,0.968); }
+      else             { kick=rnd(0.962,0.936); kmood='不発'; }
       return {
+        form, mood, kick, kmood,
         h, i, x:0, v:0, stam:1, fin:0, rank:0, spurt:false, whip:0, whipT:0,
         trouble:0, phase:Math.random(),
-        cap: BASE_V*(0.930+h.sp/900)*aptV*condV*distF*hcpV*rnd(1.012,.988),
+        cap: BASE_V*(0.930+h.sp/900)*aptV*condV*distF*hcpV*form*rnd(1.010,.990),
         accel: 0.9+h.pw/170,
-        stFac: (0.52+h.st/115)*apt,   // 適性外の条件では脚が上がる
+        /* スタミナの持ち。距離が延びるほど走破時間そのものが長く、消耗の総量が
+           増えてしまうので、距離で底上げして「長い＝全馬が必ず脚を失う」を防ぐ。
+           これが無いと3200mは全頭がバテ、1600mは誰もバテない極端な絵になる。 */
+        stFac: (0.52+h.st/115)*apt*(1+(form-1)*0.7)*Math.pow(race.d/2000,0.52),
         guts: h.gt,
         style: h.style,
         // AIの仕掛けどころ（賢さで前後）
@@ -992,6 +1023,9 @@ class RaceSim{
       };
     });
     this.me = this.run[meIdx];
+    // 人気順（オッズと同じ並び＝公表実績順）。実況で「人気薄が来た」を判定するのに使う。
+    [...this.run].sort((a,b)=>ratingOf(b.h,race)-ratingOf(a.h,race))
+                 .forEach((r,i)=>{ r.pop=i+1; });
     this.last600 = new Map();
   }
   targetMul(r, prog){
@@ -1025,6 +1059,8 @@ class RaceSim{
       if(r===this.me){ if(r.spurt) mul*=1.075; }
       else if(prog>=r.goAt) mul*=1.06;
       if(r.whipT>0){ mul*=1.045; r.whipT-=dt; }
+      // 直線に入ったら決め手が出る（伸びる馬と、伸びない馬がここで分かれる）
+      if(prog>=this.sStart) mul *= r.kick;
       if(r.trouble>0){ mul*=0.90; r.trouble-=dt; }
       // コーナー：小回りほど振られて減速し、賢さで軽減される
       if(prog>0.12 && prog<this.sStart){
@@ -1037,17 +1073,39 @@ class RaceSim{
       if(D-r.x < 220)
         mul *= 1 - this.course.slope*0.060*(1 - r.h.pw/300 - r.h.gt/500);
       // 脚色：残りスタミナが細るほど連続的に失速する（根性で粘る）
+      let fade=1;
       if(r.stam<0.30){
         const lack=clamp((0.30-r.stam)/0.30,0,1.2);
-        mul *= 1 - lack*(0.140 - r.guts/1700);
+        fade *= 1 - lack*(0.140 - r.guts/1700);
       }
+      /* 完全に脚が上がったら、ブレーキがかかったように大きく減速する。
+         ただしゴール前で出し切るのは普通のことなので、それは「バテ」に数えない。
+         まだ250m以上残しているのに脚が終わった馬だけを、飲み込まれる馬として扱う。
+         この条件を外すと全馬が毎レース「バテた」ことになり、実況が埋まって
+         特別なことが起きた感じが消える。 */
+      if(r.stam<0.045){
+        const deep=clamp((0.045-r.stam)/0.045,0,1);
+        if(!r.bust && r.stam<0.018 && (D-r.x)>420){
+          r.bust=true;
+          this.events.push({t:this.t,
+            txt:`${r.h.num}番 ${r.h.name}、脚が上がった！ 馬群に飲み込まれる！`,
+            hot:r===this.me});
+        }
+        if(r.bust) fade *= 1 - (0.035+deep*0.090)*(1-r.guts/2600);
+      }
+      /* 失速には下限を設ける。青天井にすると1着と最下位が20秒以上離れ、
+         競馬の絵にならない。馬群に飲み込まれる程度で止める。 */
+      mul *= Math.max(fade, 0.855);
       let target = r.cap*mul;
       // ラスト100mは根性で粘る
       if(prog>.94) target *= 1 + r.guts/2400;
       r.v += clamp(target-r.v, -8*dt*4, r.accel*dt*4);
       r.x += r.v*dt;
       // 消耗（基準速度は距離補正込み）
-      const ratio = r.v/(BASE_V*0.985*r.paceAdj*this.distF);
+      /* 消耗の基準速度。気配で最高速が上がった馬は、その分だけ基準も上がる。
+         ここに form を入れないと、速さの5乗で消耗が跳ね上がり、
+         上振れした馬ほど直線で失速して時計そのものが壊れる。 */
+      const ratio = r.v/(BASE_V*0.985*r.paceAdj*this.distF*r.form);
       let drain = dt*0.0069*Math.pow(Math.max(.55,ratio),5)/r.stFac;
       if(r===this.me && r.spurt) drain*=1.55;
       if(r.whipT>0) drain*=1.25;
@@ -1085,6 +1143,15 @@ class RaceSim{
     if(p>this.sStart) say('d',`4コーナーを回って直線へ！残り${Math.round(this.straight)}m！`);
     if(p>1-190/this.D && this.course.slope>=0.7) say('h',`最後の急坂だ！ここで脚が上がる！`, true);
     if(p>.90) say('e',`${this.order[0].h.name}先頭、${this.order[1].h.name}が並びかける！`);
+    // 直線で人気薄が抜け出したら煽る
+    if(p>this.sStart){
+      const top=this.order[0];
+      if(top.kmood==='鬼脚' && (top.pop||9)>=5)
+        say('u',`${top.h.num}番 ${top.h.name}、とんでもない脚だ！ 人気薄が突き抜ける！`, top===this.me);
+      const fav=this.run.find(r=>r.pop===1);
+      if(fav && fav.rank>=5 && fav.kmood==='不発')
+        say('v',`1番人気の${fav.h.name}、伸びない！ これは苦しい！`, fav===this.me);
+    }
     if(p>.97) say('f',`ゴール前、大接戦だ！`, true);
   }
   /* 現在地の区間名とコーナーの曲がり具合（描画とHUD用） */
@@ -3317,10 +3384,11 @@ function render(now, dt){
       const ll=$('#liveList'), lead=sim.order[0];
       if(ll) ll.innerHTML=sim.order.map(r=>{
         const back=Math.max(0,lead.x-r.x);
-        return `<div class="lv ${r===sim.me?'me':''}">
+        return `<div class="lv ${r===sim.me?'me':''} ${r.bust&&!r.fin?'gone':''}">
           <span class="p">${r.rank}</span>
           <span class="u" style="background:${WAKU[r.h.num-1]};color:${wakuInk(r.h.num)}">${r.h.num}</span>
           <span class="n">${esc(r.h.name)}</span>
+          ${(r.bust&&!r.fin)?'<span class="bust">バテ</span>':''}
           <span class="d">${r.fin?'ゴール':back<0.5?'先頭':'-'+back.toFixed(1)+'m'}</span>
         </div>`;
       }).join('');
@@ -3335,7 +3403,16 @@ function render(now, dt){
       bar.style.background = v>45?'linear-gradient(90deg,#5fd8e8,#63d98d)' : v>18?'linear-gradient(90deg,#f4c44a,#e8802e)':'#ff6b4a';
     }
     const pl=$('#posLbl');
-    if(pl) pl.textContent=`${me.rank}番手・残り${rem}m`;
+    if(pl){
+      // 愛馬の脚が上がったら、そのことを数字より先に伝える
+      if(me.bust && !me.fin){
+        pl.textContent=`脚が上がった！ ${me.rank}番手`;
+        pl.style.color='#ff8a70';
+      }else{
+        pl.textContent=`${me.rank}番手・残り${rem}m`;
+        pl.style.color='';
+      }
+    }
     if(sim.done){ setTimeout(app.spectate?finishWatch:finishRace, 500); app.scene='wait'; }
   }
   else if(app.scene==='podium'){
