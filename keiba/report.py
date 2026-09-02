@@ -146,15 +146,24 @@ def _tickets_html(tickets: list[Ticket]) -> str:
 
 
 def _betting_section(plan: BettingPlan) -> str:
-    tansho = "、".join(f"{m.score.horse.umaban}{m.mark}{html.escape(m.score.horse.name)}" for m in plan.tansho)
-    mode = "軸流し（絞り）" if plan.is_axis_mode else "標準形式"
-    return (
-        f"<div class='note'>買い目モード: {mode}</div>"
-        f"<h3 style='font-size:.9rem;margin:14px 0 4px'>単勝（{len(plan.tansho)}頭）</h3><div class='note'>{tansho}</div>"
-        f"<h3 style='font-size:.9rem;margin:14px 0 4px'>ワイド（{len(plan.wide)}点）</h3>{_tickets_html(plan.wide)}"
-        f"<h3 style='font-size:.9rem;margin:14px 0 4px'>馬連（{len(plan.umaren)}点）</h3>{_tickets_html(plan.umaren)}"
-        f"<div class='note'>{html.escape(plan.note)}</div>"
-    )
+    parts = [
+        f"<div class='note'>買い目タイプ: <b>{html.escape(plan.strategy)}型</b>"
+        f"（計{plan.total_points}点）</div>"
+    ]
+    if plan.tansho:
+        tansho = "、".join(
+            f"{m.score.horse.umaban}{m.mark}{html.escape(m.score.horse.name)}" for m in plan.tansho
+        )
+        parts.append(f"<h3 style='font-size:.9rem;margin:14px 0 4px'>単勝（{len(plan.tansho)}点）</h3>"
+                     f"<div class='note'>{tansho}</div>")
+    if plan.wide:
+        parts.append(f"<h3 style='font-size:.9rem;margin:14px 0 4px'>ワイド（{len(plan.wide)}点）</h3>"
+                     f"{_tickets_html(plan.wide)}")
+    if plan.umaren:
+        parts.append(f"<h3 style='font-size:.9rem;margin:14px 0 4px'>馬連（{len(plan.umaren)}点）</h3>"
+                     f"{_tickets_html(plan.umaren)}")
+    parts.append(f"<div class='note'>{html.escape(plan.note)}</div>")
+    return "".join(parts)
 
 
 def generate_report(

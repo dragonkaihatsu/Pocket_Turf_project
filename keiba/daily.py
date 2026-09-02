@@ -339,17 +339,21 @@ def _bets(plan: BettingPlan, result: RaceResult | None) -> str:
         return f'<span class="{cls}">{_esc(label)}{suffix}</span>'
 
     groups = []
-    tansho = "".join(
-        chip(f"{m.score.horse.umaban} {m.score.horse.name}", "単勝", m) for m in plan.tansho
-    )
-    groups.append(("単勝", len(plan.tansho), tansho))
+    if plan.tansho:
+        tansho = "".join(
+            chip(f"{m.score.horse.umaban} {m.score.horse.name}", "単勝", m) for m in plan.tansho
+        )
+        groups.append(("単勝", len(plan.tansho), tansho))
     for kind, tickets in (("ワイド", plan.wide), ("馬連", plan.umaren)):
+        if not tickets:
+            continue
         chips = "".join(
             chip("-".join(str(mh.score.horse.umaban) for mh in t.horses), kind, t) for t in tickets
         )
         groups.append((kind, len(tickets), chips))
 
-    out = []
+    out = [f'<p class="bet-note">買い目タイプ: <b>{_esc(plan.strategy)}型</b>'
+           f'（計{plan.total_points}点）</p>']
     for kind, n, chips in groups:
         out.append(
             f'<div class="bet-group"><div class="bet-head"><span class="bet-kind">{kind}</span>'

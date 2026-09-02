@@ -63,6 +63,8 @@ class Horse:
     kyakushitsu: str = ""  # 脚質（逃げ/先行/差し/追込）
     michiwaru_koumono: bool = False  # 道悪巧者（Y/N）
     kiso_nouryoku_override: float | None = None  # 基礎能力の手動評価（0-25点）
+    tansho_odds: float | None = None  # 単勝オッズ（買い目戦略の判定に使う）
+    ninki: int | None = None  # 単勝人気順
 
     @property
     def age(self) -> int | None:
@@ -97,6 +99,8 @@ class Horse:
             kyakushitsu=g("脚質"),
             michiwaru_koumono=_to_bool(g("道悪巧者")),
             kiso_nouryoku_override=_to_float(g("基礎能力評価")),
+            tansho_odds=_to_float(g("単勝オッズ")),
+            ninki=_to_int(g("人気")),
         )
 
 

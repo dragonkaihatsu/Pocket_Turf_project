@@ -77,24 +77,25 @@ class TestStats(unittest.TestCase):
         self.assertEqual(sum(r["出走"] for r in by_mark.values()), len(records[0].scores))
 
     def test_ticket_tally_recovery_rate(self):
-        # 単勝200円→250円 / ワイド300円→810円 / 馬連1000円→1810円 = 1500円→2870円
+        # サンプルレースはオッズ列が無いため標準型（◎軸の馬連6点）になる。
+        # 確定着順は1着8番・2着1番なので、馬連1-8が的中して1,810円。
+        # 投資600円 → 払戻1,810円 = 回収率302%
         records, _ = self._records()
         by_ticket = tally_by_ticket(records)
-        self.assertEqual(by_ticket["単勝"]["的中"], 1)
-        self.assertEqual(by_ticket["ワイド"]["的中"], 3)
         self.assertEqual(by_ticket["馬連"]["的中"], 1)
+        self.assertEqual(by_ticket["馬連"]["点数"], 6)
         total_invest = sum(r["投資"] for r in by_ticket.values())
         total_payout = sum(r["払戻"] for r in by_ticket.values())
-        self.assertEqual(total_invest, 1500)
-        self.assertEqual(total_payout, 2870)
-        self.assertAlmostEqual(total_payout / total_invest, 1.913, places=3)
+        self.assertEqual(total_invest, 600)
+        self.assertEqual(total_payout, 1810)
+        self.assertAlmostEqual(total_payout / total_invest, 3.017, places=3)
 
     def test_recovery_rate_is_none_without_payout_data(self):
         # 配当CSVが無ければ、的中していても回収率は「不明」にする（0%にしない）
         records, _ = self._records(with_payouts=False)
         by_ticket = tally_by_ticket(records)
-        self.assertIsNone(by_ticket["単勝"]["回収率"])
-        self.assertEqual(by_ticket["単勝"]["的中"], 1)
+        self.assertIsNone(by_ticket["馬連"]["回収率"])
+        self.assertEqual(by_ticket["馬連"]["的中"], 1)
 
     def test_report_warns_on_small_sample(self):
         records, skipped = self._records()

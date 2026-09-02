@@ -81,13 +81,15 @@ class TestSampleRacePipeline(unittest.TestCase):
         scores_desc = [m.score.total_yoi for m in marked]
         self.assertEqual(scores_desc, sorted(scores_desc, reverse=True))
 
-    def test_betting_plan_ticket_counts(self):
+    def test_betting_plan_respects_strategy_point_cap(self):
+        # 買い目は荒れやすさ（1番人気オッズ）で3型に分かれ、それぞれ上限点数が違う
+        from keiba.betting import MAX_POINTS
         marked = assign_marks(self.scores, baba="良")
-        plan = make_betting_plan(marked, baba="良")
-        self.assertEqual(len(plan.tansho), 2)
-        if not plan.is_axis_mode:
-            self.assertEqual(len(plan.wide), 3)
-            self.assertLessEqual(len(plan.umaren), 10)
+        for odds, expected in [(1.5, "鉄板"), (2.5, "標準"), (3.5, "波乱")]:
+            plan = make_betting_plan(marked, baba="良", favorite_odds=odds)
+            self.assertEqual(plan.strategy, expected)
+            self.assertLessEqual(plan.total_points, MAX_POINTS[expected])
+            self.assertGreater(plan.total_points, 0)
 
     def test_pace_forecast_probabilities_sum_to_one(self):
         pace = forecast_pace(self.horses)
