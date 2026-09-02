@@ -17,6 +17,7 @@ import csv
 import re
 import time
 import unicodedata
+from datetime import date as _Date
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,6 +36,11 @@ VENUE_CODES = {
 
 RESULT_URL = "https://nar.netkeiba.com/race/result.html?race_id={race_id}"
 CALENDAR_URL = "https://nar.netkeiba.com/top/calendar.html?year={year}&month={month}"
+SHUTUBA_PAST_URL = "https://nar.netkeiba.com/race/shutuba_past.html?race_id={race_id}"
+
+# 中央（JRA）の開催場。前走がここなら地方への転入初戦とみなす
+JRA_VENUES = {"札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"}
+LONG_LAYOFF_DAYS = 180  # これを超える間隔を長期休養明けとする
 
 PAYOUT_KINDS = {
     "Tansho": "単勝", "Fukusho": "複勝", "Wakuren": "枠連", "Umaren": "馬連",
@@ -153,6 +159,7 @@ class RaceData:
     horses: list[dict] = field(default_factory=list)
     payouts: list[dict] = field(default_factory=list)
     corners: list[dict] = field(default_factory=list)
+    entries: list[dict] = field(default_factory=list)
 
 
 RESULT_COLUMNS = ["着順", "枠番", "馬番", "馬名", "性齢", "斤量", "騎手", "タイム",
@@ -260,6 +267,93 @@ def parse_result(html: str, race_id: str) -> RaceData | None:
 
 
 # ---------------------------------------------------------------------------
+# 馬柱（出馬表）のパース
+# ---------------------------------------------------------------------------
+
+ENTRY_COLUMNS = [
+    "馬番", "枠番", "馬名", "性齢", "騎手", "厩舎", "脚質", "単勝オッズ", "人気",
+    "前走着順", "前走レース名", "上がり3F", "馬体重",
+    "前走開催場", "前走間隔日数", "間隔表記", "転入初戦", "長期休養明け", "直近3走JRA数",
+    "血統父", "血統母父", "調教評価",
+]
+
+KYAKUSHITSU = {"逃": "逃げ", "先": "先行", "差": "差し", "追": "追込"}
+
+
+def _parse_past_cell(body: str) -> dict:
+    """馬柱の過去走セル1つを辞書にする。"""
+    t = _text(body)
+    out: dict = {}
+    if m := re.match(r"(\d{4})\.(\d{2})\.(\d{2})\s+(\S+)", t):
+        out["日付"] = _Date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        out["開催場"] = m.group(4)
+    if m := re.search(r"\d{4}\.\d{2}\.\d{2}\s+\S+\s+(\d+)\s", t):
+        out["着順"] = int(m.group(1))
+    if m := re.search(r"\d{4}\.\d{2}\.\d{2}\s+\S+\s+\d+\s+(\S.*?)\s+[芝ダ障]", t):
+        out["レース名"] = m.group(1).strip()
+    if m := re.search(r"\(([\d.]+)\)\s+\d+\(", t):
+        out["上がり3F"] = float(m.group(1))
+    return out
+
+
+def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
+    """馬柱ページから、脚質・間隔・血統・オッズ・前走情報を取り出す。
+
+    確定結果には含まれない事前情報（脚質、前走からの間隔、前走の開催場、血統）が
+    取れる。前走が中央の開催場なら転入初戦、間隔が180日超なら長期休養明けとする。
+    """
+    horses = []
+    for row in re.findall(r'<tr[^>]*class="HorseList".*?</tr>', html, re.S):
+        row = row.replace("&nbsp;", " ")  # オッズ欄などに実体参照が混ざる
+        h: dict = {}
+        if m := re.search(r'<td class="Waku(\d+)"', row):
+            h["枠番"] = int(m.group(1))
+        if m := re.search(r'<td class="Waku"[^>]*>\s*(\d+)\s*</td>', row):
+            h["馬番"] = int(m.group(1))
+        for key, cls in (("血統父", "Horse01"), ("馬名", "Horse02"),
+                         ("血統母父", "Horse04"), ("厩舎", "Horse05")):
+            if m := re.search(rf'<dt class="{cls}[^"]*">(.*?)</dt>', row, re.S):
+                h[key] = _text(m.group(1)).strip("()")
+        if m := re.search(r'<dt class="Horse06[^"]*">(.*?)</dt>', row, re.S):
+            body = m.group(1)
+            if k := re.search(r'<div class="Type[^"]*"><span>(.*?)</span>', body):
+                h["脚質"] = KYAKUSHITSU.get(_text(k.group(1)), "")
+            h["間隔表記"] = _text(re.sub(r'<div class="Type.*?</div>', "", body, flags=re.S))
+        if m := re.search(r'<dt class="Horse07[^"]*">(.*?)</dt>', row, re.S):
+            body = m.group(1)
+            if w := re.search(r'<div class="Weight">(\d+)kg<span>\(([-+]?\d+)\)', body):
+                h["馬体重"] = f"{w.group(1)}({w.group(2)})"
+            # 上位人気は <span class="Odds_Ninki"> で囲まれ、それ以外は素の数値で入る
+            if pop := re.search(r'<div class="Popular">(.*?)</div>', body, re.S):
+                ptxt = _text(pop.group(1))
+                if o := re.search(r"([\d.]+)\s*\((\d+)人気\)", ptxt):
+                    h["単勝オッズ"], h["人気"] = float(o.group(1)), int(o.group(2))
+        if m := re.search(r'<span class="Barei">(.*?)</span>', row):
+            h["性齢"] = _text(m.group(1))[:2]
+        if m := re.search(r'<td class="Jockey".*?</td>', row, re.S):
+            names = re.findall(r">([^<>]{2,10})</a>", m.group())
+            if names:
+                h["騎手"] = names[-1].strip()
+
+        pasts = [_parse_past_cell(b) for _, b in
+                 re.findall(r'<td class="(Past[^"]*)"[^>]*>(.*?)</td>', row, re.S)]
+        pasts = [p for p in pasts if p.get("日付")]
+        if pasts:
+            p0 = pasts[0]
+            interval = (race_date - p0["日付"]).days
+            h["前走着順"] = p0.get("着順")
+            h["前走レース名"] = p0.get("レース名", "")
+            h["前走開催場"] = p0.get("開催場")
+            h["上がり3F"] = p0.get("上がり3F")
+            h["前走間隔日数"] = interval
+            h["長期休養明け"] = "Y" if interval > LONG_LAYOFF_DAYS else ""
+            h["転入初戦"] = "Y" if p0.get("開催場") in JRA_VENUES else ""
+            h["直近3走JRA数"] = sum(1 for p in pasts[:3] if p.get("開催場") in JRA_VENUES)
+        horses.append(h)
+    return horses
+
+
+# ---------------------------------------------------------------------------
 # 保存
 # ---------------------------------------------------------------------------
 
@@ -292,18 +386,11 @@ def save_race(data: RaceData, outdir: Path) -> dict[str, Path]:
         _write_csv(p, ["コーナー", "通過順"], data.corners)
         out["通過順"] = p
 
-    # 確定結果から出走馬CSVを復元する（前走情報は含まれないため、
-    # スコアリングに使うときは前走着順などを別途補う必要がある）
-    entries = [
-        {"馬番": h["馬番"], "枠番": h["枠番"], "馬名": h["馬名"], "性齢": h["性齢"],
-         "斤量": h["斤量"], "騎手": h["騎手"], "上がり3F": h["上がり3F"],
-         "前走着順": "", "前走レース名": "", "調教評価": "", "脚質": ""}
-        for h in data.horses
-    ]
-    p = outdir / f"{prefix}_出走馬.csv"
-    _write_csv(p, ["馬番", "枠番", "馬名", "性齢", "斤量", "騎手", "前走着順",
-                   "前走レース名", "上がり3F", "調教評価", "脚質"], entries)
-    out["出走馬"] = p
+    if data.entries:
+        # 馬柱から取れた事前情報（脚質・間隔・血統・転入初戦など）
+        p = outdir / f"{prefix}_出走馬.csv"
+        _write_csv(p, ENTRY_COLUMNS, data.entries)
+        out["出走馬"] = p
 
     return out
 
@@ -357,8 +444,17 @@ def collect_day(
             continue
         data.info.date = data.info.date or date
         data.info.venue = data.info.venue or venue
+        # 馬柱（事前情報）も取得する。結果だけでは脚質・間隔・血統が分からないため
+        past_html = fetcher.get(
+            SHUTUBA_PAST_URL.format(race_id=race_id), f"{race_id}_past"
+        )
+        if past_html:
+            y, mo, d = (int(x) for x in data.info.date.split("-"))
+            data.entries = parse_shutuba_past(past_html, _Date(y, mo, d))
+
         paths = save_race(data, outdir)
-        print(f"→ {data.info.name} ({len(data.horses)}頭, 払戻{len(data.payouts)}件)")
+        print(f"→ {data.info.name} ({len(data.horses)}頭, 払戻{len(data.payouts)}件"
+              f", 馬柱{len(data.entries)}頭)")
         collected.append(data)
 
     return collected

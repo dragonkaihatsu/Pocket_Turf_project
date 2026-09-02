@@ -86,3 +86,56 @@ class TestParseResult(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+CACHED_PAST = ROOT / "data" / "raw" / "202644090211_past.html"
+
+
+@unittest.skipUnless(CACHED_PAST.exists(), "取得済み馬柱HTMLのキャッシュが必要")
+class TestParseShutubaPast(unittest.TestCase):
+    """馬柱ページから、確定結果には無い事前情報が取れることを検証する。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from datetime import date
+
+        from keiba.collect import parse_shutuba_past
+        cls.entries = parse_shutuba_past(
+            CACHED_PAST.read_text(encoding="utf-8"), date(2026, 9, 2)
+        )
+        cls.by_umaban = {e["馬番"]: e for e in cls.entries}
+
+    def test_all_horses_parsed(self):
+        self.assertEqual(len(self.entries), 16)
+
+    def test_odds_and_ninki_for_every_horse(self):
+        # 上位人気は <span class="Odds_Ninki"> で囲まれ構造が変わるため、全頭で確認する
+        missing = [e["馬番"] for e in self.entries if e.get("人気") is None]
+        self.assertEqual(missing, [], f"人気が取れていない馬番: {missing}")
+
+    def test_favorite_details(self):
+        fav = next(e for e in self.entries if e["人気"] == 1)
+        self.assertEqual(fav["馬名"], "ティントレット")
+        self.assertEqual(fav["単勝オッズ"], 1.9)
+        self.assertEqual(fav["脚質"], "先行")
+        self.assertEqual(fav["血統父"], "ホッコータルマエ")
+
+    def test_interval_is_computed_from_previous_race_date(self):
+        fav = next(e for e in self.entries if e["人気"] == 1)
+        self.assertEqual(fav["前走間隔日数"], 70)   # 前走 2026-06-24 → 当日 2026-09-02
+        self.assertEqual(fav["前走開催場"], "浦和")
+        self.assertEqual(fav["長期休養明け"], "")   # 180日以内
+
+    def test_jra_transfer_flag(self):
+        # 14番サンライズホークは前走が福島(中央)＝転入初戦にあたる
+        hawk = self.by_umaban[14]
+        self.assertEqual(hawk["前走開催場"], "福島")
+        self.assertEqual(hawk["転入初戦"], "Y")
+        self.assertEqual(hawk["直近3走JRA数"], 3)
+        # 前走が地方の馬にはフラグが立たない
+        fav = next(e for e in self.entries if e["人気"] == 1)
+        self.assertEqual(fav["転入初戦"], "")
+
+    def test_kyakushitsu_is_normalized(self):
+        styles = {e.get("脚質") for e in self.entries if e.get("脚質")}
+        self.assertTrue(styles <= {"逃げ", "先行", "差し", "追込"}, styles)
