@@ -347,22 +347,28 @@ table.res td.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-wi
 
 /* レース操作卓 */
 .deck{display:flex;flex-direction:column;gap:8px;height:100%}
-.spur{
-  flex:0 0 auto; height:clamp(84px,15dvh,124px); border-radius:12px;
-  background:linear-gradient(#f6cf5f,#cf9a1e);
-  color:#2a1e02; font-family:"Dela Gothic One",sans-serif; font-size:20px;
-  display:grid;place-items:center;gap:2px; border:2px solid #ffe6a6;
-  box-shadow:0 4px 0 #8c6712, 0 8px 18px rgba(244,196,74,.18);
+.pacebox{
+  display:flex;align-items:stretch;gap:7px;margin-bottom:7px;
 }
-.spur:active{transform:translateY(3px);box-shadow:0 1px 0 #8c6712}
-.spur.on{background:linear-gradient(#ff8a63,#e04a22);border-color:#ffbca4;color:#2a0d04;box-shadow:0 4px 0 #8a2c14}
-.spur small{display:block;font-family:inherit;font-size:10px;letter-spacing:.1em;opacity:.75}
-.whip{
-  flex:0 0 auto;min-height:52px;border-radius:10px;background:#1b4a2e;border:1px solid var(--line);
-  display:grid;place-items:center;font-size:14px;font-weight:700;
+.pacebtn{
+  flex:0 0 62px;border-radius:9px;font-size:26px;line-height:1;
+  background:linear-gradient(#2a5a3c,#17371f);border:1px solid var(--line);color:var(--ink);
 }
-.whip:active{filter:brightness(1.3)}
-.whip .pips{font-family:"DotGothic16",monospace;color:var(--gold);font-size:12px}
+.pacebtn.up{background:linear-gradient(#8a5a1a,#5a3410);border-color:var(--brass-lo)}
+.pacebtn:active{filter:brightness(1.35)}
+.pacenow{
+  flex:1 1 auto;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;padding:6px 4px;border-radius:9px;background:var(--panel-2);border:1px solid var(--line);
+}
+.pacenow b{font-size:15px;font-family:"DotGothic16",monospace;letter-spacing:.04em}
+.pacenow small{font-size:9.5px;color:var(--ink-3);text-align:center;line-height:1.2}
+.pacepips{display:flex;gap:3px}
+.pacepips i{
+  display:block;width:15px;height:6px;border-radius:2px;
+  background:#0a1f13;border:1px solid var(--line);
+}
+.pacepips i.on{background:linear-gradient(90deg,#5fd8e8,#63d98d);border-color:transparent}
+.pacepips i.hot{background:linear-gradient(90deg,#f4c44a,#ff6b4a);border-color:transparent}
 
 .log{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--ink-2);line-height:1.5}
 .log .ln{padding-left:10px;border-left:2px solid var(--line)}
@@ -943,7 +949,7 @@ function makeField(g, race){
   const lvl = fieldLevel(race);
   const field=[], used=new Set([g.horse&&g.horse.name]);
   for(let i=0;i<7;i++){
-    const b = clamp(lvl + rint(-9,9), 22, 108);
+    const b = clamp(lvl + rint(-9,9), 22, 120);   // 天井はレジェンドカップのためだけに高い
     const r = newHorse({base:b});
     r.cond = rint(45,92);
     r.fatigue = rint(0,25);
@@ -966,7 +972,7 @@ function makeWatchField(race){
   const lvl = fieldLevel(race);
   const field=[], used=new Set();
   for(let i=0;i<8;i++){
-    const r=newHorse({base:clamp(lvl+rint(-9,9),22,108)});
+    const r=newHorse({base:clamp(lvl+rint(-9,9),22,120)});
     r.cond=rint(45,92); r.fatigue=rint(0,25); r.npc=true;
     if(INTL_COURSES.has(race.c)) r.jockey = pick(JOCKEY_INT).n;
     if(Math.random()<0.45) r.name = pick(MOB_NAMES);
@@ -1001,8 +1007,9 @@ function makeOdds(field, race, oddsMul){
   const rs = field.map(h=>Math.pow(Math.max(6,ratingOf(h,race)),4.2));
   const sum = rs.reduce((a,b)=>a+b,0);
   return field.map((h,i)=>{
-    const p = clamp(rs[i]/sum, .012, .82);
-    let win = Math.max(1.1, Math.round(78/(p*100)*10)/10);
+    // 下限を下げて、万馬券ならぬ99.9倍まで出るようにする
+    const p = clamp(rs[i]/sum, .0078, .82);
+    let win = clamp(Math.round(78/(p*100)*10)/10, 1.1, 99.9);
     const p3  = clamp(p*2.45, .03, .93);
     let plc = Math.max(1.0, Math.round(80/(p3*100)*10)/10);
     if(!h.npc && oddsMul && oddsMul<1){          // 連闘の愛馬は配当が下がる
@@ -1036,6 +1043,17 @@ const HYO = [
 ];
 const hyoOf = win => HYO.find(x=>win<x.max) || HYO[HYO.length-1];
 
+/* --- ペース管理（1〜5） ---
+   ムチの回数制ではなく、道中どれくらい脚を使うかを選ぶ。4と5は使える距離に
+   限りがあり、使い切ると自動的に3へ戻る。長距離は2〜3で温存して坂で5、
+   短距離は3で押し切って最後に5、という組み立てになる。 */
+const PACE = [
+  {k:'追走',   d:'列に並んで脚をためる',       v:0.960, w:0.72},
+  {k:'位置取り',d:'じわりと位置を上げる',       v:0.988, w:0.88},
+  {k:'勝負',   d:'前を取りに行く',             v:1.015, w:1.06},
+  {k:'ムチ',   d:'約300mしか続かない',         v:1.055, w:1.62, lim:300},
+  {k:'全開',   d:'約100mで脚を使い果たす',     v:1.105, w:2.70, lim:100}
+];
 const BASE_V = 16.0;
 /* 距離が延びるほど平均速度は落ちる。実際の持久曲線（Riegel則 v∝d^-k）に合わせる。 */
 const distFactor = d => 1.035*Math.pow(d/1200,-0.095);
@@ -1080,11 +1098,11 @@ class RaceSim{
          それでいて走破時計は壊れない。「突然加速した」「伸びなかった」の正体。 */
       const kq=Math.random();
       let kick, kmood=null;
-      if(kq<0.10)      { kick=rnd(1.070,1.040); kmood='鬼脚'; }
-      else if(kq<0.30) { kick=rnd(1.030,1.012); }
+      if(kq<0.13)      { kick=rnd(1.088,1.048); kmood='鬼脚'; }
+      else if(kq<0.32) { kick=rnd(1.034,1.014); }
       else if(kq<0.72) { kick=rnd(1.008,0.992); }
-      else if(kq<0.90) { kick=rnd(0.988,0.968); }
-      else             { kick=rnd(0.962,0.936); kmood='不発'; }
+      else if(kq<0.90) { kick=rnd(0.988,0.966); }
+      else             { kick=rnd(0.960,0.930); kmood='不発'; }
       /* 騎手。手当が腕の値段で、安い若手は出遅れと不利を背負う。
          得意脚質が噛み合うとわずかに伸びる。 */
       const jk = jockeyOf(h.jockey), js = jSkill(jk);
@@ -1094,7 +1112,7 @@ class RaceSim{
         jk, jSk:js, lateStart, lateT: lateStart ? rnd(2.3,1.2) : 0,
         blockMul: 1.9 - js*1.35,                             // 包まれやすさ
         fit: (jk.s===h.style) ? 1.012 : 1,                   // 得意脚質
-        h, i, x:0, v:0, stam:1, fin:0, rank:0, spurt:false, whip:0, whipT:0,
+        h, i, x:0, v:0, stam:1, fin:0, rank:0,
         trouble:0, phase:Math.random(),
         cap: BASE_V*(0.930+h.sp/900)*aptV*condV*distF*hcpV*form*rnd(1.010,.990),
         accel: 0.9+h.pw/170,
@@ -1110,10 +1128,19 @@ class RaceSim{
       };
     });
     this.me = this.run[meIdx];
+    this.myPace = 3;          // 愛馬のペース（1〜5）。レース中に上げ下げする
+    this.paceRun = 0;         // 現在のペースで走った距離（4・5の持続判定用）
     // 人気順（オッズと同じ並び＝公表実績順）。実況で「人気薄が来た」を判定するのに使う。
     [...this.run].sort((a,b)=>ratingOf(b.h,race)-ratingOf(a.h,race))
                  .forEach((r,i)=>{ r.pop=i+1; });
     this.last600 = new Map();
+  }
+  /* ペースを変える。4・5は使える距離が決まっているので、切り替えのたびに測り直す。 */
+  setPace(n){
+    const v=clamp(Math.round(n),1,5);
+    if(v===this.myPace) return this.myPace;
+    this.myPace=v; this.paceRun=0;
+    return v;
   }
   targetMul(r, prog){
     const s = r.style;
@@ -1156,9 +1183,18 @@ class RaceSim{
         }
       }
       // 仕掛け
-      if(r===this.me){ if(r.spurt) mul*=1.075; }
+      if(r===this.me){
+        const P=PACE[this.myPace-1];
+        mul *= P.v;
+        if(P.lim){
+          this.paceRun += r.v*dt;
+          if(this.paceRun>=P.lim){
+            this.setPace(3);
+            this.events.push({t:this.t, txt:`${P.k}はここまで。ペースを戻した。`, hot:true});
+          }
+        }
+      }
       else if(prog>=r.goAt) mul*=1.06;
-      if(r.whipT>0){ mul*=1.045; r.whipT-=dt; }
       // 直線に入ったら決め手が出る（伸びる馬と、伸びない馬がここで分かれる）
       if(prog>=this.sStart) mul *= r.kick;
       if(r.trouble>0){ mul*=0.90; r.trouble-=dt; }
@@ -1197,6 +1233,17 @@ class RaceSim{
       /* 失速には下限を設ける。青天井にすると1着と最下位が20秒以上離れ、
          競馬の絵にならない。馬群に飲み込まれる程度で止める。 */
       mul *= Math.max(fade, 0.855);
+      /* 馬群を100m以内に保つ。位置取りの駆け引きは、隊列が固まっていて
+         初めて成立する（離れると画面にも入らない）。
+         後ろを押すだけだと先頭が入れ替わるたびに全体のペースが上がって
+         走破時計が壊れるので、抜け出した先頭も同じだけ抑える。 */
+      if(this.leader && this.leader!==r){
+        const back=this.leader.x-r.x;
+        if(back>32) mul *= 1 + Math.min(0.24,(back-32)/230);
+      }else if(this.order && this.order[1]){
+        const lead=r.x-this.order[1].x;
+        if(lead>28) mul *= 1 - Math.min(0.12,(lead-28)/260);
+      }
       let target = r.cap*mul;
       // ラスト100mは根性で粘る
       if(prog>.94) target *= 1 + r.guts/2400;
@@ -1208,8 +1255,7 @@ class RaceSim{
          上振れした馬ほど直線で失速して時計そのものが壊れる。 */
       const ratio = r.v/(BASE_V*0.985*r.paceAdj*this.distF*r.form);
       let drain = dt*0.0069*Math.pow(Math.max(.55,ratio),5)/r.stFac;
-      if(r===this.me && r.spurt) drain*=1.55;
-      if(r.whipT>0) drain*=1.25;
+      if(r===this.me) drain *= PACE[this.myPace-1].w;
       r.stam -= drain;
       // 上がり3F計測
       if(!this.last600.has(r.i) && r.x>=D-600) this.last600.set(r.i,this.t);
@@ -1243,6 +1289,16 @@ class RaceSim{
       ? `3コーナー、小回りで隊列が一気に凝縮する！`
       : `3コーナーから隊列が動き出す！`);
     if(p>this.sStart) say('d',`4コーナーを回って直線へ！残り${Math.round(this.straight)}m！`);
+    /* 直線に入った時点で先頭が5番人気以下なら、3回に1回だけ空が焼ける。
+       大波乱が起きかけていることを、実況より先に色で知らせる演出。 */
+    if(p>this.sStart && !this.skyRolled){
+      this.skyRolled=true;
+      const top=this.order[0];
+      if((top.pop||9)>=5 && Math.random()<0.33){
+        this.redSky=true;
+        say('r',`空が焼けている——これは大波乱の気配だ！`, true);
+      }
+    }
     if(p>1-190/this.D && this.course.slope>=0.7) say('h',`最後の急坂だ！ここで脚が上がる！`, true);
     if(p>.90) say('e',`${this.order[0].h.name}先頭、${this.order[1].h.name}が並びかける！`);
     // 直線で人気薄が抜け出したら煽る
@@ -1539,11 +1595,12 @@ function drawTheme(sg, camX, omen){
 const CROWD=['#ff5b6e','#ffd23f','#4ad6ff','#7ef07a','#ff9f43','#c98bff','#ffffff','#ff7ac0','#5b8cff'];
 const hash1=n=>{ const s=Math.sin(n*127.1)*43758.5453; return s-Math.floor(s); };
 
-function drawBack(camX, surface, sg, omen){
+function drawBack(camX, surface, sg, omen, red){
   if(sg){ drawTheme(sg, camX, omen); return; }
-  // 昼の空
+  // 昼の空。大波乱の気配があるときだけ焼けた赤に変わる
   const sky=g.createLinearGradient(0,0,0,H*.56);
-  sky.addColorStop(0,'#3fa8d8'); sky.addColorStop(.65,'#8fd2e8'); sky.addColorStop(1,'#cdeaf0');
+  if(red){ sky.addColorStop(0,'#5c1020'); sky.addColorStop(.55,'#c3402a'); sky.addColorStop(1,'#f0a25a'); }
+  else   { sky.addColorStop(0,'#3fa8d8'); sky.addColorStop(.65,'#8fd2e8'); sky.addColorStop(1,'#cdeaf0'); }
   g.fillStyle=sky; g.fillRect(0,0,W,H*.56);
   // 雲
   g.fillStyle='rgba(255,255,255,.75)';
@@ -2084,12 +2141,49 @@ function drawPodium(field, res, mePos, t){
     }
     g.globalAlpha=1;
   }
-  const s=Math.min(W*0.26,H*0.38);
+  const s=Math.min(W*0.24,H*0.34);
   const top=res[0].h, num=top.num||1;
-  drawHorse(W*0.5,H*0.78,s,top.coat,clamp(num-1,0,7),num,Math.sin(t/600)*0.15,false,true);
-  g.fillStyle='#f4c44a'; g.font='11px "DotGothic16",monospace';
-  g.textAlign='center'; g.textBaseline='alphabetic';
-  g.fillText((mePos===1?'1着 ':'')+top.name, W*0.5, H*0.30);
+  drawHorse(W*0.30,H*0.80,s,top.coat,clamp(num-1,0,7),num,Math.sin(t/600)*0.15,false,true);
+
+  /* 左＝勝ち馬の名前、右＝単勝の枠色と複勝オッズ。
+     払戻を確かめるのに要るのはこの2つなので、上画面で完結させる。 */
+  g.textBaseline='alphabetic';
+  g.textAlign='left';
+  const lx=W*0.05;
+  /* 「Win!」も右の配当も、指しているのは勝ち馬。愛馬の着順は下画面に大きく出る。
+     ここで自分の着順を出すと、隣の名前（勝ち馬）と食い違って読めなくなる。 */
+  g.fillStyle='#f4c44a';
+  g.font=`bold ${Math.round(Math.min(W*0.085,30))}px "Dela Gothic One",sans-serif`;
+  g.fillText('Win!', lx, H*0.20);
+  g.fillStyle=mePos===1?'#f4c44a':'#ffffff';
+  g.font=`${Math.round(Math.min(W*0.050,17))}px "DotGothic16",monospace`;
+  g.fillText(`【${top.name}】`, lx, H*0.29);
+
+  // 右：単勝の枠色（馬番）と、単勝・複勝のオッズ
+  const od = (typeof app!=='undefined' && app.odds && app.field)
+    ? app.odds[app.field.indexOf(top)] : null;
+  const bx=W*0.62, bw=W*0.33, by=H*0.12, bh=H*0.30;
+  g.fillStyle='rgba(0,0,0,.42)'; roundRect(bx,by,bw,bh,7); g.fill();
+  g.strokeStyle='rgba(244,196,74,.55)'; g.lineWidth=1.5; roundRect(bx,by,bw,bh,7); g.stroke();
+  // 枠色のセル
+  const cw=Math.min(bw*0.34,H*0.10);
+  g.fillStyle=WAKU[clamp(num-1,0,7)];
+  roundRect(bx+bw*0.08, by+bh*0.13, cw, cw, 4); g.fill();
+  g.strokeStyle='rgba(0,0,0,.55)'; g.lineWidth=1;
+  roundRect(bx+bw*0.08, by+bh*0.13, cw, cw, 4); g.stroke();
+  g.fillStyle=wakuInk(num);
+  g.font=`${Math.round(cw*0.62)}px "DotGothic16",monospace`;
+  g.textAlign='center';
+  g.fillText(String(num), bx+bw*0.08+cw/2, by+bh*0.13+cw*0.72);
+  // オッズ
+  g.textAlign='right';
+  g.fillStyle='#9fd8c4'; g.font=`${Math.round(Math.min(W*0.032,11))}px "DotGothic16",monospace`;
+  g.fillText('単勝', bx+bw-W*0.03, by+bh*0.30);
+  g.fillText('複勝', bx+bw-W*0.03, by+bh*0.66);
+  g.fillStyle='#6fe0ee'; g.font=`${Math.round(Math.min(W*0.055,19))}px "DotGothic16",monospace`;
+  g.fillText(od?od.win.toFixed(1):'--', bx+bw-W*0.03, by+bh*0.47);
+  g.fillText(od?od.plc.toFixed(1):'--', bx+bw-W*0.03, by+bh*0.83);
+  g.textAlign='left';
 }
 
 /* =======================================================================
@@ -2837,11 +2931,18 @@ const V = {
         <p class="eyebrow">隊列</p>
         <div id="liveList"></div>
       </div>
-      <button class="spur" id="spurBtn" data-act="spurt">追い出す<small>SPURT</small></button>
+      <div class="pacebox">
+        <button class="pacebtn" data-act="pacedown" aria-label="ペースを下げる">−</button>
+        <div class="pacenow">
+          <span class="pacepips" id="pacePips"></span>
+          <b id="paceNum">3 勝負</b>
+          <small id="paceLbl">前を取りに行く</small>
+        </div>
+        <button class="pacebtn up" data-act="paceup" aria-label="ペースを上げる">＋</button>
+      </div>
       <div class="row" style="gap:6px">
-        <button class="whip" data-act="whip" style="flex:1.5">ムチ <span class="pips" id="whipPips">●●●</span></button>
-        <button class="btn ghost center" data-act="speed" style="flex:1;min-height:52px;font-size:12px" id="spdBtn">×1</button>
-        <button class="btn ghost center" data-act="skip" id="skipBtn" style="flex:1;min-height:52px;font-size:12px">直線まで</button>
+        <button class="btn ghost center" data-act="speed" style="flex:1;min-height:46px;font-size:12px" id="spdBtn">×1</button>
+        <button class="btn ghost center" data-act="skip" id="skipBtn" style="flex:1;min-height:46px;font-size:12px">直線まで</button>
       </div>
     </div>`;
   },
@@ -3198,7 +3299,7 @@ function startRace(){
     if(idx===undefined) idx=app.odds.reduce((m,o,i)=>o.win<app.odds[m].win?i:m,0);
     app.sim.me=app.sim.run[+idx];
   }
-  app.sim.me.whip=3;
+
   if(app.omen && !app.spectate){        // 吉兆は演出だけでなく実際に効く
     app.sim.me.cap   *= 1.030;
     app.sim.me.stFac *= 1.25;
@@ -3377,13 +3478,16 @@ const ACT = {
     tmap.hidden=true; SFX.tap(); show('home'); drawScene(); },
   watch(){ openWatch(); },
   startrace(){ startRace(); },
-  spurt(){ const s=app.sim; if(!s||s.done) return; s.me.spurt=!s.me.spurt;
-    const b=$('#spurBtn'); if(b){ b.classList.toggle('on',s.me.spurt); b.firstChild.textContent=s.me.spurt?'全力！':'追い出す'; }
-    SFX.tap(); },
-  whip(){ const s=app.sim; if(!s||s.done||s.me.whip<=0) return;
-    s.me.whip--; s.me.whipT=2.2; SFX.whip();
-    const p=$('#whipPips'); if(p) p.textContent='●●●'.slice(0,s.me.whip)+'○○○'.slice(0,3-s.me.whip);
-    if(s.me.stam<0.12) s.events.push({t:s.t,txt:'反応がない！もう脚がない！',hot:true}); },
+  paceup(){   ACT._pace(1); },
+  pacedown(){ ACT._pace(-1); },
+  _pace(d){
+    const s=app.sim; if(!s||s.done) return;
+    const before=s.myPace, now=s.setPace(before+d);
+    if(now===before){ SFX.err(); return; }
+    now>before ? SFX.whip() : SFX.tap();
+    if(now>=4 && s.me.stam<0.12) s.events.push({t:s.t,txt:'反応がない！もう脚がない！',hot:true});
+    syncPace();
+  },
   speed(){ app.speed = app.speed===1?2:app.speed===2?4:1;
     const b=$('#spdBtn'); if(b) b.textContent='×'+app.speed; SFX.tap(); },
   /* スキップ＝スタートを見せたあとコーナーを飛ばして直線から中継を再開する。
@@ -3456,8 +3560,8 @@ $('#mute').addEventListener('click',e=>{
 });
 addEventListener('keydown',e=>{
   if(app.scene!=='race') return;
-  if(e.code==='Space'){ e.preventDefault(); ACT.spurt(); }
-  if(e.code==='KeyW'){ ACT.whip(); }
+  if(e.code==='ArrowUp'||e.code==='KeyW'){ e.preventDefault(); ACT.paceup(); }
+  if(e.code==='ArrowDown'||e.code==='KeyS'){ e.preventDefault(); ACT.pacedown(); }
 });
 
 /* =======================================================================
@@ -3465,6 +3569,22 @@ addEventListener('keydown',e=>{
    ======================================================================= */
 let last=performance.now(), evIdx=0;
 /* 描画ループは常時1本だけ回る。drawScene() は画面遷移直後の即時反映用。 */
+/* ペースの操作卓を今の状態に合わせる。4・5は残り距離をピップスの色で示す。 */
+function syncPace(){
+  const s=app.sim; if(!s) return;
+  const P=PACE[s.myPace-1];
+  const num=$('#paceNum'), lbl=$('#paceLbl'), pips=$('#pacePips');
+  if(num) num.textContent=`${s.myPace} ${P.k}`;
+  if(lbl){
+    lbl.textContent = P.lim
+      ? `${P.d}（残り${Math.max(0,Math.round(P.lim-s.paceRun))}m）`
+      : P.d;
+  }
+  if(pips){
+    pips.innerHTML=[1,2,3,4,5].map(i=>
+      `<i class="${i<=s.myPace ? (i>=4?'hot':'on') : ''}"></i>`).join('');
+  }
+}
 function drawScene(){ render(performance.now(), 0); }
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000); last=now;
@@ -3541,7 +3661,7 @@ function render(now, dt){
     }
     const me=sim.me, D=sim.D;
     const camX=clamp(me.x-16, 0, D+20);
-    drawBack(camX,app.race.s,app.sgTheme,app.omen);
+    drawBack(camX,app.race.s,app.sgTheme,app.omen,sim&&sim.redSky);
     drawTrack(camX,app.race.s,D,sim.bendAt(me.x));
     drawField(sim,camX);
     const rem=Math.max(0,Math.round((D-me.x)/10)*10);
@@ -3570,6 +3690,7 @@ function render(now, dt){
     // 実況
     while(evIdx<sim.events.length){ const e=sim.events[evIdx++]; say(e.txt,e.hot); }
     // 操作卓の同期
+    syncPace();
     const bar=$('#stamBar');
     if(bar){
       const v=clamp(me.stam,0,1)*100;
@@ -3599,7 +3720,7 @@ function render(now, dt){
     const sim=app.sim;
     if(sim){
       const camX=clamp(sim.me.x-16,0,sim.D+20);
-      drawBack(camX,app.race.s,app.sgTheme,app.omen); drawTrack(camX,app.race.s,sim.D,0);
+      drawBack(camX,app.race.s,app.sgTheme,app.omen,sim.redSky); drawTrack(camX,app.race.s,sim.D,0);
       drawField(sim,camX);
     }
     setHud(`<span class="chip gold">GOAL!</span>`);
