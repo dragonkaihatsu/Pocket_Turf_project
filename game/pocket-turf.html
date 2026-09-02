@@ -1642,17 +1642,31 @@ function drawBack(camX, surface, sg, omen, red){
   g.fillStyle='#2f7a48'; g.fillRect(0,bot,W,H*.03);              // 内馬場の緑
 }
 /* 馬（横から見た走行）。s は体長のおおよそのピクセル数。 */
-function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label){
+/* --- 脚質ごとの体型 ---
+   逃げ＝小柄、先行＝標準、差し＝ノッポ、追込＝ぽっちゃり。
+   sc は全体の大きさで、縮めたぶんは drop で下げて接地線を揃える
+   （揃えないと小さい馬が宙に浮き、大きい馬が地面にめり込む）。 */
+const BODY = {
+  '逃げ': {sc:0.88, leg:0.92, girth:1.00, len:0.95, neck:0.92},
+  '先行': {sc:1.00, leg:1.00, girth:1.00, len:1.00, neck:1.00},
+  '差し': {sc:1.03, leg:1.20, girth:0.88, len:0.99, neck:1.18},
+  '追込': {sc:1.00, leg:0.88, girth:1.26, len:1.07, neck:0.95}
+};
+function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label,style){
   const c=COATS[coat]||COATS[0];
   const dark=c.m||'#2b1a10';
   const legCol = coat===3 ? '#8d8781' : dark;   // 芦毛は脚も淡い
+  const B=BODY[style]||BODY['先行'];
   g.save(); g.translate(x,y);
   const ground=s*0.50;
   // 接地影（馬体の上下動には追従させない）
   g.globalAlpha=.30; g.fillStyle='#000';
-  g.beginPath(); g.ellipse(0,ground,s*0.46,s*0.068,0,0,7); g.fill(); g.globalAlpha=1;
+  g.beginPath(); g.ellipse(0,ground,s*0.46*B.sc,s*0.068,0,0,7); g.fill(); g.globalAlpha=1;
   const bob = running? Math.sin(phase*2)*s*0.045 : 0;
-  g.translate(0,bob);
+  // 体型ぶんの拡大縮小。接地線がずれないように、縮んだぶんだけ下げる。
+  g.translate(0, bob + ground*(1-B.sc));
+  g.scale(B.sc,B.sc);
+  const gl = ground/B.sc;                 // 拡大縮小後の座標系での接地線
   g.lineCap='round'; g.lineJoin='round';
 
   // 脚：肩/寛から膝、球節までの2関節。ギャロップは前後で半周期ずらす。
@@ -1661,11 +1675,11 @@ function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label){
     const p=phase+off;
     const sw  = running? Math.sin(p)*amp : stand;      // 静止時も前後の肢をわずかにずらす
     const bend= running? Math.max(0,Math.cos(p))*0.85+0.18 : 0.14;
-    const L=len*s;
+    const L=len*s*B.leg;
     const kx=ax+Math.sin(sw)*L*0.55,       ky=ay+Math.cos(sw)*L*0.55;
     const fx=kx+Math.sin(sw-bend)*L*0.52,  fy=ky+Math.cos(sw-bend)*L*0.52;
     g.beginPath(); g.moveTo(ax,ay); g.lineTo(kx,ky);
-    g.lineTo(fx,Math.min(fy,ground-bob)); g.stroke();
+    g.lineTo(fx,Math.min(fy,gl)); g.stroke();
   };
   // 奥側の対（暗く細く＝奥行き）
   g.globalAlpha=.72;
@@ -1681,12 +1695,12 @@ function drawHorse(x,y,s,coat,waku,num,phase,running,hl,label){
 
   // 胴（後躯・腹・肩の3塊で馬らしいシルエットを作る）
   g.fillStyle=c.c;
-  g.beginPath(); g.ellipse(-0.21*s,-0.03*s,0.25*s,0.205*s,0,0,7); g.fill();
-  g.beginPath(); g.ellipse( 0.05*s, 0.00*s,0.33*s,0.180*s,0,0,7); g.fill();
-  g.beginPath(); g.ellipse( 0.26*s,-0.05*s,0.19*s,0.185*s,0,0,7); g.fill();
+  g.beginPath(); g.ellipse(-0.21*s*B.len,-0.03*s,0.25*s*B.len,0.205*s*B.girth,0,0,7); g.fill();
+  g.beginPath(); g.ellipse( 0.05*s*B.len, 0.00*s,0.33*s*B.len,0.180*s*B.girth,0,0,7); g.fill();
+  g.beginPath(); g.ellipse( 0.26*s*B.len,-0.05*s,0.19*s*B.len,0.185*s*B.girth,0,0,7); g.fill();
 
   // 首（走行時は前へ低く、静止時はやや起こす）
-  const nx=running?0.575:0.535, ny=running?-0.34:-0.33;
+  const nx=(running?0.575:0.535)*B.len, ny=(running?-0.34:-0.33)*B.neck;
   g.beginPath();
   g.moveTo(0.30*s,-0.17*s);
   g.quadraticCurveTo(0.47*s,-0.20*s,nx*s,ny*s);
@@ -1851,7 +1865,7 @@ function drawField(sim, camX){
     if(px<-70||px>W+70) return;
     const sc=Math.min(W*0.085,H*0.13)*(0.80+(r.laneY/H)*0.36);
     const focus = (r===sim.me);
-    drawHorse(px,r.laneY,sc,r.h.coat,r.h.num-1,r.h.num,r.phase,true,focus,focus);
+    drawHorse(px,r.laneY,sc,r.h.coat,r.h.num-1,r.h.num,r.phase,true,focus,focus,r.h.style);
   });
 }
 /* 厩舎シーン */
@@ -1972,9 +1986,9 @@ function drawStable(h, t){
     hl.addColorStop(0,'rgba(255,236,190,.42)');
     hl.addColorStop(1,'rgba(255,226,170,0)');
     g.fillStyle=hl; g.fillRect(0,0,W,H);
-    drawHorseSeated(cx-ts*0.03, seatY, ts*1.05, h.coat, t);
+    drawHorseSeated(cx-ts*0.03, seatY, ts*1.05, h.coat, t, h.style);
   }else{
-    drawHorse(W*0.52,H*0.74+breathe,s,h.coat,0,0,Math.sin(t/700)*0.18,false,false);
+    drawHorse(W*0.52,H*0.74+breathe,s,h.coat,0,0,Math.sin(t/700)*0.18,false,false,null,h.style);
   }
 }
 /* 玉座。厩舎の最終段階は馬房ではなく謁見の間になる。 */
@@ -2018,10 +2032,12 @@ function drawThrone(cx, seatY, s, t){
 /* 玉座に腰を下ろした愛馬。走る型の drawHorse とは別に、座り姿を描く。
    seatY は座面の高さ。尻がそこへ沈むよう原点を決め、肢は座面より下に出さない
    （下に伸ばすと立っているように見えてしまう）。 */
-function drawHorseSeated(x,seatY,s,coat,t){
+function drawHorseSeated(x,seatY,s,coat,t,style){
   const c=COATS[coat]||COATS[0];
   const dark=c.m||'#2b1a10';
   const legCol = coat===3 ? '#8d8781' : dark;
+  const B=BODY[style]||BODY['先行'];        // 玉座でも脚質の体型を保つ
+  s=s*B.sc;
   const breathe=Math.sin(t/900)*s*0.008;
   g.save(); g.translate(x, seatY-0.24*s+breathe);
   g.lineCap='round'; g.lineJoin='round';
@@ -2036,9 +2052,9 @@ function drawHorseSeated(x,seatY,s,coat,t){
   g.globalAlpha=1;
   // 胴：後躯を座面へ落とし、胸を起こす
   g.fillStyle=c.c;
-  g.beginPath(); g.ellipse(-0.19*s, 0.04*s,0.255*s,0.200*s, 0.10,0,7); g.fill();
-  g.beginPath(); g.ellipse( 0.02*s,-0.07*s,0.280*s,0.180*s,-0.16,0,7); g.fill();
-  g.beginPath(); g.ellipse( 0.22*s,-0.18*s,0.180*s,0.165*s,-0.24,0,7); g.fill();
+  g.beginPath(); g.ellipse(-0.19*s, 0.04*s,0.255*s*B.len,0.200*s*B.girth, 0.10,0,7); g.fill();
+  g.beginPath(); g.ellipse( 0.02*s,-0.07*s,0.280*s*B.len,0.180*s*B.girth,-0.16,0,7); g.fill();
+  g.beginPath(); g.ellipse( 0.22*s,-0.18*s,0.180*s*B.len,0.165*s*B.girth,-0.24,0,7); g.fill();
   // 後肢：寛→膝→飛節と深く折りたたむ。胴の手前に描いて折れ方を見せる。
   g.strokeStyle=legCol; g.lineWidth=s*0.082;
   g.beginPath();
@@ -2048,7 +2064,7 @@ function drawHorseSeated(x,seatY,s,coat,t){
   g.lineTo( 0.03*s, rest);             // 蹄は前へ
   g.stroke();
   // 首を高く起こす
-  const nx=0.46, ny=-0.54;
+  const nx=0.46*B.len, ny=-0.54*B.neck;
   g.beginPath();
   g.moveTo(0.24*s,-0.30*s);
   g.quadraticCurveTo(0.39*s,-0.39*s,nx*s,ny*s);
@@ -2117,7 +2133,7 @@ function drawTraining(h, menu, t, prog){
   drawTrack(t*0.012, surf, 99999);
   const s=Math.min(W*0.20,H*0.30);
   const x = W*0.18 + (W*0.5)*Math.min(1,prog*1.3);
-  drawHorse(x, H*0.80, s, h.coat, 0, 0, t/70, true, true);
+  drawHorse(x, H*0.80, s, h.coat, 0, 0, t/70, true, true, null, h.style);
   if(menu==='プール'){
     g.fillStyle='rgba(70,150,220,.35)'; g.fillRect(0,H*.72,W,H*.28);
     g.strokeStyle='rgba(180,230,255,.5)'; g.lineWidth=1;
@@ -2143,7 +2159,7 @@ function drawPodium(field, res, mePos, t){
   }
   const s=Math.min(W*0.24,H*0.34);
   const top=res[0].h, num=top.num||1;
-  drawHorse(W*0.30,H*0.80,s,top.coat,clamp(num-1,0,7),num,Math.sin(t/600)*0.15,false,true);
+  drawHorse(W*0.30,H*0.80,s,top.coat,clamp(num-1,0,7),num,Math.sin(t/600)*0.15,false,true,null,top.style);
 
   /* 左＝勝ち馬の名前、右＝単勝の枠色と複勝オッズ。
      払戻を確かめるのに要るのはこの2つなので、上画面で完結させる。 */
@@ -3635,7 +3651,7 @@ function render(now, dt){
       // 馬を選んだら、その1頭を枠色の勝負服つきで大きく見せる
       const h=app.field[sel];
       const s=Math.min(W*0.25,H*0.35);
-      drawHorse(W*0.62,H*0.76,s,h.coat,h.num-1,h.num,Math.sin(now/620)*0.16,false,true);
+      drawHorse(W*0.62,H*0.76,s,h.coat,h.num-1,h.num,Math.sin(now/620)*0.16,false,true,null,h.style);
       drawNamePlate(h, app.odds&&app.odds[sel]);
       setHud(`<span class="chip gold">${esc(app.race.n)}</span>
         <span class="chip">${app.race.s}${app.race.d}m</span>`);
@@ -3646,7 +3662,7 @@ function render(now, dt){
         const s=Math.min(W*0.10,H*0.15);
         const x=W*(0.15+(i%4)*0.235) + Math.sin(now/1400+i)*4;
         const y=H*(0.56+Math.floor(i/4)*0.235);
-        drawHorse(x,y,s,h.coat,h.num-1,h.num,now/900+i,false,true);
+        drawHorse(x,y,s,h.coat,h.num-1,h.num,now/900+i,false,true,null,h.style);
       }
       setHud(`<span class="chip gold">${esc(app.race.n)}</span>
         <span class="chip">${app.race.s}${app.race.d}m ${app.sim.pace}想定</span>`);
