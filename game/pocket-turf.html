@@ -426,6 +426,22 @@ input[type=text]{
 .ro-odds{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
 .ro-odds b{font-family:"DotGothic16",monospace;font-size:16px;color:var(--cyan)}
 .ro-odds small{font-size:9px;color:var(--ink-3)}
+/* 騎手を選ぶカード */
+.jk{
+  display:block;width:100%;text-align:left;margin-bottom:7px;
+  padding:8px 9px;border-radius:7px;
+  background:var(--panel-2);border:1px solid var(--line);
+}
+.jk.fit{border-color:var(--gold);background:#17301d}
+.jk:active{background:var(--panel-3)}
+.jkbars{display:flex;align-items:center;gap:5px;margin-top:6px}
+.jkbars small{font-size:9px;flex:0 0 auto}
+.jkbar{
+  flex:1 1 auto;height:5px;border-radius:3px;background:#0a1f13;
+  border:1px solid var(--line);overflow:hidden;display:block;
+}
+.jkbar i{display:block;height:100%;background:linear-gradient(90deg,#5fd8e8,#63d98d)}
+
 /* 短評。信頼度の虹色（赤＝高い／青＝低い）を文字と枠に載せる */
 .hyo{
   flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.02em;
@@ -579,9 +595,39 @@ const KOTOWAZA = [
   'オニニカナボウ','ウオゴコロアレバ','イヌモアルケバ','トラノコ','イシバシヲタタク','テンカワケメ','ヒョウタンカラコマ','ワタリニフネ','ウマガアウ',
   'ワラウカドニハフク','ナセバナル','カテバカングン','コイノタキノボリ','ケイゾクハチカラ','イシノウエニモ','サイオウガウマ'];
 const NAME_POOL = YOJI.concat(KOTOWAZA);
-const JOCKEY = ['黒川','早坂','鷲見','片桐','天野','日下部','桐生','榊','南雲','剣持','鏑木','八神','相良'];
-/* 海外カップ限定の欧米人騎手。国内の条件戦・G1には出てこない。 */
-const JOCKEY_INT = ['デニーロ','ロメール','ドンペリ','アントニ','メンディ','マイケル','ドナルド','フレディ','ブライアン'];
+/* --- 騎手 ---
+   得意脚質と手当（1着賞金からの取り分）を持つ。手当は腕の値段でもあり、
+   安い若手は出遅れやすく馬群に包まれやすい。賞金を PRIZE_MUL 倍に引き上げた
+   うえで手当を引くので、「高い騎手を買うか、安く上げて риск を取るか」の選択になる。 */
+const JOCKEYS = [
+  {n:'ガリゾウ', s:'逃げ', fee:10}, {n:'クマサン', s:'逃げ', fee:25},
+  {n:'タイトゥ', s:'逃げ', fee:40}, {n:'ユウカ',   s:'逃げ', fee:50},
+  {n:'ヒゲジイ', s:'先行', fee:10}, {n:'チンパン', s:'先行', fee:25},
+  {n:'ヤノール', s:'先行', fee:40}, {n:'ノリオ',   s:'先行', fee:50},
+  {n:'デブゴン', s:'差し', fee:10}, {n:'ミケネコ', s:'差し', fee:25},
+  {n:'ササヅカ', s:'差し', fee:40}, {n:'タケノコ', s:'差し', fee:50},
+  {n:'ツルパゲ', s:'追込', fee:10}, {n:'ペンギン', s:'追込', fee:25},
+  {n:'ミカモン', s:'追込', fee:40}, {n:'ウッディ', s:'追込', fee:50}
+];
+/* 海外カップ限定の騎手。国内の条件戦・G1には出てこない。腕は実力級で揃えてある。 */
+const JOCKEY_INT = [
+  {n:'デニーロ', s:'差し', fee:40}, {n:'ロメール', s:'逃げ', fee:40},
+  {n:'ドンペリ', s:'先行', fee:40}, {n:'アントニ', s:'追込', fee:40},
+  {n:'メンディ', s:'差し', fee:40}, {n:'マイケル', s:'先行', fee:40},
+  {n:'ドナルド', s:'逃げ', fee:40}, {n:'フレディ', s:'追込', fee:40},
+  {n:'ブライアン', s:'差し', fee:40}
+];
+const JOCKEY_ALL = JOCKEYS.concat(JOCKEY_INT);
+const jockeyOf = name => JOCKEY_ALL.find(j=>j.n===name) || JOCKEYS[0];
+/* 腕前 0（手当10%の若手）〜1（手当50%のトップ）。手当がそのまま実力の指標。 */
+const jSkill = j => clamp((j.fee-10)/40, 0, 1);
+const jRank  = j => j.fee>=50?'トップ' : j.fee>=40?'実力' : j.fee>=25?'中堅' : '若手';
+/* 1人だけ選ぶ候補を4人ぶん引く（同じ騎手は並べない） */
+function jockeyChoices(n=4){
+  const pool=JOCKEYS.slice();
+  for(let i=pool.length-1;i>0;i--){ const j=rint(0,i); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  return pool.slice(0,n);
+}
 /* SG_RACES の c に使われる海外の舞台。この舞台のNPCだけ JOCKEY_INT を引く。 */
 const INTL_COURSES = new Set(['チャイナ','アメリカ','ブリテン','パリ','レジェンド']);
 /* 出走表に混ざる名物馬たち。半分ほどのNPCがこの名前を名乗る。 */
@@ -769,8 +815,11 @@ function racesFor(g){
   const cond = (g.week%2===1) ? condRaces(g) : [];
   return sg.concat(cond, list);
 }
-const prizeOf = r => r.prize!=null ? r.prize
-  : (r.g==='jo' ? COND_PRIZE[clamp(r.lv||0,0,3)] : GRADE_PRIZE[r.g]);
+/* 騎手手当を導入したぶん、賞金の額面そのものを1.5倍に引き上げてある。
+   手取りは prizeOf × 着順率 −（騎手の手当%）。 */
+const PRIZE_MUL = 1.5;
+const prizeOf = r => Math.round(PRIZE_MUL * (r.prize!=null ? r.prize
+  : (r.g==='jo' ? COND_PRIZE[clamp(r.lv||0,0,3)] : GRADE_PRIZE[r.g])));
 /* 次に出走できる週を先読みする（50週あるので目安がないと待ち方が分からない） */
 function nextRaceInfo(){
   for(let k=1;k<=WEEKS_PER_YEAR*3;k++){
@@ -860,7 +909,7 @@ function newHorse(opt={}){
     coat: rint(0,COATS.length-1),
     style: pick(STYLES),
     growth: pick(GROWTH),
-    jockey: pick(JOCKEY),
+    jockey: pick(JOCKEYS).n,
     sp: base+rint(-6,8), st: base+rint(-6,8), pw: base+rint(-6,8),
     gt: base+rint(-6,8), wt: base+rint(-6,8),
     aptTurf: turfFirst?pick(['S','A','A','B']):pick(['B','C','C','D']),
@@ -899,7 +948,7 @@ function makeField(g, race){
     r.cond = rint(45,92);
     r.fatigue = rint(0,25);
     r.npc = true;
-    if(INTL_COURSES.has(race.c)) r.jockey = pick(JOCKEY_INT);   // 海外カップは欧米人騎手に差し替え
+    if(INTL_COURSES.has(race.c)) r.jockey = pick(JOCKEY_INT).n;   // 海外カップは現地の騎手に差し替え
     if(Math.random()<0.45) r.name = pick(MOB_NAMES);
     // 同じ名前が2頭並ぶと着順表が読めなくなる
     for(let t=0; t<12 && used.has(r.name); t++) r.name = pick(MOB_NAMES);
@@ -919,7 +968,7 @@ function makeWatchField(race){
   for(let i=0;i<8;i++){
     const r=newHorse({base:clamp(lvl+rint(-9,9),22,108)});
     r.cond=rint(45,92); r.fatigue=rint(0,25); r.npc=true;
-    if(INTL_COURSES.has(race.c)) r.jockey = pick(JOCKEY_INT);
+    if(INTL_COURSES.has(race.c)) r.jockey = pick(JOCKEY_INT).n;
     if(Math.random()<0.45) r.name = pick(MOB_NAMES);
     for(let t=0; t<12 && used.has(r.name); t++) r.name = pick(MOB_NAMES);
     used.add(r.name);
@@ -1036,8 +1085,15 @@ class RaceSim{
       else if(kq<0.72) { kick=rnd(1.008,0.992); }
       else if(kq<0.90) { kick=rnd(0.988,0.968); }
       else             { kick=rnd(0.962,0.936); kmood='不発'; }
+      /* 騎手。手当が腕の値段で、安い若手は出遅れと不利を背負う。
+         得意脚質が噛み合うとわずかに伸びる。 */
+      const jk = jockeyOf(h.jockey), js = jSkill(jk);
+      const lateStart = Math.random() < (0.30 - js*0.27);   // 若手30%→トップ3%
       return {
         form, mood, kick, kmood,
+        jk, jSk:js, lateStart, lateT: lateStart ? rnd(2.3,1.2) : 0,
+        blockMul: 1.9 - js*1.35,                             // 包まれやすさ
+        fit: (jk.s===h.style) ? 1.012 : 1,                   // 得意脚質
         h, i, x:0, v:0, stam:1, fin:0, rank:0, spurt:false, whip:0, whipT:0,
         trouble:0, phase:Math.random(),
         cap: BASE_V*(0.930+h.sp/900)*aptV*condV*distF*hcpV*form*rnd(1.010,.990),
@@ -1086,6 +1142,19 @@ class RaceSim{
       if(r.fin) continue;
       const prog = r.x/D;
       let mul = this.targetMul(r, prog);
+      mul *= r.fit;                                   // 騎手の得意脚質
+      // 腕の差。直線でどれだけ引き出せるかが、手当のいちばんの中身。
+      if(prog>=this.sStart) mul *= 1 + (r.jSk-0.5)*0.022;
+      // 出遅れ。序盤だけ大きく置かれ、そのぶん位置取りが苦しくなる
+      if(r.lateT>0){
+        mul *= 0.55; r.lateT-=dt;
+        if(!r.lateSaid){
+          r.lateSaid=true;
+          this.events.push({t:this.t,
+            txt:`${r.h.num}番 ${r.h.name}、出遅れた！ ${r.jk.n}騎手、痛恨だ`,
+            hot:r===this.me});
+        }
+      }
       // 仕掛け
       if(r===this.me){ if(r.spurt) mul*=1.075; }
       else if(prog>=r.goAt) mul*=1.06;
@@ -1095,7 +1164,8 @@ class RaceSim{
       if(r.trouble>0){ mul*=0.90; r.trouble-=dt; }
       // コーナー：小回りほど振られて減速し、賢さで軽減される
       if(prog>0.12 && prog<this.sStart){
-        mul *= 1 - this.course.curve*0.030*(1 - r.h.wt/280);
+        // 上手い騎手はコーナーでのロスが小さい
+        mul *= 1 - this.course.curve*0.030*(1 - r.h.wt/280)*(1 - r.jSk*0.30);
         // 4コーナーで後方の馬は外を回らされる
         if(prog>this.cStart && (r.style==='追込'||r.style==='差し'))
           mul *= 1 - this.course.curve*0.028;
@@ -1144,9 +1214,10 @@ class RaceSim{
       // 上がり3F計測
       if(!this.last600.has(r.i) && r.x>=D-600) this.last600.set(r.i,this.t);
       // 不利（差し・追込にまれに発生）
-      if(!r.troubleDone && prog>.45 && prog<.72 && (r.style==='差し'||r.style==='追込') && Math.random()<dt*0.045){
+      if(!r.troubleDone && prog>.45 && prog<.72 && (r.style==='差し'||r.style==='追込')
+         && Math.random()<dt*0.032*r.blockMul){
         r.troubleDone=true; r.trouble=1.4;
-        this.events.push({t:this.t, txt:`${r.h.num}番 ${r.h.name} 前が壁だ！`, hot:r===this.me});
+        this.events.push({t:this.t, txt:`${r.h.num}番 ${r.h.name} 前が壁だ！ 包まれた！`, hot:r===this.me});
       }
       if(r.x>=D){
         r.fin = this.t - (r.x-D)/Math.max(1,r.v);
@@ -2572,6 +2643,49 @@ const V = {
       <button class="btn danger center wide" data-act="reset">セーブデータを消す</button>`;
   },
   /* ---- 出走登録・馬券 ---- */
+  /* ---- 騎手を選ぶ（4人から1人） ---- */
+  jockey(){
+    const r=app.race, h=G.horse;
+    const cards=app.jockeyPick.map((j,i)=>{
+      const fit = j.s===h.style;
+      const sk  = jSkill(j);
+      const take=Math.round(prizeOf(r)*j.fee/100);
+      return `<button class="jk ${fit?'fit':''}" data-act="pickjockey" data-i="${i}">
+        <div class="row between" style="align-items:center">
+          <span><b style="font-size:13px">${esc(j.n)}</b>
+            <span class="pill ${j.fee>=50?'g1':j.fee>=40?'g2':j.fee>=25?'g3':'jo'}"
+              style="margin-left:5px">${jRank(j)}</span></span>
+          <b class="num" style="color:${j.fee>=40?'var(--hot)':'var(--cyan)'}">手当${j.fee}%</b>
+        </div>
+        <div class="row between" style="margin-top:4px;font-size:10.5px">
+          <span class="${fit?'gold':'muted'}">得意 ${j.s}${fit?'（愛馬と一致）':''}</span>
+          <span class="muted">1着なら -${yen(take)}</span>
+        </div>
+        <div class="jkbars">
+          <span class="jkbar"><i style="width:${Math.round((1-(0.30-sk*0.27)/0.30)*100)}%"></i></span>
+          <small class="muted">ゲート</small>
+          <span class="jkbar"><i style="width:${Math.round((1-(1.9-sk*1.35)/1.9)*100)}%"></i></span>
+          <small class="muted">捌き</small>
+        </div>
+      </button>`;
+    }).join('');
+    return `<div class="row between"><p class="eyebrow" style="margin:0">${G.year}歳 ${dateLabel(G.week)}</p>
+        <button class="btn ghost" data-act="cancelrace" style="min-height:0;padding:3px 9px;font-size:11px">出走取消</button></div>
+      <h2 class="head">${esc(r.n)} ${raceMeta(r)}</h2>
+      <p class="muted" style="margin:-4px 0 9px;font-size:11.5px">
+        騎乗を頼めるのは今日集まった<b class="gold">4人</b>。手当は1着賞金からの歩合で、
+        <b class="gold">掲示板を外せば手当も発生しない</b>。安い騎手は出遅れやすく、馬群に包まれやすい。</p>
+      <div class="card tight" style="margin-bottom:9px">
+        <div class="row between" style="font-size:11px">
+          <span class="muted">愛馬の脚質</span><b class="gold">${h.style}</b>
+        </div>
+        <div class="sep" style="margin:6px 0"></div>
+        <div class="row between" style="font-size:11px">
+          <span class="muted">1着賞金（手当を引く前）</span><b class="num gold">${yen(prizeOf(r))}</b>
+        </div>
+      </div>
+      ${cards}`;
+  },
   bet(){
     const r=app.race, f=app.field, o=app.odds;
     const me=f.findIndex(h=>!h.npc);
@@ -2615,6 +2729,12 @@ const V = {
         <div class="row between" style="font-size:11px">
           <span class="muted">想定ペース</span><b>${app.sim.pace}</b>
         </div>
+        ${sp?'':(()=>{ const j=jockeyOf(G.horse.jockey);
+          return `<div class="sep" style="margin:6px 0"></div>
+          <div class="row between" style="font-size:11px">
+            <span class="muted">騎手</span>
+            <b>${esc(j.n)}<span class="muted" style="font-weight:400"> ・手当${j.fee}%</span></b>
+          </div>`; })()}
         ${(!sp&&packOf(G.horse)>0)?`<div class="sep" style="margin:6px 0"></div>
           <div class="row between" style="font-size:11px">
             <span class="muted">${packLabel(G.horse)}</span>
@@ -2752,7 +2872,13 @@ const V = {
         </div>`;
     return `${hero}
       <div class="card tight">
-        ${d.spectate?'':`<div class="row between"><span class="muted">賞金</span><b class="num gold">+${yen(d.prize)}</b></div>
+        ${d.spectate?'':`<div class="row between"><span class="muted">賞金</span><b class="num gold">+${yen(d.gross)}</b></div>
+        <div class="sep"></div>
+        <div class="row between">
+          <span class="muted">${esc(d.jk.n)}騎手 手当${d.jk.fee}%</span>
+          <b class="num ${d.fee>0?'hot':''}">${d.fee>0?'-':''}${yen(d.fee)}</b></div>
+        <div class="sep"></div>
+        <div class="row between"><span class="muted">賞金の手取り</span><b class="num gold">+${yen(d.prize)}</b></div>
         <div class="sep"></div>`}
         <div class="row between"><span class="muted">馬券払戻</span><b class="num ${d.pay>0?'gold':''}">${d.pay>0?'+':''}${yen(d.pay)}</b></div>
         <div class="sep"></div>
@@ -3002,9 +3128,11 @@ function openEntry(i){
   const meIdx=app.field.findIndex(h=>!h.npc);
   app.sim=new RaceSim(r,app.field,meIdx);
   app.scene='paddock';
+  // 依頼できる4人をここで引く。同じレースでは引き直せない。
+  app.jockeyPick = jockeyChoices(4);
   SFX.gate();
-  say(`${r.n}。${r.s}${r.d}m、${app.field.length}頭立て。`);
-  show('bet');
+  say(`${r.n}。${r.s}${r.d}m、${app.field.length}頭立て。まずは騎手を決めよう。`);
+  show('jockey');
   drawScene();
 }
 function openWatch(){
@@ -3085,7 +3213,11 @@ function finishRace(){
   const sim=app.sim, r=app.race, h=G.horse;
   const res=sim.result, me=res.find(x=>!x.h.npc);
   const prizeTable=[1,.40,.25,.15,.10,0,0,0];
-  const prize=Math.round(prizeOf(r)*(prizeTable[me.pos-1]||0));
+  const gross=Math.round(prizeOf(r)*(prizeTable[me.pos-1]||0));
+  // 騎手手当は賞金からの歩合。掲示板を外して賞金ゼロなら手当も発生しない。
+  const jk=jockeyOf(h.jockey);
+  const fee=Math.round(gross*jk.fee/100);
+  const prize=gross-fee;
   let pay=0, spent=0;
   for(const b of app.bets){
     spent+=b.amt;
@@ -3126,7 +3258,7 @@ function finishRace(){
   tmap.hidden=true;
   say(unlocked.length ? `${r.n}制覇！ 招待状が届いた——${unlocked[0]}。`
       : me.pos===1 ? `${h.name}、${r.n}制覇！` : `${h.name}は${me.pos}着でゴール。`, me.pos===1);
-  show('result',{res,race:r,mePos:me.pos,prize,pay,spent,net:prize+pay-spent,up,unlocked});
+  show('result',{res,race:r,mePos:me.pos,prize,gross,fee,jk,pay,spent,net:prize+pay-spent,up,unlocked});
   save();
 }
 function retire(){
@@ -3230,6 +3362,14 @@ const ACT = {
   entry(d){ openEntry(+d.i); },
   pickhorse(d){ app.betSel=+d.i; SFX.tap(); show('bet'); },
   picktype(d){ app.betType=d.t; SFX.tap(); show('bet'); },
+  pickjockey(d){
+    const j=app.jockeyPick[+d.i]; if(!j) return;
+    G.horse.jockey=j.n;
+    app.sim=new RaceSim(app.race, app.field, app.field.findIndex(h=>!h.npc));
+    SFX.ok();
+    say(`${j.n}騎手に依頼した。手当は1着賞金の${j.fee}%。`);
+    show('bet');
+  },
   bet(d){ placeBet(d.t,+d.a); },
   clearbet(){ for(const b of app.bets) G.medals+=b.amt; app.bets=[]; SFX.tap(); show('bet'); },
   cancelrace(){ app.scene='stable'; app.sim=null; app.spectate=false; app.sgTheme=null; app.omen=false;
@@ -3488,7 +3628,8 @@ function boot(){
 window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, distFactor, RACES, ITEMS, JOBS, blank,
                       SG_RACES, racesFor, sgOpen, sgReady, legendReady, tourWon, SG_TOUR,
                       seasonOf, SG_NEED_G1, GRADE_PRIZE, prizeOf, fieldLevel,
-                      JOCKEY, JOCKEY_INT, INTL_COURSES, HYO, hyoOf, makeOdds,
+                      JOCKEYS, JOCKEY_INT, INTL_COURSES, HYO, hyoOf, makeOdds,
+                      jockeyOf, jSkill, jRank, jockeyChoices, PRIZE_MUL,
                       get state(){ return G; } };
 
 try{ boot(); }
