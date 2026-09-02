@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 
 from .betting import make_betting_plan
+from .collect import VENUE_CODES, collect_day
 from .daily import build_from_config
 from .feedback import RaceResult, generate_feedback_report, load_payouts
 from .marks import assign_marks
@@ -92,6 +93,21 @@ def cmd_stats(args) -> None:
         print(f"\nJSON書き出し: {out}")
 
 
+def cmd_collect(args) -> None:
+    if "-" in args.races:
+        lo, hi = args.races.split("-")
+        numbers = list(range(int(lo), int(hi) + 1))
+    else:
+        numbers = [int(x) for x in args.races.split(",")]
+
+    print(f"{args.date} {args.venue} のレース結果を取得します（{len(numbers)}レース）")
+    collected = collect_day(
+        date=args.date, venue=args.venue, race_numbers=numbers,
+        outdir=Path(args.outdir), cache_dir=Path(args.cache_dir), interval=args.interval,
+    )
+    print(f"\n取得完了: {len(collected)}レース → {args.outdir}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="競馬予想システム（100点スコアリング）")
     sub = p.add_subparsers(dest="command", required=True)
@@ -121,6 +137,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_stats.add_argument("configs", nargs="*", help="開催日設定JSON（省略時は config/*.json）")
     p_stats.add_argument("--json", help="集計結果をJSONでも書き出す")
     p_stats.set_defaults(func=cmd_stats)
+
+    p_collect = sub.add_parser("collect", help="レース結果・払戻・通過順を取得して保存")
+    p_collect.add_argument("--date", required=True, help="開催日 (YYYY-MM-DD)")
+    p_collect.add_argument("--venue", required=True, choices=sorted(VENUE_CODES), help="競馬場")
+    p_collect.add_argument("--races", default="1-12", help="レース番号 (例: 1-12 または 10,11,12)")
+    p_collect.add_argument("--outdir", default="data/collected", help="CSV出力先")
+    p_collect.add_argument("--cache-dir", default="data/raw", help="取得HTMLのキャッシュ先")
+    p_collect.add_argument("--interval", type=float, default=1.5, help="リクエスト間隔(秒)")
+    p_collect.set_defaults(func=cmd_collect)
 
     return p
 

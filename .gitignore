@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 output/*.html
 !output/.gitkeep
+
+# 取得したHTMLのキャッシュ（再取得を避けるためのもの。リポジトリには含めない）
+data/raw/
