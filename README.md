@@ -17,6 +17,7 @@ keiba/
   feedback.py  # レース後フィードバックHTML（回収率計算）
   stats.py     # 成績のレース横断集計（印別・スコア帯別・券種別）
   collect.py   # レース結果・払戻・通過順の自動収集（netkeiba 地方）
+  course.py    # コース傾向の集計（人気別・枠番別・4角通過順位別）
   daily.py     # 開催日単位のArtifact向けページ
   cli.py       # コマンドラインエントリポイント
 data/          # 入力CSV（サンプルデータを同梱）
@@ -198,6 +199,22 @@ JRAのデータを本格的に扱う場合は、公式の
 [JRA-VAN Data Lab.](https://jra-van.jp/dlb/) の利用を検討してください
 （JV-Link は Windows 専用のため、取り込みは別マシンで行い、
 できたSQLiteを参照する構成になります）。
+
+## コース傾向の集計
+
+`collect` で貯めた結果コーパスから、そのコースの性質を集計します。
+`stats`（自分の予想が当たったか）とは別に、`course` は「コースがどういう性質か」を見ます。
+
+```bash
+python3 -m keiba.cli course                      # data/collected の全レース
+python3 -m keiba.cli course --kyori 1200 --json output/course.json
+```
+
+集計軸は人気別・枠番別・4コーナー通過順位別・勝ち馬の4角位置分布の4つです。
+コーナー通過順位の括弧（横並び）は同一順位として扱います。
+
+母数30頭未満の区分には「※母数少」を付け、4角の位置は結果であって事前情報では
+ないという注意書きを必ず出力します。
 
 ## 成績の集計（レース横断）
 

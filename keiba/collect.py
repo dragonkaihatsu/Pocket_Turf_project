@@ -34,6 +34,7 @@ VENUE_CODES = {
 }
 
 RESULT_URL = "https://nar.netkeiba.com/race/result.html?race_id={race_id}"
+CALENDAR_URL = "https://nar.netkeiba.com/top/calendar.html?year={year}&month={month}"
 
 PAYOUT_KINDS = {
     "Tansho": "単勝", "Fukusho": "複勝", "Wakuren": "枠連", "Umaren": "馬連",
@@ -92,6 +93,27 @@ class Fetcher:
         return None
 
 
+def find_race_days(year: int, month: int, venue: str, fetcher: "Fetcher") -> list[str]:
+    """指定した月に、その競馬場が開催した日を返す（'YYYY-MM-DD' のリスト）。
+
+    netkeiba のカレンダーには開催ごとに kaisai_id=YYYY<場コード><MMDD> のリンクが
+    並んでいるので、場コードで絞り込めば開催日が分かる。総当たりで各日を叩くより
+    リクエスト数がはるかに少なくて済む。
+    """
+    code = VENUE_CODES[venue]
+    html = fetcher.get(
+        CALENDAR_URL.format(year=year, month=month), f"calendar_{year}{month:02d}"
+    )
+    if html is None:
+        return []
+    days = {
+        f"{kid[:4]}-{kid[6:8]}-{kid[8:10]}"
+        for kid in re.findall(r"kaisai_id=(\d{10})", html)
+        if kid[4:6] == code
+    }
+    return sorted(days)
+
+
 # ---------------------------------------------------------------------------
 # パース
 # ---------------------------------------------------------------------------
@@ -141,7 +163,12 @@ def parse_result(html: str, race_id: str) -> RaceData | None:
     info = RaceInfo(race_id=race_id, race_no=int(race_id[-2:]))
 
     if m := re.search(r'<div[^>]*class="RaceName"[^>]*>.*?</div>', html, re.S):
-        info.name = _text(m.group()).replace(" 重賞", "").strip()
+        raw_name = re.sub(r"\s+", " ", _text(m.group())).strip()
+        for badge in (" 重賞", " OP", " Jpn1", " Jpn2", " Jpn3", " G1", " G2", " G3"):
+            if raw_name.endswith(badge):
+                raw_name = raw_name[: -len(badge)].strip()
+                info.grade = badge.strip()
+        info.name = raw_name
     if m := re.search(r'<div[^>]*class="RaceData01"[^>]*>.*?</div>', html, re.S):
         pass
 
@@ -247,7 +274,8 @@ def _write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
 def save_race(data: RaceData, outdir: Path) -> dict[str, Path]:
     """既存フォーマット（結果CSV・配当CSV）＋通過順・出走馬CSVを書き出す。"""
     i = data.info
-    prefix = f"{i.date}_{i.venue}{i.race_no:02d}R_{i.name}".replace("/", "_")
+    safe_name = re.sub(r'[\\/:*?"<>|\s]+', "", i.name) or f"{i.race_no:02d}R"
+    prefix = f"{i.date}_{i.venue}{i.race_no:02d}R_{safe_name}"
     out: dict[str, Path] = {}
 
     p = outdir / f"{prefix}_結果.csv"
@@ -280,6 +308,30 @@ def save_race(data: RaceData, outdir: Path) -> dict[str, Path]:
     return out
 
 
+def collect_month(
+    year: int,
+    month: int,
+    venue: str,
+    race_numbers: list[int],
+    outdir: Path,
+    cache_dir: Path,
+    interval: float = REQUEST_INTERVAL,
+) -> list[RaceData]:
+    """その月の開催日をカレンダーから調べ、全開催日分をまとめて取得する。"""
+    fetcher = Fetcher(cache_dir, interval)
+    days = find_race_days(year, month, venue, fetcher)
+    if not days:
+        print(f"  {year}年{month}月に{venue}の開催は見つかりませんでした")
+        return []
+
+    print(f"  {year}年{month}月の{venue}開催: {len(days)}日 ({', '.join(d[5:] for d in days)})")
+    collected = []
+    for day in days:
+        print(f"\n  [{day}]")
+        collected += collect_day(day, venue, race_numbers, outdir, cache_dir, interval, fetcher)
+    return collected
+
+
 def collect_day(
     date: str,
     venue: str,
@@ -287,8 +339,9 @@ def collect_day(
     outdir: Path,
     cache_dir: Path,
     interval: float = REQUEST_INTERVAL,
+    fetcher: "Fetcher | None" = None,
 ) -> list[RaceData]:
-    fetcher = Fetcher(cache_dir, interval)
+    fetcher = fetcher or Fetcher(cache_dir, interval)
     collected = []
 
     for no in race_numbers:

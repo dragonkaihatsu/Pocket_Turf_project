@@ -19,7 +19,9 @@ import json
 from pathlib import Path
 
 from .betting import make_betting_plan
-from .collect import VENUE_CODES, collect_day
+from .collect import VENUE_CODES, collect_day, collect_month
+from .course import analyze, load_corpus
+from .course import format_report as format_course_report
 from .daily import build_from_config
 from .feedback import RaceResult, generate_feedback_report, load_payouts
 from .marks import assign_marks
@@ -100,12 +102,38 @@ def cmd_collect(args) -> None:
     else:
         numbers = [int(x) for x in args.races.split(",")]
 
-    print(f"{args.date} {args.venue} のレース結果を取得します（{len(numbers)}レース）")
-    collected = collect_day(
-        date=args.date, venue=args.venue, race_numbers=numbers,
-        outdir=Path(args.outdir), cache_dir=Path(args.cache_dir), interval=args.interval,
-    )
+    if not (args.date or args.month):
+        print("--date か --month のどちらかを指定してください")
+        return
+
+    if args.month:
+        year, month = (int(x) for x in args.month.split("-"))
+        print(f"{args.month} の{args.venue}のレース結果を取得します")
+        collected = collect_month(
+            year=year, month=month, venue=args.venue, race_numbers=numbers,
+            outdir=Path(args.outdir), cache_dir=Path(args.cache_dir), interval=args.interval,
+        )
+    else:
+        print(f"{args.date} {args.venue} のレース結果を取得します（{len(numbers)}レース）")
+        collected = collect_day(
+            date=args.date, venue=args.venue, race_numbers=numbers,
+            outdir=Path(args.outdir), cache_dir=Path(args.cache_dir), interval=args.interval,
+        )
     print(f"\n取得完了: {len(collected)}レース → {args.outdir}")
+
+
+def cmd_course(args) -> None:
+    corpus = load_corpus(args.dir, kyori=args.kyori)
+    if not len(corpus):
+        print(f"{args.dir} に結果CSVが見つかりません（先に collect を実行してください）")
+        return
+    a = analyze(corpus)
+    print(format_course_report(a))
+    if args.json:
+        out = Path(args.json)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(a, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"\nJSON書き出し: {out}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -139,13 +167,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_stats.set_defaults(func=cmd_stats)
 
     p_collect = sub.add_parser("collect", help="レース結果・払戻・通過順を取得して保存")
-    p_collect.add_argument("--date", required=True, help="開催日 (YYYY-MM-DD)")
+    p_collect.add_argument("--date", help="開催日 (YYYY-MM-DD)")
+    p_collect.add_argument("--month", help="対象月 (YYYY-MM)。その月の開催日を自動で調べて全日取得")
     p_collect.add_argument("--venue", required=True, choices=sorted(VENUE_CODES), help="競馬場")
     p_collect.add_argument("--races", default="1-12", help="レース番号 (例: 1-12 または 10,11,12)")
     p_collect.add_argument("--outdir", default="data/collected", help="CSV出力先")
     p_collect.add_argument("--cache-dir", default="data/raw", help="取得HTMLのキャッシュ先")
     p_collect.add_argument("--interval", type=float, default=1.5, help="リクエスト間隔(秒)")
     p_collect.set_defaults(func=cmd_collect)
+
+    p_course = sub.add_parser("course", help="収集した結果からコース傾向を集計")
+    p_course.add_argument("--dir", default="data/collected", help="収集済みCSVのディレクトリ")
+    p_course.add_argument("--kyori", type=int, help="距離で絞る (例: 1200)")
+    p_course.add_argument("--json", help="集計結果をJSONでも書き出す")
+    p_course.set_defaults(func=cmd_course)
 
     return p
 
