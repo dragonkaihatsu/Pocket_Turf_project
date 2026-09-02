@@ -11,8 +11,10 @@ CLAUDE.md の配点表・補正項目をそのままコード化したもの。
 """
 from __future__ import annotations
 
+import json
 import statistics
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .models import Horse, HistoryRecord
 
@@ -23,6 +25,23 @@ MAX_COURSE = 15
 MAX_KYORI = 15
 MAX_CHOKYO = 10
 MAX_BASE = MAX_KISO + MAX_ZENSO + MAX_COURSE + MAX_KYORI + MAX_CHOKYO  # 85
+
+# 実測成績（scripts/build_ratings.py が作る）。あれば内蔵リストより優先する
+RATINGS_PATH = Path(__file__).resolve().parent.parent / "data" / "ratings.json"
+MIN_RIDES = 20      # 騎手補正を効かせる最低騎乗数
+MIN_PROGENY = 20    # 血統補正を効かせる最低産駒数
+
+
+def load_ratings(path: Path | str | None = None) -> dict:
+    """実測の騎手・種牡馬成績を読み込む。無ければ空を返す。"""
+    p = Path(path) if path else RATINGS_PATH
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
 
 # 騎手補正の目安ティア（必要に応じて呼び出し側で差し替え可能）
 DEFAULT_JOCKEY_TIERS: dict[int, tuple[str, ...]] = {
@@ -184,14 +203,80 @@ def score_chokyo(horse: Horse) -> ScoreItem:
 # 補正項目（加減算）
 # ---------------------------------------------------------------------------
 
-def correction_kishu(horse: Horse, tiers: dict[int, tuple[str, ...]] | None = None) -> ScoreItem:
+def _lookup(table: dict, name: str) -> dict | None:
+    """馬柱の騎手名は略記されることがあるため、前方一致でも引く。"""
+    if not name:
+        return None
+    if name in table:
+        return table[name]
+    for k, v in table.items():
+        if k.startswith(name) or name.startswith(k):
+            return v
+    return None
+
+
+def correction_kishu(
+    horse: Horse,
+    tiers: dict[int, tuple[str, ...]] | None = None,
+    ratings: dict | None = None,
+) -> ScoreItem:
+    """騎手補正。実測成績があればそれを使い、無ければ内蔵ティアにフォールバックする。"""
+    ratings = ratings if ratings is not None else load_ratings()
+    if rec := _lookup(ratings.get("騎手", {}), horse.jockey):
+        n, rate = rec["n"], rec["複勝率"]
+        if n < MIN_RIDES:
+            return ScoreItem("騎手補正", 0.0,
+                             f"{horse.jockey}: 複勝率{rate:.0%}（{n}騎乗・母数不足のため補正なし）")
+        if rate >= 0.45:
+            pts = 3.0
+        elif rate >= 0.35:
+            pts = 2.0
+        elif rate >= 0.28:
+            pts = 1.0
+        elif rate < 0.10:
+            pts = -2.0
+        elif rate < 0.18:
+            pts = -1.0
+        else:
+            pts = 0.0
+        return ScoreItem("騎手補正", pts, f"{horse.jockey}: 当地複勝率{rate:.0%}（{n}騎乗の実測）")
+
     tiers = tiers or DEFAULT_JOCKEY_TIERS
     for pts, names in sorted(tiers.items(), reverse=True):
         if any(n in horse.jockey for n in names):
             return ScoreItem("騎手補正", float(pts), f"実績上位騎手: {horse.jockey}")
     if horse.kishu_norikae:
         return ScoreItem("騎手補正", -1.0, f"乗り替わり（プラス実績なし）: {horse.jockey}")
-    return ScoreItem("騎手補正", 0.0, f"{horse.jockey}（該当なし）")
+    return ScoreItem("騎手補正", 0.0, f"{horse.jockey}（実測データなし）")
+
+
+def correction_ketto(horse: Horse, ratings: dict | None = None) -> ScoreItem:
+    """血統補正（種牡馬の当地成績）。
+
+    CLAUDE.md の方針どおり、産駒数が少ない種牡馬は「血統軸ではニュートラル評価」
+    とし、補正を掛けずにその旨をコメントに残す。
+    """
+    if not horse.ketto_chichi:
+        return ScoreItem("血統補正", 0.0, "血統データなし→ニュートラル評価")
+    ratings = ratings if ratings is not None else load_ratings()
+    rec = _lookup(ratings.get("種牡馬", {}), horse.ketto_chichi)
+    if not rec:
+        return ScoreItem("血統補正", 0.0, f"{horse.ketto_chichi}: 当地データなし→ニュートラル評価")
+    n, rate = rec["n"], rec["複勝率"]
+    if n < MIN_PROGENY:
+        return ScoreItem("血統補正", 0.0,
+                         f"{horse.ketto_chichi}産駒: 複勝率{rate:.0%}"
+                         f"（{n}頭・母数不足のためニュートラル評価）")
+    if rate >= 0.45:
+        pts = 2.0
+    elif rate >= 0.40:
+        pts = 1.0
+    elif rate < 0.15:
+        pts = -1.0
+    else:
+        pts = 0.0
+    return ScoreItem("血統補正", pts,
+                     f"{horse.ketto_chichi}産駒: 当地複勝率{rate:.0%}（{n}頭の実測）")
 
 
 def correction_wakuban(horse: Horse, history: list[HistoryRecord] | None) -> ScoreItem:
@@ -311,8 +396,10 @@ def score_horse(
         score_kyori_tekisei(horse, None),
         score_chokyo(horse),
     ]
+    ratings = load_ratings()
     corrections = [
-        correction_kishu(horse, jockey_tiers),
+        correction_kishu(horse, jockey_tiers, ratings),
+        correction_ketto(horse, ratings),
         correction_wakuban(horse, history),
         correction_zenso_furi(horse),
         correction_koreiuma(horse, kyori),
