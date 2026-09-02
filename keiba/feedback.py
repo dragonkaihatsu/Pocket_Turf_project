@@ -234,3 +234,13 @@ def ticket_hit(kind: str, ticket, result: RaceResult) -> bool | None:
     戻り値: True=的中, False=ハズレ, None=着順情報が足りず判定不能
     """
     return _is_hit(kind, _ticket_umaban(ticket), result)
+
+
+def is_outside_top(result: RaceResult, umaban: int, n: int) -> bool:
+    """umaban が n位以内に入っていないと確定できるか（配当データ不要）。
+
+    着順が明示されていない馬でも、1位〜n位が既に他馬で埋まっていれば
+    「n位以内ではない」と確定できる。判定できない場合は False を返す
+    （＝「圏外と確定はできない」）。
+    """
+    return _confirmed_outside_top_n(result, umaban, n)

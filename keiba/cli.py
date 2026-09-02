@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .betting import make_betting_plan
@@ -25,6 +26,7 @@ from .models import load_history, load_horses
 from .pace import forecast_pace
 from .report import generate_report
 from .scoring import score_race
+from .stats import aggregate, format_report, load_records
 
 
 def _build_common(args) -> tuple:
@@ -73,6 +75,23 @@ def cmd_daily(args) -> None:
     print(f"書き出し完了: {out_path}")
 
 
+def cmd_stats(args) -> None:
+    paths = args.configs or sorted(Path("config").glob("*.json"))
+    if not paths:
+        print("設定JSONが見つかりません（config/*.json）")
+        return
+    records, skipped = load_records(paths)
+    agg = aggregate(records)
+    print(format_report(agg, skipped))
+    if args.json:
+        out = Path(args.json)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            json.dumps(agg, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"\nJSON書き出し: {out}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="競馬予想システム（100点スコアリング）")
     sub = p.add_subparsers(dest="command", required=True)
@@ -97,6 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_daily.add_argument("config", help="開催日設定JSON")
     p_daily.add_argument("--output", required=True, help="出力HTMLパス")
     p_daily.set_defaults(func=cmd_daily)
+
+    p_stats = sub.add_parser("stats", help="結果が判明したレースを横断して成績を集計")
+    p_stats.add_argument("configs", nargs="*", help="開催日設定JSON（省略時は config/*.json）")
+    p_stats.add_argument("--json", help="集計結果をJSONでも書き出す")
+    p_stats.set_defaults(func=cmd_stats)
 
     return p
 

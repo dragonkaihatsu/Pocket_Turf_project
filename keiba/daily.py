@@ -243,6 +243,7 @@ class RaceEntry:
     entries: str
     history: str | None = None
     result: str | None = None
+    payouts: str | None = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "RaceEntry":
