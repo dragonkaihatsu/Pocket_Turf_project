@@ -355,6 +355,14 @@ table.res td.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-wi
 }
 .vet b{font-size:11.5px;color:#ff9a86;letter-spacing:.04em}
 .vet span{font-size:10.5px;color:#e0b3aa;line-height:1.45}
+/* 疲労が抜けているあいだの伸び3倍。数字より先に「いま鍛え時だ」と伝える */
+.fresh{
+  margin-top:8px;padding:7px 9px;border-radius:6px;
+  background:#0f2a19;border:1px solid #2f7a4d;
+  display:flex;flex-direction:column;gap:2px;
+}
+.fresh b{font-size:11.5px;color:#7ff0ac;letter-spacing:.04em}
+.fresh span{font-size:10.5px;color:#a9d9bd;line-height:1.45}
 .entry[disabled]{opacity:.42}
 .pacebox{
   display:flex;align-items:stretch;gap:7px;margin-bottom:7px;
@@ -872,26 +880,56 @@ const ITEM_OVER = 20;
    売店・休養・アルバイトは通す（塞ぐと抜け出す手段が無くなる）。 */
 const VET_STOP = 75;
 const vetStop = h => !!h && h.fatigue > VET_STOP;
+/* 疲労がこの帯（0〜FRESH_FAT）にある間だけ、調教の伸びが FRESH_MUL 倍になる。
+   ブランデー廃止で失われた「メダルを能力に換える道」の代わりに、
+   「休ませてから鍛える」を主要動線に据えるための係数。
+   ここを外すと、疲労を無視して毎週鍛え続けるのが最適解に戻り、
+   休養も売店のアイテムも押す理由が無くなる。 */
+const FRESH_FAT = 25;
+const FRESH_MUL = 3;
+const freshLegs = h => !!h && h.fatigue < FRESH_FAT;
 /* --- アルバイト ---
-   メダルが尽きたときの救済措置。4週（約1ヶ月）育成を止める代わりに稼ぐ。
-   期待値はピザが最も高く、実験台は一撃狙い。どれも「育成の時間」との交換なので、
-   稼ぎ続けると馬が仕上がらない。ここが釣り合っている限りバランスは壊れない。 */
-const WORK_WEEKS = 4;
+   メダルが尽きたときの救済であり、G1を勝ち切ったあとの「やることがない週」の受け皿でもある。
+   仕事ごとに消費する週数（w）が違うので、取り逃がすレースを見比べて選ぶことになる。
+   稼ぎ方は3通りに分けてある:
+     ・ライブ配信      2週と短く、成功率も高い。刻んで稼ぐ堅い口
+     ・トラックの配達  4週で振れ幅が大きい。半々の賭け
+     ・サイン会        ファン数に比例する。勝ち星が無い馬では実入りも無い
+     ・ボートレース場  0〜5,000枚の完全な運。期待値は最も高いが0もある
+   どれも「育成の時間」との交換なので、稼ぎ続けると馬が仕上がらない。
+   ここが釣り合っている限りバランスは壊れない。 */
+const WORK_WEEKS = 4;   // いちばん長い仕事の週数。案内文と「見送るレース」の先読みに使う
 const JOBS = [
-  {k:'皿洗い',         rate:.75, win:500,  lose:300,
-   d:'堅実。ただし25%の確率で皿を割る',
-   okTxt:'洗い場を任され、4週間を無事に勤め上げた。',
-   ngTxt:'皿を割ってしまい、弁償ぶんを差し引かれた。'},
-  {k:'ピザの配達',     rate:.50, win:1000, lose:500,
+  {k:'ライブ配信', w:2, rate:.75, win:1000, lose:500,
+   d:'ポケキャスでゲームを配信する。2週と短い',
+   okTxt:'投げ銭が伸び、切り抜きまで作られた。',
+   ngTxt:'配信中にクレームの電話が入ってしまった。'},
+  {k:'トラックの配達', w:4, rate:.50, win:2000, lose:1000,
    d:'実入りは大きいが、半分は失敗する',
-   okTxt:'一度も遅れずに届けきり、店長に感謝された。',
-   ngTxt:'ピザが崩れてクレーム。詫び代を引かれた。'},
-  {k:'研究室の実験台', rate:.25, win:2500, lose:0,
-   d:'一撃はあるが、4回に3回は無報酬',
-   okTxt:'治験は最後まで完了。破格の謝礼を受け取った。',
-   ngTxt:'途中で体調を崩し、謝礼は出なかった。'}
+   okTxt:'長い道のりを走りきり、荷主から指名が入った。',
+   ngTxt:'荷物を壊してしまい、弁償ぶんを差し引かれた。'},
+  {k:'サイン会', w:4, rate:.75, fan:.10, fanNg:.01,
+   d:'ファン数の10%が入る。勝ち星の無い馬では実入りも無い',
+   okTxt:'長い列ができ、色紙が尽きるまで書き続けた。',
+   ngTxt:'客足がまばらで、握手だけで終わってしまった。'},
+  {k:'ボートレース場営業', w:4, roll:5000,
+   d:'0〜5,000枚。当たれば一撃、外れれば紙切れ',
+   okTxt:'締切間際に買った舟券が大化けした。',
+   ngTxt:'握りしめた舟券は、ただの紙切れになってしまった。'}
 ];
-const jobEV = j => Math.round(j.rate*j.win + (1-j.rate)*j.lose);
+/* 仕事ごとに報酬の決まり方が違う（固定二択・ファン比例・完全な運）ので、
+   出目はここに集約する。画面もここを通して同じ数字を見せること。 */
+function jobRoll(j,h){
+  if(j.roll){ const pay=rint(0,j.roll); return {pay, ok: pay > j.roll*0.25}; }
+  const ok = Math.random() < j.rate;
+  if(j.fan) return {ok, pay: Math.round(Math.max(0,(h&&h.fans)||0) * (ok?j.fan:j.fanNg))};
+  return {ok, pay: ok?j.win:j.lose};
+}
+const jobRate = j => j.roll ? 0.75 : j.rate;          // 舟券は下から4分の1が紙切れ
+const jobWin  = (j,h) => j.roll ? j.roll : j.fan ? Math.round(Math.max(0,(h&&h.fans)||0)*j.fan)   : j.win;
+const jobLose = (j,h) => j.roll ? 0      : j.fan ? Math.round(Math.max(0,(h&&h.fans)||0)*j.fanNg) : j.lose;
+const jobEV   = (j,h) => j.roll ? Math.round(j.roll/2)
+  : Math.round(j.rate*jobWin(j,h) + (1-j.rate)*jobLose(j,h));
 const ITEMS = [
   {k:'コーヒー',   p:100,  fat:20,  cond:5,  up:1,  mode:'random',
    d:'疲労を20回復し、ランダムな能力が1上がる'},
@@ -2461,7 +2499,7 @@ const V = {
   help(){
     return `<h2 class="head">あそびかた</h2>
     <div class="card"><p class="eyebrow">1 / 育成</p>
-      <p class="muted">1年は50週。毎週「調教」か「休養」を選び、3歳から5歳までの150週で愛馬を仕上げる。1回の伸びは小さいので、疲労を溜めずに積み重ねるほど強くなる。</p></div>
+      <p class="muted">1年は50週。毎週「調教」か「休養」を選び、3歳から5歳までの150週で愛馬を仕上げる。1回の伸びは小さいが、<b class="gold">疲労が${FRESH_FAT}を切っているあいだは伸びが${FRESH_MUL}倍</b>になる。溜め込まずに休みながら鍛えるほど強くなる。</p></div>
     <div class="card"><p class="eyebrow">2 / 出走</p>
       <p class="muted">条件戦は隔週、重賞は決まった週に開催される。条件戦に勝つとクラスが上がり、オープンまで昇ればG1に挑戦できる。</p></div>
     <div class="card"><p class="eyebrow">3 / 馬券</p>
@@ -2471,7 +2509,7 @@ const V = {
     <div class="card"><p class="eyebrow">5 / 合言葉</p>
       <p class="muted">記録タブで<b class="gold">12文字のひらがな</b>の合言葉を発行できる。控えておけば、タイトルの「データを読み込む」からいつでも呼び出せる。合言葉ごとに別のデータを持てるので、育成をやり直したいときの控えにもなる。記録はこの端末に残る。</p></div>
     <div class="card"><p class="eyebrow">6 / アルバイト</p>
-      <p class="muted">メダルが尽きたら<b class="gold">アルバイト</b>で立て直せる。${WORK_WEEKS}週のあいだ調教も出走もできない代わりに、皿洗い・ピザの配達・研究室の実験台で稼ぐ。安全に取るか一撃を狙うかは自由だが、稼ぎ続けると馬が仕上がらない。</p></div>
+      <p class="muted">メダルが尽きたら<b class="gold">アルバイト</b>で立て直せる。<b class="gold">ライブ配信</b>（2週）・<b class="gold">トラックの配達</b>・<b class="gold">サイン会</b>（ファン数の10%）・<b class="gold">ボートレース場営業</b>（0〜5,000枚）の4つで、消費する週も振れ幅も違う。その間は調教も出走もできないので、稼ぎ続けると馬が仕上がらない。</p></div>
     <div class="card"><p class="eyebrow">7 / レース操作</p>
       <p class="muted">下画面の<b class="gold">追い出す</b>で仕掛ける。早すぎるとスタミナが尽き、遅すぎると届かない。<b class="gold">ムチ</b>は3回まで、ラスト勝負に効く。<b class="gold">直線まで</b>を押すとコーナーを飛ばして直線から中継を再開する。</p></div>
     <div class="card"><p class="eyebrow">8 / 招待状</p>
@@ -2534,7 +2572,7 @@ const V = {
         <h2 class="head hot">休養中</h2>
         <div class="card"><p class="muted">${esc(h.name)}は放牧に出ている。あと <b class="gold num">${h.rest}</b> 週で復帰予定。</p></div>
         <button class="btn primary center wide" data-act="advance" style="margin-bottom:7px">週を進める</button>
-        <button class="btn ghost center wide" data-act="work">アルバイトに出る<small>${WORK_WEEKS}週・待つあいだに稼ぐ</small></button>`;
+        <button class="btn ghost center wide" data-act="work">アルバイトに出る<small>2〜${WORK_WEEKS}週・待つあいだに稼ぐ</small></button>`;
     }
     const rs=racesFor(G);
     const fat = Math.round(h.fatigue);
@@ -2561,6 +2599,9 @@ const V = {
         ${vetStop(h)?`<div class="vet">
           <b>ドクターストップ</b>
           <span>疲労が${VET_STOP}を超えている。休養か、売店のアイテムで抜くまで、調教も出走もできない。</span>
+        </div>`:freshLegs(h)?`<div class="fresh">
+          <b>脚が軽い（伸び${FRESH_MUL}倍）</b>
+          <span>疲労が${FRESH_FAT}を切っているあいだは、調教で上がる能力が${FRESH_MUL}倍になる。</span>
         </div>`:''}
       </div>
       ${rs.length?`
@@ -2594,11 +2635,11 @@ const V = {
             <b style="font-size:12px" class="gold">メダルが心細い</b>
             <span class="num" style="font-size:11px;color:var(--gold)">◉ ${yen(G.medals)}</span>
           </div>
-          <p class="muted" style="margin:0 0 7px;font-size:11px">馬券も売店もメダルが要る。${WORK_WEEKS}週を使えばアルバイトで立て直せる。</p>
+          <p class="muted" style="margin:0 0 7px;font-size:11px">馬券も売店もメダルが要る。2〜${WORK_WEEKS}週を使えばアルバイトで立て直せる。</p>
           <button class="btn primary center wide" data-act="work" style="min-height:38px">アルバイトに出る</button>
         </div>`:`
         <button class="btn center wide" data-act="work" style="min-height:40px;margin-bottom:7px">
-          アルバイトに出る<small>${WORK_WEEKS}週・育成を止めてメダルを稼ぐ</small></button>`}
+          アルバイトに出る<small>2〜${WORK_WEEKS}週・育成を止めてメダルを稼ぐ</small></button>`}
       <button class="btn ghost center wide" data-act="save" style="min-height:40px">
         セーブする<small>進行は自動でも保存される</small></button>`;
   },
@@ -2657,25 +2698,27 @@ const V = {
       <div class="card tight">
         <div class="row between" style="margin-bottom:4px">
           <b style="font-size:13.5px">${j.k}</b>
-          <span class="dot" style="font-size:11px;color:var(--cyan)">成功率 ${Math.round(j.rate*100)}%</span>
+          <span class="dot" style="font-size:11px;color:var(--cyan)">${j.w}週・${Math.round(jobRate(j)*100)}%</span>
         </div>
         <p class="muted" style="margin:0 0 6px;font-size:11px">${j.d}</p>
+        ${j.fan?`<div class="row between" style="font-size:11px;margin-bottom:3px">
+          <span class="muted">いまのファン</span><b class="num">${yen(G.horse.fans)}人</b></div>`:''}
         <div class="row between" style="font-size:11px;margin-bottom:3px">
-          <span class="muted">成功</span><b class="num gold">+${yen(j.win)}</b></div>
+          <span class="muted">${j.roll?'最高':'成功'}</span><b class="num gold">+${yen(jobWin(j,G.horse))}</b></div>
         <div class="row between" style="font-size:11px;margin-bottom:3px">
-          <span class="muted">失敗</span><b class="num ${j.lose?'':'hot'}">+${yen(j.lose)}</b></div>
+          <span class="muted">${j.roll?'最低':'失敗'}</span><b class="num ${jobLose(j,G.horse)?'':'hot'}">+${yen(jobLose(j,G.horse))}</b></div>
         <div class="row between" style="font-size:11px;margin-bottom:7px">
-          <span class="muted">平均</span><b class="num cyan">${yen(jobEV(j))}</b></div>
+          <span class="muted">平均</span><b class="num cyan">${yen(jobEV(j,G.horse))}</b></div>
         <button class="btn primary center wide" data-act="dojob" data-i="${i}" style="min-height:38px">${j.k}をやる</button>
       </div>`).join('');
     return `<div class="row between" style="margin-bottom:6px">
         <p class="eyebrow" style="margin:0">PART-TIME / アルバイト</p>
         <span class="dot gold" style="font-size:12px">◉ ${yen(G.medals)}</span>
       </div>
-      <h2 class="head">${WORK_WEEKS}週を売ってメダルに換える</h2>
-      <p class="muted" style="margin:-4px 0 9px">その間は調教も出走もできない。愛馬の疲労だけは20抜ける。</p>
+      <h2 class="head">週を売ってメダルに換える</h2>
+      <p class="muted" style="margin:-4px 0 9px">その間は調教も出走もできない。愛馬の疲労は1週につき5抜ける。</p>
       ${miss.length?`<div class="card tight" style="border-color:#5c2b28">
-        <p class="eyebrow" style="color:#ff9f8b">見送ることになるレース</p>
+        <p class="eyebrow" style="color:#ff9f8b">見送ることになるレース（先${WORK_WEEKS}週）</p>
         ${miss.slice(0,5).map(m=>`<div class="row between" style="font-size:11px;padding:2px 0">
           <span>${esc(m.r.n)}</span>
           <span class="dot" style="color:var(--ink-3)">${m.year}歳${m.week}週</span></div>`).join('')}
@@ -2694,7 +2737,7 @@ const V = {
       <div class="card tight">
         <div class="row between"><span class="muted">メダル残高</span><b class="num gold">${yen(G.medals)}</b></div>
         <div class="sep"></div>
-        <div class="row between"><span class="muted">経過</span><b class="num">${WORK_WEEKS}週</b></div>
+        <div class="row between"><span class="muted">経過</span><b class="num">${d.job.w}週</b></div>
       </div>
       <button class="btn primary center wide" data-act="backhome">厩舎へもどる</button>`;
   },
@@ -3183,14 +3226,13 @@ function advanceWeeks(n){
 function doWork(i){
   const j=JOBS[i], h=G.horse;
   if(!j||!h) return;
-  const ok = Math.random() < j.rate;
-  const pay = ok ? j.win : j.lose;
+  const {pay, ok} = jobRoll(j,h);
   G.medals += pay;
-  h.fatigue = clamp(h.fatigue-20,0,100);   // 馬は4週間ゆっくり休める
+  h.fatigue = clamp(h.fatigue-5*j.w,0,100);   // 馬は働いているあいだゆっくり休める
   logLine(`${j.k} +${pay}枚`);
   ok ? SFX.coin() : SFX.err();
   say(`${j.k}のアルバイト。${ok?j.okTxt:j.ngTxt} ${pay}枚。`, ok);
-  if(advanceWeeks(WORK_WEEKS)===false) return;   // 途中で引退した
+  if(advanceWeeks(j.w)===false) return;   // 途中で引退した
   save();
   show('workresult',{job:j, ok, pay});
   drawScene();
@@ -3221,10 +3263,12 @@ function doTrain(i){
   /* 1年50週＝キャリア150ターン。1回あたりの上がり幅を小さくして、
      3年かけて伸びる曲線にする（係数を上げると1年目で頭打ちになる）。 */
   const cap=capOf(h,G.year), cm=COND_NAME[condIdx(h)].m;
+  // 疲労が抜けているうちは伸びが FRESH_MUL 倍。判定は疲労を足す前に行う
+  const fm = freshLegs(h) ? FRESH_MUL : 1;
   const gains=[];
   for(const [k,mul] of Object.entries(m.up)){
     const room=clamp(1-h[k]/cap,0.05,1);
-    const g0 = mul*1.55*room*cm*rnd(1.35,.7);
+    const g0 = mul*1.55*room*cm*rnd(1.35,.7)*fm;
     h[k]=Math.min(cap+2,h[k]+g0);
     gains.push([k,g0]);
   }
@@ -3234,7 +3278,7 @@ function doTrain(i){
   app.gains=gains;
   SFX.tap();
   const txt = gains.map(([k,v])=>`${STAT_KEYS.find(s=>s[0]===k)[1]}+${v.toFixed(1)}`).join('　');
-  say(`${m.k}調教。${txt}`);
+  say(`${m.k}調教。${txt}${fm>1?'　脚が軽い！':''}`);
   // メダルと能力はここで確定している。演出中に閉じられても週送り前の
   // この時点までは残るよう、advanceWeek を待たずにここで一度保存する。
   save();
@@ -3826,6 +3870,7 @@ window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, di
                       jockeyOf, jSkill, jRank, jockeyChoices, PRIZE_MUL,
                       SEASON_ITEMS, seasonItemNow, shopList, gotSeason,
                       VET_STOP, vetStop, opClosed,
+                      FRESH_FAT, FRESH_MUL, freshLegs, jobRoll, jobEV, jobRate, jobWin, jobLose, WORK_WEEKS,
                       get state(){ return G; } };
 
 try{ boot(); }
