@@ -347,6 +347,15 @@ table.res td.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-wi
 
 /* レース操作卓 */
 .deck{display:flex;flex-direction:column;gap:8px;height:100%}
+/* ドクターストップの札。疲労で止められていることを、数字より先に伝える */
+.vet{
+  margin-top:8px;padding:7px 9px;border-radius:6px;
+  background:#3a1410;border:1px solid #8d2a20;
+  display:flex;flex-direction:column;gap:2px;
+}
+.vet b{font-size:11.5px;color:#ff9a86;letter-spacing:.04em}
+.vet span{font-size:10.5px;color:#e0b3aa;line-height:1.45}
+.entry[disabled]{opacity:.42}
 .pacebox{
   display:flex;align-items:stretch;gap:7px;margin-bottom:7px;
 }
@@ -759,6 +768,9 @@ const RACES = [
    クラス条件は課さない（重賞を勝った事実そのものが出走資格）。
    達成は愛馬ごとに持つので、代が替わればまた一から挑むことになる。 */
 const wonRace = (h,n) => !!(h && h.won && h.won[n]);
+/* オープン特別からの卒業。G1を2勝するか、SGに一度でも出走したらもう組まれない。
+   格が上がった馬が、いつまでも下で賞金を拾えないようにする蓋。 */
+const opClosed = h => !!h && (((h.g1w||0) >= SG_NEED_G1) || ((h.sgRun||0) > 0));
 /* theme: 上画面の背景。omen はごく稀に現れる吉兆で、出たらその日は勝ちやすい。
    出走条件は全レース共通で「G1を2勝」。満たした時点で招待状が届き、あとは
    季節ごとに巡ってくる各国のカップに挑んでいく。 */
@@ -807,7 +819,7 @@ function condRaces(g){
   }else if(h.cls<4){
     out.push({n:h.cls+'勝クラス', w:g.week, d:d1, s:'芝', g:'jo', cls:h.cls, lv:h.cls, c:c1});
     out.push({n:h.cls+'勝クラス', w:g.week, d:d2, s:surf, g:'jo', cls:h.cls, lv:h.cls, c:c2});
-  }else{
+  }else if(!opClosed(h)){
     out.push({n:'オープン特別', w:g.week, d:d1, s:'芝', g:'op', cls:4, lv:4, c:c1});
   }
   return out;
@@ -856,6 +868,10 @@ const STAT_KEYS = [['sp','スピード'],['st','スタミナ'],['pw','パワー'
    馬券の的中で増えたメダルを能力に還元する。調教と違い週を消費しない代わりに、
    伸ばせるのは成長上限＋ITEM_OVER まで。ここが青天井だとレースが壊れる。 */
 const ITEM_OVER = 20;
+/* 疲労がここを超えると獣医が止める。調教も出走もできないが、
+   売店・休養・アルバイトは通す（塞ぐと抜け出す手段が無くなる）。 */
+const VET_STOP = 75;
+const vetStop = h => !!h && h.fatigue > VET_STOP;
 /* --- アルバイト ---
    メダルが尽きたときの救済措置。4週（約1ヶ月）育成を止める代わりに稼ぐ。
    期待値はピザが最も高く、実験台は一撃狙い。どれも「育成の時間」との交換なので、
@@ -882,10 +898,32 @@ const ITEMS = [
   {k:'ビール',     p:500,  fat:30,  cond:8,  up:4,  mode:'pick',
    d:'疲労を30回復し、選んだ能力が4上がる'},
   {k:'シャンパン', p:1000, fat:45,  cond:15, up:10, mode:'pick',
-   d:'疲労を45回復し、選んだ能力が10上がる'},
-  {k:'ブランデー', p:2500, fat:100, cond:40, up:8,  mode:'all',
-   d:'疲労が完全に抜けて絶好調になり、全能力が8上がる'}
+   d:'疲労を45回復し、選んだ能力が10上がる'}
 ];
+/* --- 季節限定アイテム ---
+   常時買えるブランデーは、貯めたメダルで能力を買い切れてしまいバランスを壊した。
+   効果はそのままに、その季節にしか置かず、値段を5,000へ上げ、
+   愛馬1頭につき一度きりにしてある（代が替われば、また4つ狙える）。 */
+const SEASON_BASE = {p:5000, fat:100, cond:40, up:8, mode:'all', season:true};
+const SEASON_ITEMS = [
+  {k:'さくらもち',  ms:[3,4,5],   s:'春', d:'春の訪れを祝う和菓子。甘くてもちもち。'},
+  {k:'かきごおり',  ms:[6,7,8],   s:'夏', d:'夏の暑さもこれで解決。キーンと目が覚める味。'},
+  {k:'金の焼き芋',  ms:[9,10,11], s:'秋', d:'食欲の秋、馬肥ゆる秋。ホクホクのお芋を味わおう。'},
+  {k:'熱々おでん',  ms:[12,1,2],  s:'冬', d:'厳しい寒さも熱々おでんで乗り切ろう。吹き出し注意。'}
+];
+/* いま置かれている季節のもの。月で決まる（`seasonOf` は隠しレース用の週判定なので別物）。 */
+function seasonItemNow(){
+  const m=ymOf(G.week).m;
+  const it=SEASON_ITEMS.find(x=>x.ms.includes(m));
+  return it ? Object.assign({}, SEASON_BASE, it) : null;
+}
+const gotSeason = (h,k) => !!(h && h.season && h.season[k]);
+/* 売店の品揃え＝常設3種＋その季節のもの */
+function shopList(){
+  const l=ITEMS.slice(), s=seasonItemNow();
+  if(s) l.push(s);
+  return l;
+}
 const CLASS_NAME = ['未勝利','1勝クラス','2勝クラス','3勝クラス','オープン'];
 const COND_NAME = [
   {t:'絶好調', m:1.06, c:'var(--ok)'},
@@ -2429,7 +2467,7 @@ const V = {
     <div class="card"><p class="eyebrow">3 / 馬券</p>
       <p class="muted">出走前にメダルで単勝・複勝を購入。愛馬に賭けても、ライバルに賭けてもよい。賞金と払戻の両方がメダルになる。</p></div>
     <div class="card"><p class="eyebrow">4 / 売店</p>
-      <p class="muted">的中で貯めたメダルは売店で<b class="gold">コーヒー・ビール・シャンパン・ブランデー</b>に換えられる。週を使わずに能力を伸ばせるが、上限＋${ITEM_OVER}までしか効かない。</p></div>
+      <p class="muted">的中で貯めたメダルは売店で<b class="gold">コーヒー・ビール・シャンパン</b>に換えられる。週を使わずに能力を伸ばせるが、上限＋${ITEM_OVER}までしか効かない。さらに季節ごとの<b class="gold">さくらもち・かきごおり・金の焼き芋・熱々おでん</b>（各5,000）は、その季節にしか置かず<b class="gold">愛馬1頭につき一度だけ</b>。疲労が完全に抜けて全能力が上がる。</p></div>
     <div class="card"><p class="eyebrow">5 / 合言葉</p>
       <p class="muted">記録タブで<b class="gold">12文字のひらがな</b>の合言葉を発行できる。控えておけば、タイトルの「データを読み込む」からいつでも呼び出せる。合言葉ごとに別のデータを持てるので、育成をやり直したいときの控えにもなる。記録はこの端末に残る。</p></div>
     <div class="card"><p class="eyebrow">6 / アルバイト</p>
@@ -2502,7 +2540,7 @@ const V = {
     const fat = Math.round(h.fatigue);
     const fatCol = fat>82?'var(--hot)':fat>60?'var(--gold)':'var(--ok)';
     const menus = TRAIN.map((t,i)=>`
-      <button class="btn" data-act="train" data-i="${i}" ${G.medals<t.cost?'disabled':''}>
+      <button class="btn" data-act="train" data-i="${i}" ${(G.medals<t.cost||vetStop(h))?'disabled':''}>
         <span>${t.k} <span class="dot gold" style="font-size:10px">◉${t.cost}</span></span>
         <small>${t.d}・疲労+${t.f}</small>
       </button>`).join('');
@@ -2520,11 +2558,15 @@ const V = {
           <span class="gauge" style="flex:1"><i style="width:${clamp(fat,0,100)}%;background:${fatCol}"></i></span>
           <span class="num" style="font-size:11px;color:${fatCol}">${fat}</span>
         </div>
+        ${vetStop(h)?`<div class="vet">
+          <b>ドクターストップ</b>
+          <span>疲労が${VET_STOP}を超えている。休養か、売店のアイテムで抜くまで、調教も出走もできない。</span>
+        </div>`:''}
       </div>
       ${rs.length?`
         <p class="eyebrow">今週のレース</p>
         <div class="list" style="margin-bottom:10px">
-          ${rs.map((r,i)=>`<button class="entry" data-act="entry" data-i="${i}">
+          ${rs.map((r,i)=>`<button class="entry" data-act="entry" data-i="${i}" ${vetStop(h)?'disabled':''}>
             <div class="nm"><b>${esc(r.n)}</b><br><span style="font-size:10px;color:var(--ink-3)">${raceMeta(r)}</span>
               <br><span style="font-size:9.5px;color:var(--ink-3)">${courseLine(r)}</span></div>
             <span class="od">${yen(prizeOf(r))}</span>
@@ -2665,17 +2707,21 @@ const V = {
       <button class="btn center" data-act="pickstat" data-k="${k}"
         style="min-height:44px;font-size:10.5px;padding:5px 2px;${k===sel?'border-color:var(--gold);background:#231d0d;color:var(--gold)':''}">
         ${lb}<small class="num" style="${k===sel?'color:var(--gold)':''}">${Math.round(h[k])}</small></button>`).join('');
-    const cards=ITEMS.map((it,i)=>{
-      const can=G.medals>=it.p;
-      return `<div class="card tight">
+    const cards=shopList().map((it,i)=>{
+      const done=it.season && gotSeason(h,it.k);
+      const can=G.medals>=it.p && !done;
+      return `<div class="card tight" ${it.season?'style="border-color:var(--gold)"':''}>
         <div class="row between" style="margin-bottom:4px">
-          <b style="font-size:13.5px">${it.k}</b>
+          <b style="font-size:13.5px">${it.k}${
+            it.season?`<span class="pill g1" style="margin-left:6px">${it.s}かぎり</span>`:''}</b>
           <span class="num" style="font-size:12px;color:${can?'var(--gold)':'var(--ink-3)'}">◉ ${yen(it.p)}</span>
         </div>
         <p class="muted" style="margin:0 0 7px;font-size:11px">${it.d}${
-          it.mode==='pick'?`<br><span class="gold">対象：${selName}</span>`:''}</p>
+          it.mode==='pick'?`<br><span class="gold">対象：${selName}</span>`:''}${
+          it.season?`<br><span class="gold">疲労が完全に抜けて絶好調になり、全能力が${it.up}上がる。愛馬1頭につき一度だけ。</span>`:''}</p>
         <button class="btn ${can?'primary':'ghost'} center wide" data-act="buy" data-i="${i}"
-          style="min-height:38px" ${can?'':'disabled'}>${can?'使う':'メダルが足りない'}</button>
+          style="min-height:38px" ${can?'':'disabled'}>${
+          done?'この馬にはもう与えた':can?'使う':'メダルが足りない'}</button>
       </div>`;
     }).join('');
     return `<div class="row between" style="margin-bottom:6px">
@@ -3152,6 +3198,10 @@ function doWork(i){
 
 function doTrain(i){
   const h=G.horse, m=TRAIN[i];
+  if(vetStop(h)){
+    SFX.err(); toast(`疲労${Math.round(h.fatigue)}。獣医が止めている`);
+    return;
+  }
   if(G.medals < m.cost){
     SFX.err(); toast(`${m.k}には${yen(m.cost)}メダル要る`);
     return;
@@ -3198,9 +3248,11 @@ function doTrain(i){
   tabs.hidden=true;
 }
 function buyItem(i){
-  const it=ITEMS[i], h=G.horse;
+  const it=shopList()[i], h=G.horse;
   if(!h||!it) return;
+  if(it.season && gotSeason(h,it.k)){ SFX.err(); toast('この馬にはもう与えた'); return; }
   if(G.medals<it.p){ SFX.err(); toast('メダルが足りない'); return; }
+  if(it.season){ h.season=h.season||{}; h.season[it.k]=true; }
   const lim=capOf(h,G.year)+ITEM_OVER;
   G.medals-=it.p;
   h.fatigue=clamp(h.fatigue-it.fat,0,100);
@@ -3235,6 +3287,10 @@ function doRest(){
 function openEntry(i){
   const rs=racesFor(G), r=rs[i];
   if(!r) return;
+  if(vetStop(G.horse)){
+    SFX.err(); toast(`疲労${Math.round(G.horse.fatigue)}。この状態では出走できない`);
+    return;
+  }
   app.race=r;
   app.field=makeField(G,r);
   app.odds=makeOdds(app.field, r, 1-packOf(G.horse)*0.35);
@@ -3345,6 +3401,7 @@ function finishRace(){
   }
   G.medals+=prize+pay;
   h.races++; h.earned+=prize;
+  if(r.g==='SG') h.sgRun=(h.sgRun||0)+1;   // 出走した事実。オープン特別の卒業条件
   const pack=packOf(h);
   h.fatigue=clamp(h.fatigue + rint(20,26)*(GRADE_FAT[r.g]||1)*(1+pack*0.9), 0, 100);
   h.cond=clamp(h.cond-rint(4,12)-Math.round(pack*10),5,100);
@@ -3767,6 +3824,8 @@ window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, di
                       seasonOf, SG_NEED_G1, GRADE_PRIZE, prizeOf, fieldLevel,
                       JOCKEYS, JOCKEY_INT, INTL_COURSES, HYO, hyoOf, makeOdds,
                       jockeyOf, jSkill, jRank, jockeyChoices, PRIZE_MUL,
+                      SEASON_ITEMS, seasonItemNow, shopList, gotSeason,
+                      VET_STOP, vetStop, opClosed,
                       get state(){ return G; } };
 
 try{ boot(); }
