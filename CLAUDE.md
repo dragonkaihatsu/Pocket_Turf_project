@@ -151,7 +151,18 @@ JRA重賞・地方重賞の予想と検証を継続的に行い、独自のス�
 | 調教コメント（定性評価） | winsight.jp |
 | 確定配当 | Yahoo Sports keiba（`sports.yahoo.co.jp/keiba/race/result/[race-ID]`） |
 | 当日他レースの脚質傾向・結果 | 楽天競馬 |
-| 地方（浦和等）の結果確認 | keiba.go.jp（RaceMarkTable、`k_babaCode=18`等） |
+| 地方（浦和等）の結果確認 | keiba.go.jp（RaceMarkTable、`k_babaCode=18`等）※自動収集は不可、下記参照 |
+| 南関東4場の公式データ | nankankeiba.com（`/uma_detail_search/`で馬検索、`/result/`、`/race_trend/`。文字コードはShift_JIS） |
+
+### 自動収集してよいサイト・いけないサイト
+- **keiba.go.jp（地方競馬情報サイト）は robots.txt で `/KeibaWeb/TodayRaceInfo/`
+  `/KeibaWeb/DataRoom/` `/KeibaWeb/DataDownload/` を全ボットに Disallow している**
+  （Googlebotのみ許可、`Crawl-delay: 10`）。上表の RaceMarkTable はこの配下なので、
+  **人が手で見るのは自由だが、スクリプトでの取得はしない**
+- nankankeiba.com は robots.txt を設置していない（404）。明示的な禁止は無いが、
+  公式サイトなので `collect` と同じく間隔を空け、取得済みはキャッシュから読む
+- netkeiba (nar.netkeiba.com) が現行の収集元。`keiba/collect.py` は
+  1.5秒間隔・HTMLキャッシュ・再取得スキップで運用している
 
 ## レース後の検証フォーマット
 確定着順・配当をweb検索で確認 → スコア上位陣との一致度を表形式で整理 →
