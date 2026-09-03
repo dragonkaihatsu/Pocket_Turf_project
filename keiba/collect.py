@@ -67,10 +67,15 @@ class Fetcher:
         self.interval = interval
         self._last_request = 0.0
 
-    def get(self, url: str, cache_key: str, retries: int = 2) -> str | None:
-        """取得してキャッシュに保存する。一時的な失敗は間隔を空けて再試行する。"""
+    def get(self, url: str, cache_key: str, retries: int = 2,
+            refresh: bool = False) -> str | None:
+        """取得してキャッシュに保存する。一時的な失敗は間隔を空けて再試行する。
+
+        refresh=True ならキャッシュを無視して取り直す。発走前に取得した
+        「結果が空のページ」がキャッシュに残っている場合に必要になる。
+        """
         cached = self.cache_dir / f"{cache_key}.html"
-        if cached.exists():
+        if cached.exists() and not refresh:
             return cached.read_text(encoding="utf-8")
 
         for attempt in range(retries + 1):
@@ -450,7 +455,7 @@ def collect_day(
             print(f"  {venue}{no:>2}R → 取得済みのためスキップ")
             continue
         print(f"  {venue}{no:>2}R (race_id={race_id})", end=" ")
-        html = fetcher.get(RESULT_URL.format(race_id=race_id), race_id)
+        html = fetcher.get(RESULT_URL.format(race_id=race_id), race_id, refresh=force)
         if html is None:
             print("→ 取得できず")
             continue
@@ -462,7 +467,7 @@ def collect_day(
         data.info.venue = data.info.venue or venue
         # 馬柱（事前情報）も取得する。結果だけでは脚質・間隔・血統が分からないため
         past_html = fetcher.get(
-            SHUTUBA_PAST_URL.format(race_id=race_id), f"{race_id}_past"
+            SHUTUBA_PAST_URL.format(race_id=race_id), f"{race_id}_past", refresh=force
         )
         if past_html:
             y, mo, d = (int(x) for x in data.info.date.split("-"))
