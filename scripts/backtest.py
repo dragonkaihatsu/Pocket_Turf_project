@@ -26,6 +26,27 @@ from keiba.scoring import score_race
 
 STAKE = 100
 RACE_NO_RE = re.compile(r"_大井(\d{2})R_")
+DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
+
+
+def race_date(stem: str) -> str | None:
+    """ファイル名先頭の開催日。馬別戦績を「その日より前」に絞るために使う。"""
+    m = DATE_RE.match(stem)
+    return m.group(1) if m else None
+
+
+def load_race_info(path: str | None) -> dict[str, int]:
+    """stem → 距離(m)。距離適性の判定に使う。"""
+    p = Path(path) if path else Path("data/race_info.csv")
+    if not p.exists():
+        return {}
+    out = {}
+    with open(p, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if (row.get("距離") or "").isdigit():
+                out[row["stem"]] = int(row["距離"])
+    return out
+
 
 
 def race_number(stem: str) -> int | None:
@@ -133,6 +154,11 @@ def main() -> None:
     ap.add_argument("--ratings",
                     help="使用する補正ファイル。1-9Rだけで作った補正を10-12Rに当てれば"
                          "後知恵の入らない独立検証になる（--with-ratings と併用）")
+    ap.add_argument("--race-info", help="レース距離の一覧(data/race_info.csv)")
+    ap.add_argument("--records",
+                    help="馬別戦績CSV(data/horse_records.csv)。渡すとコース適性・"
+                         "距離適性がその馬自身の実績から算出される。各レースの"
+                         "開催日より前の戦績だけを使うため後知恵は入らない")
     ap.add_argument("--with-ratings", action="store_true",
                     help="騎手・血統補正を使う（同一データから作った補正のため後知恵が入る）")
     args = ap.parse_args()
@@ -148,6 +174,19 @@ def main() -> None:
         table = json.loads(Path(args.ratings).read_text(encoding="utf-8"))
         sc.load_ratings = lambda *a, **k: table
 
+    from keiba.horsedb import load_records
+    kyori_by_stem = load_race_info(args.race_info) if args.records else {}
+    records = load_records(args.records) if args.records else None
+    if records:
+        by_name: dict[str, list[dict]] = {}
+        for rows in records.values():
+            if rows and rows[0]["馬名"]:
+                by_name.setdefault(rows[0]["馬名"], []).extend(rows)
+        for rows in by_name.values():
+            rows.sort(key=lambda r: r["日付"])
+        records = by_name
+        print(f"馬別戦績: {len(records)}頭を読み込み（各レースの開催日より前だけ使用）")
+
     results: dict[str, dict] = {}
     used = 0
     wanted = parse_races(args.races) if args.races else None
@@ -159,7 +198,9 @@ def main() -> None:
         race = load_race(directory, stem)
         if race is None:
             continue
-        marked = assign_marks(score_race(race["horses"], None), baba="良")
+        marked = assign_marks(
+            score_race(race["horses"], None, kyori=kyori_by_stem.get(stem),
+                       records=records, as_of=race_date(stem)), baba="良")
         if len(marked) < 6:
             continue
         used += 1

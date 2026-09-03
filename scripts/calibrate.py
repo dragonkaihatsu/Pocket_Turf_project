@@ -34,6 +34,27 @@ from keiba.scoring import score_race
 
 FIELD_BUCKETS = [("〜9頭", 0, 9), ("10-12頭", 10, 12), ("13頭〜", 13, 99)]
 RACE_NO_RE = re.compile(r"_大井(\d{2})R_")
+DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
+
+
+def race_date(stem: str) -> str | None:
+    """ファイル名先頭の開催日。馬別戦績を「その日より前」に絞るために使う。"""
+    m = DATE_RE.match(stem)
+    return m.group(1) if m else None
+
+
+def load_race_info(path: str | None) -> dict[str, int]:
+    """stem → 距離(m)。距離適性の判定に使う。"""
+    p = Path(path) if path else Path("data/race_info.csv")
+    if not p.exists():
+        return {}
+    out = {}
+    with open(p, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if (row.get("距離") or "").isdigit():
+                out[row["stem"]] = int(row["距離"])
+    return out
+
 
 
 def race_number(stem: str) -> int | None:
@@ -99,6 +120,11 @@ def main() -> None:
     ap.add_argument("--dir", default="data/collected")
     ap.add_argument("--races", help="対象レース番号 (例: 10-12)")
     ap.add_argument("--out", default="data/calibration.json")
+    ap.add_argument("--race-info", help="レース距離の一覧(data/race_info.csv)")
+    ap.add_argument("--records",
+                    help="馬別戦績CSV(data/horse_records.csv)。渡すとコース適性・"
+                         "距離適性がその馬自身の実績から算出される。各レースの"
+                         "開催日より前の戦績だけを使うため後知恵は入らない")
     ap.add_argument("--with-ratings", action="store_true",
                     help="実測補正(脚質・騎手・血統)を使う。予想時と同じ条件にするならこちら")
     ap.add_argument("--ratings",
@@ -117,6 +143,19 @@ def main() -> None:
     directory = Path(args.dir)
     stems = sorted({p.name.replace("_結果.csv", "") for p in directory.glob("*_結果.csv")})
 
+    from keiba.horsedb import load_records
+    kyori_by_stem = load_race_info(args.race_info) if args.records else {}
+    records = load_records(args.records) if args.records else None
+    if records:
+        by_name: dict[str, list[dict]] = {}
+        for rows in records.values():
+            if rows and rows[0]["馬名"]:
+                by_name.setdefault(rows[0]["馬名"], []).extend(rows)
+        for rows in by_name.values():
+            rows.sort(key=lambda r: r["日付"])
+        records = by_name
+        print(f"馬別戦績: {len(records)}頭を読み込み（各レースの開催日より前だけ使用）")
+
     by_rank: dict = {}
     by_field: dict = {}
     by_ninki: dict = {}
@@ -129,7 +168,8 @@ def main() -> None:
         race = load_race(directory, stem)
         if race is None:
             continue
-        scores = score_race(race["horses"], None)
+        scores = score_race(race["horses"], None, kyori=kyori_by_stem.get(stem),
+                            records=records, as_of=race_date(stem))
         ranked = sorted(scores, key=lambda s: s.total_yoi, reverse=True)
         used += 1
         fb = field_bucket(race["field"])
