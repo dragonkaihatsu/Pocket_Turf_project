@@ -38,6 +38,7 @@ def parse_races(spec: str) -> set[int]:
 def build(directory: Path, wanted: set[int] | None = None) -> dict:
     jockey: dict[str, list[int]] = defaultdict(list)
     sire: dict[str, list[int]] = defaultdict(list)
+    kyakushitsu: dict[str, list[int]] = defaultdict(list)
     races = 0
 
     for res in sorted(directory.glob("*_結果.csv")):
@@ -52,11 +53,13 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
         races += 1
 
         sires: dict[int, str] = {}
+        kyaku: dict[int, str] = {}
         ent = directory / res.name.replace("_結果.csv", "_出走馬.csv")
         if ent.exists():
             for e in csv.DictReader(open(ent, encoding="utf-8")):
                 if (e.get("馬番") or "").isdigit():
                     sires[int(e["馬番"])] = (e.get("血統父") or "").strip()
+                    kyaku[int(e["馬番"])] = (e.get("脚質") or "").strip()
 
         for r in rows:
             chaku = int(r["着順"])
@@ -65,6 +68,8 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
             umaban = int(r["馬番"]) if (r.get("馬番") or "").isdigit() else -1
             if s := sires.get(umaban, ""):
                 sire[s].append(chaku)
+            if k := kyaku.get(umaban, ""):
+                kyakushitsu[k].append(chaku)
 
     def summarize(d: dict[str, list[int]]) -> dict:
         return {
@@ -76,7 +81,8 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
             for k, v in sorted(d.items()) if v
         }
 
-    return {"レース数": races, "騎手": summarize(jockey), "種牡馬": summarize(sire)}
+    return {"レース数": races, "騎手": summarize(jockey), "種牡馬": summarize(sire),
+            "脚質": summarize(kyakushitsu)}
 
 
 def main() -> None:
@@ -92,7 +98,9 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(ratings, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{ratings['レース数']}レースから作成: 騎手{len(ratings['騎手'])}人 / "
-          f"種牡馬{len(ratings['種牡馬'])}頭 → {out}")
+          f"種牡馬{len(ratings['種牡馬'])}頭 / 脚質{len(ratings['脚質'])}種 → {out}")
+    for k, v in sorted(ratings["脚質"].items(), key=lambda x: -x[1]["複勝率"]):
+        print(f"    {k:<6} n={v['n']:>5}  勝率{v['勝率']:.1%}  複勝率{v['複勝率']:.1%}")
 
 
 if __name__ == "__main__":

@@ -100,12 +100,18 @@ def main() -> None:
     ap.add_argument("--races", help="対象レース番号 (例: 10-12)")
     ap.add_argument("--out", default="data/calibration.json")
     ap.add_argument("--with-ratings", action="store_true",
-                    help="騎手・血統補正を使う（同一データ由来のため後知恵が入る）")
+                    help="実測補正(脚質・騎手・血統)を使う。予想時と同じ条件にするならこちら")
+    ap.add_argument("--ratings",
+                    help="使用する補正ファイル。1-9Rだけで作った補正を10-12Rに当てれば"
+                         "後知恵の入らない対応表になる（--with-ratings と併用）")
     args = ap.parse_args()
 
+    import keiba.scoring as sc
     if not args.with_ratings:
-        import keiba.scoring as sc
         sc.load_ratings = lambda *a, **k: {}
+    elif args.ratings:
+        table = json.loads(Path(args.ratings).read_text(encoding="utf-8"))
+        sc.load_ratings = lambda *a, **k: table
 
     wanted = parse_races(args.races) if args.races else None
     directory = Path(args.dir)
@@ -150,8 +156,12 @@ def main() -> None:
         "生成日": date.today().isoformat(),
         "対象": target,
         "レース数": used,
-        "補正": "騎手・血統補正あり（後知恵注意）" if args.with_ratings else "騎手・血統補正なし",
-        "注意": "同一レース群で作った in-sample の対応表。将来の率を保証しない",
+        "補正": (f"実測補正あり（{Path(args.ratings).name}・別レース群由来）"
+                 if args.with_ratings and args.ratings
+                 else "実測補正あり（後知恵注意）" if args.with_ratings
+                 else "実測補正なし"),
+        "注意": ("順位→率の対応そのものは同じ178レースで数えた in-sample の値。"
+                 "将来の率を保証しない"),
         "順位別": finalize(by_rank),
         "頭数別": finalize(by_field),
         "対照_人気順": finalize(by_ninki),

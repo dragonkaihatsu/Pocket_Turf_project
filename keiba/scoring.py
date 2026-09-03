@@ -31,6 +31,15 @@ RATINGS_PATH = Path(__file__).resolve().parent.parent / "data" / "ratings.json"
 MIN_RIDES = 20      # 騎手補正を効かせる最低騎乗数
 MIN_PROGENY = 20    # 血統補正を効かせる最低産駒数
 
+# 騎手・血統補正の重み。CLAUDE.md の方針では騎手・血統は馬自身の能力に
+# 「上乗せされる価値」であって、能力評価を覆すものではない。
+# 実測でも補正の振れ幅（中央値8点）が能力スコアの1位2位差（中央値2.6点）を
+# 上回っており、上乗せが本体を押しのける構造になっていた。ここで縮尺を掛ける。
+# 実測（10-12R 178レース・1-9R由来の補正）では重みを下げるほど回収率が上がり、
+# 1.0=70.6% / 0.5=72.3% / 0.25=73.5% / 0.0=73.2%。0.25〜0.0の差はノイズの範囲。
+# 騎手・血統を残しつつ能力評価を覆せない大きさにする、という位置づけで 0.5 とする。
+KISHU_KETTO_WEIGHT = 0.5
+
 
 def load_ratings(path: Path | str | None = None) -> dict:
     """実測の騎手・種牡馬成績を読み込む。無ければ空を返す。"""
@@ -169,17 +178,56 @@ def score_course_tekisei(
     return ScoreItem("コース適性", MAX_COURSE * 0.55, "当該コース出走歴なし→中立値"), False
 
 
-def score_kyori_tekisei(horse: Horse, kyori_hyoka_override: float | None) -> ScoreItem:
-    """距離適性（15点）: レース横断の距離別成績データを本仕様は定義していない
-    ため、既定では中立値。距離適性評価カラム（0-15）で人間/Claudeの判断を
-    差し込める。
+# 脚質補正を効かせる最低頭数。これを下回る脚質は中立に倒す
+MIN_KYAKUSHITSU = 50
+
+
+def score_kyori_tekisei(
+    horse: Horse,
+    kyori_hyoka_override: float | None,
+    ratings: dict | None = None,
+) -> ScoreItem:
+    """距離・展開・脚質（15点）。
+
+    配点の半分を「距離」、半分を「展開・脚質」に割る。
+
+    距離パートは、レース横断の距離別成績データを本仕様が定義していないため
+    既定では中立値。距離適性評価カラム（0-15）で人間/Claudeの判断を差し込める。
+
+    脚質パートは data/ratings.json の実測値（scripts/build_ratings.py が作る）を
+    使う。大井は4角の位置取りが着順をほぼ支配するコースで、744レースの実測でも
+    先行の勝率は追込の約4倍あり、1-9Rと10-12Rで同じ傾向が再現する。脚質は
+    馬自身の特性であり、騎手・血統のような上乗せ要素とは区別して扱う。
+
+    実測値が無い・母数不足の場合は中立に倒し、推定値を作らない。
     """
+    half = MAX_KYORI / 2
+
     if kyori_hyoka_override is not None:
         pts = max(0.0, min(MAX_KYORI, kyori_hyoka_override))
-        return ScoreItem("距離適性", pts, "距離適性評価カラムによる手動評価")
+        return ScoreItem("距離・展開・脚質", pts, "距離適性評価カラムによる手動評価")
+
+    ratings = ratings if ratings is not None else load_ratings()
+    table = ratings.get("脚質", {})
+    kyaku = horse.kyakushitsu.strip()
+    rec = table.get(kyaku)
+
+    if not rec or rec.get("n", 0) < MIN_KYAKUSHITSU:
+        reason = (f"脚質「{kyaku}」の実測が母数不足(n={rec['n']})" if rec
+                  else ("脚質データなし" if not kyaku else f"脚質「{kyaku}」の実測値なし"))
+        return ScoreItem("距離・展開・脚質", MAX_KYORI * 0.55,
+                          f"{reason}→中立値（距離適性評価カラムで上書き可）")
+
+    # 実測複勝率を、その場のいちばん低い脚質〜いちばん高い脚質で正規化する
+    rates = [v["複勝率"] for v in table.values() if v.get("n", 0) >= MIN_KYAKUSHITSU]
+    lo, hi = min(rates), max(rates)
+    kyaku_pts = _scale(rec["複勝率"], lo, hi, half * 0.3, half) if hi > lo else half * 0.55
+
+    pts = half * 0.55 + kyaku_pts
     return ScoreItem(
-        "距離適性", MAX_KYORI * 0.55,
-        "距離別成績データ未入力→中立値（距離適性評価カラムで上書き推奨）",
+        "距離・展開・脚質", round(pts, 2),
+        f"脚質「{kyaku}」実測複勝率{rec['複勝率']:.1%}(n={rec['n']})"
+        f"／距離は評価データ未入力のため中立",
     )
 
 
@@ -239,7 +287,8 @@ def correction_kishu(
             pts = -1.0
         else:
             pts = 0.0
-        return ScoreItem("騎手補正", pts, f"{horse.jockey}: 当地複勝率{rate:.0%}（{n}騎乗の実測）")
+        return ScoreItem("騎手補正", round(pts * KISHU_KETTO_WEIGHT, 2),
+                         f"{horse.jockey}: 当地複勝率{rate:.0%}（{n}騎乗の実測）")
 
     tiers = tiers or DEFAULT_JOCKEY_TIERS
     for pts, names in sorted(tiers.items(), reverse=True):
@@ -275,7 +324,7 @@ def correction_ketto(horse: Horse, ratings: dict | None = None) -> ScoreItem:
         pts = -1.0
     else:
         pts = 0.0
-    return ScoreItem("血統補正", pts,
+    return ScoreItem("血統補正", round(pts * KISHU_KETTO_WEIGHT, 2),
                      f"{horse.ketto_chichi}産駒: 当地複勝率{rate:.0%}（{n}頭の実測）")
 
 
@@ -388,15 +437,15 @@ def score_horse(
     jockey_tiers: dict[int, tuple[str, ...]] | None = None,
 ) -> HorseScore:
     course_item, has_experience = score_course_tekisei(horse, history)
+    ratings = load_ratings()
 
     base_items = [
         score_kiso_nouryoku(horse, field_horses),
         score_zenso_naiyou(horse),
         course_item,
-        score_kyori_tekisei(horse, None),
+        score_kyori_tekisei(horse, None, ratings),
         score_chokyo(horse),
     ]
-    ratings = load_ratings()
     corrections = [
         correction_kishu(horse, jockey_tiers, ratings),
         correction_ketto(horse, ratings),
