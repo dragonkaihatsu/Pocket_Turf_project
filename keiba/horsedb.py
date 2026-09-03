@@ -29,6 +29,10 @@ FIELDS = ["馬ID", "馬名", "日付", "場", "R", "レース名", "頭数", "�
           "オッズ", "人気", "着順", "騎手", "斤量", "馬場種別", "距離", "馬場"]
 
 _TAG = re.compile(r"<[^>]+>")
+# 出走馬のリンクは <a href=".../horse/ID/"><span class="Icon_HorseMark"></span>馬名</a>
+# のようにアイコン用のタグを挟むことがある。挟まっても馬名を拾えるようにする
+HORSE_LINK_RE = re.compile(
+    r'/horse/([0-9a-zA-Z]{8,12})/?"[^>]*>(?:\s*<[^>]*>\s*)*([^<]{2,20})<')
 _KAISAI = re.compile(r"[0-9]")
 
 
@@ -41,7 +45,7 @@ def horse_ids_from_cache(cache_dir: Path) -> dict[str, str]:
     found: dict[str, str] = {}
     for p in sorted(Path(cache_dir).glob("*_past.html")):
         html = p.read_text(encoding="utf-8", errors="replace")
-        for m in re.finditer(r'/horse/([0-9a-zA-Z]{8,12})/?"[^>]*>([^<]{2,20})<', html):
+        for m in HORSE_LINK_RE.finditer(html):
             name = m.group(2).strip()
             if name and not name.startswith("&"):
                 found.setdefault(m.group(1), name)

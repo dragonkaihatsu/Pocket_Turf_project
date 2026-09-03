@@ -82,6 +82,32 @@ class TestHorseDb(unittest.TestCase):
         self.assertEqual(parse_horse_results("<html>なし</html>", "1"), [])
 
 
+class TestHorseLinkExtraction(unittest.TestCase):
+    """出走馬のリンクはアイコン用のタグを挟むことがあり、それでも馬名を拾う。"""
+
+    PAST_HTML = (
+        '<td class="Horse_Info"><dl><dt class="Horse02">'
+        '<a href="https://db.netkeiba.com/horse/2017100627/" target="_blank">'
+        '<span class="Icon_HorseMark Icon_kakuChi"></span>コスモギンガ</a>'
+        '</dt></dl></td>'
+        '<td><a href="https://db.netkeiba.com/horse/2019102109/">ラピード</a></td>'
+    )
+
+    def test_name_is_found_even_behind_an_icon_span(self):
+        import tempfile
+
+        from keiba.horsedb import horse_ids_from_cache
+
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "202644090410_past.html").write_text(
+                self.PAST_HTML, encoding="utf-8")
+            found = horse_ids_from_cache(Path(d))
+
+        # spanを挟む馬（出走馬本体）も、挟まない馬も、どちらも名前が付く
+        self.assertEqual(found["2017100627"], "コスモギンガ")
+        self.assertEqual(found["2019102109"], "ラピード")
+
+
 class TestLookaheadGuardInScoring(unittest.TestCase):
     """score_race に as_of を渡すと未来の戦績が効かないことを確認する。"""
 
