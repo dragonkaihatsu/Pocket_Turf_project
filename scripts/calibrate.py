@@ -200,7 +200,7 @@ def main() -> None:
                  if args.with_ratings and args.ratings
                  else "実測補正あり（後知恵注意）" if args.with_ratings
                  else "実測補正なし"),
-        "注意": ("順位→率の対応そのものは同じ178レースで数えた in-sample の値。"
+        "注意": (f"順位→率の対応そのものは同じ{used}レースで数えた in-sample の値。"
                  "将来の率を保証しない"),
         "順位別": finalize(by_rank),
         "頭数別": finalize(by_field),
