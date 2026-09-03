@@ -98,3 +98,37 @@ class TestSampleRacePipeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestExpectation(unittest.TestCase):
+    """期待度%は実測の対応表がある時だけ出す（無ければ数字を捏造しない）。"""
+
+    def test_no_calibration_yields_no_numbers(self):
+        from keiba.expectation import Expectation
+        exp = Expectation({})
+        self.assertFalse(exp.available)
+        self.assertIsNone(exp.lookup(1))
+        self.assertEqual(exp.format(1), ("—", "—"))
+
+    def test_small_sample_is_suppressed(self):
+        from keiba.expectation import Expectation, MIN_SAMPLE
+        cal = {"順位別": {"1": {"n": MIN_SAMPLE - 1, "勝率": 0.9, "複勝率": 1.0,
+                              "勝率CI": [0.5, 1.0], "複勝率CI": [0.6, 1.0]}}}
+        self.assertIsNone(Expectation(cal).lookup(1))
+
+    def test_lookup_and_rank_bucketing(self):
+        from keiba.expectation import Expectation, MAX_RANK, rank_key
+        rec = {"n": 100, "勝率": 0.25, "複勝率": 0.5,
+               "勝率CI": [0.2, 0.3], "複勝率CI": [0.4, 0.6]}
+        cal = {"順位別": {"1": rec, f"{MAX_RANK + 1}位以下": rec}}
+        exp = Expectation(cal)
+        self.assertEqual(exp.lookup(1), (0.25, 0.5))
+        self.assertEqual(rank_key(MAX_RANK + 5), f"{MAX_RANK + 1}位以下")
+        self.assertEqual(exp.lookup(MAX_RANK + 5), (0.25, 0.5))
+
+    def test_wilson_interval_brackets_the_estimate(self):
+        from keiba.expectation import wilson
+        lo, hi = wilson(50, 100)
+        self.assertLess(lo, 0.5)
+        self.assertGreater(hi, 0.5)
+        self.assertEqual(wilson(0, 0), (0.0, 0.0))

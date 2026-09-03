@@ -23,6 +23,7 @@ from .collect import VENUE_CODES, collect_day, collect_month
 from .course import analyze, load_corpus
 from .course import format_report as format_course_report
 from .daily import build_from_config
+from .expectation import Expectation
 from .feedback import RaceResult, generate_feedback_report, load_payouts
 from .marks import assign_marks
 from .models import load_history, load_horses
@@ -44,7 +45,8 @@ def cmd_predict(args) -> None:
     horses, history, scores, marked = _build_common(args)
     pace = forecast_pace(horses)
     plan = make_betting_plan(marked, baba=args.baba)
-    html_out = generate_report(args.race_name, scores, marked, pace, plan, args.baba)
+    html_out = generate_report(args.race_name, scores, marked, pace, plan, args.baba,
+                               Expectation())
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,9 +54,13 @@ def cmd_predict(args) -> None:
     print(f"書き出し完了: {out_path}")
 
     print("\n--- 印 ---")
-    for m in marked:
+    exp = Expectation()
+    for rank, m in enumerate(marked, start=1):
+        win_pct, place_pct = exp.format(rank)
         print(f"{m.mark} {m.score.horse.umaban:>2} {m.score.horse.name} "
-              f"(良{m.score.total_yoi:.1f} / 重{m.score.total_omoi:.1f})")
+              f"(良{m.score.total_yoi:.1f} / 重{m.score.total_omoi:.1f}) "
+              f"1着{win_pct} / 着内{place_pct}")
+    print(f"\n{exp.source_note}")
 
 
 def cmd_feedback(args) -> None:
