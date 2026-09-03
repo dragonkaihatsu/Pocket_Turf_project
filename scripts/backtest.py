@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import sys
 from itertools import combinations
 from pathlib import Path
@@ -24,6 +25,19 @@ from keiba.models import load_horses
 from keiba.scoring import score_race
 
 STAKE = 100
+RACE_NO_RE = re.compile(r"_大井(\d{2})R_")
+
+
+def race_number(stem: str) -> int | None:
+    m = RACE_NO_RE.search(stem + "_")
+    return int(m.group(1)) if m else None
+
+
+def parse_races(spec: str) -> set[int]:
+    if "-" in spec:
+        lo, hi = spec.split("-")
+        return set(range(int(lo), int(hi) + 1))
+    return {int(x) for x in spec.split(",")}
 
 
 def load_race(directory: Path, stem: str):
@@ -115,6 +129,10 @@ def strategies(order: list[int], by_ninki: list[int] | None = None
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--races", help="対象レース番号で絞る (例: 10-12)")
+    ap.add_argument("--ratings",
+                    help="使用する補正ファイル。1-9Rだけで作った補正を10-12Rに当てれば"
+                         "後知恵の入らない独立検証になる（--with-ratings と併用）")
     ap.add_argument("--with-ratings", action="store_true",
                     help="騎手・血統補正を使う（同一データから作った補正のため後知恵が入る）")
     args = ap.parse_args()
@@ -122,13 +140,22 @@ def main() -> None:
     directory = Path(args.dir)
     stems = sorted({p.name.replace("_結果.csv", "") for p in directory.glob("*_結果.csv")})
 
+    import keiba.scoring as sc
     if not args.with_ratings:
-        import keiba.scoring as sc
         sc.load_ratings = lambda *a, **k: {}   # 補正を無効化して後知恵を排除
+    elif args.ratings:
+        import json
+        table = json.loads(Path(args.ratings).read_text(encoding="utf-8"))
+        sc.load_ratings = lambda *a, **k: table
 
     results: dict[str, dict] = {}
     used = 0
+    wanted = parse_races(args.races) if args.races else None
     for stem in stems:
+        if wanted is not None:
+            rn = race_number(stem)
+            if rn is None or rn not in wanted:
+                continue
         race = load_race(directory, stem)
         if race is None:
             continue
@@ -155,9 +182,15 @@ def main() -> None:
             r["peak"] = max(r["peak"], r["cum"])
             r["dd"] = min(r["dd"], r["cum"] - r["peak"])
 
-    tag = "騎手・血統補正あり（後知恵注意）" if args.with_ratings else "騎手・血統補正なし"
+    if not args.with_ratings:
+        tag = "騎手・血統補正なし"
+    elif args.ratings:
+        tag = f"補正={Path(args.ratings).name}（別レース群由来・独立検証）"
+    else:
+        tag = "騎手・血統補正あり（後知恵注意）"
+    band = f"{args.races}R限定・" if args.races else ""
     print("=" * 78)
-    print(f" 買い目戦略のシミュレーション（{used}レース・1点100円・{tag}）")
+    print(f" 買い目戦略のシミュレーション（{band}{used}レース・1点100円・{tag}）")
     print("=" * 78)
     print(f"{'戦略':<26}{'的中率':>7}{'回収率':>8}{'収支':>11}{'最大連敗':>8}{'最大DD':>10}")
     for label, r in sorted(results.items(), key=lambda x: -x[1]["ret"] / max(x[1]["inv"], 1)):

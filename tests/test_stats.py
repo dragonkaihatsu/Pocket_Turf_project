@@ -33,7 +33,20 @@ def _sample_config(with_payouts: bool = True) -> dict:
 
 
 class TestStats(unittest.TestCase):
-    """サンプルレース（着順・配当が全て揃っている）で集計値を検証する。"""
+    """サンプルレース（着順・配当が全て揃っている）で集計値を検証する。
+
+    騎手・血統の実測補正(data/ratings.json)は収集レースが増えるたびに変わるため、
+    ここでは無効化する。検証したいのは集計ロジックであって補正値ではない。
+    """
+
+    def setUp(self):
+        import keiba.scoring as sc
+        self._orig_load_ratings = sc.load_ratings
+        sc.load_ratings = lambda *a, **k: {}
+
+    def tearDown(self):
+        import keiba.scoring as sc
+        sc.load_ratings = self._orig_load_ratings
 
     def _records(self, with_payouts: bool = True):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,

@@ -6,22 +6,45 @@
 その競馬場の騎手・種牡馬を評価する。
 
     python3 scripts/build_ratings.py [--dir data/collected] [--out data/ratings.json]
+
+--races でレース番号を絞れる。1-9Rだけで補正を作り10-12Rで検証すれば、
+騎手は全レースに騎乗するため、後知恵の入らない独立した検証ができる。
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 
 
-def build(directory: Path) -> dict:
+RACE_NO_RE = re.compile(r"_大井(\d{2})R_")
+
+
+def race_number(stem: str) -> int | None:
+    m = RACE_NO_RE.search(stem + "_")
+    return int(m.group(1)) if m else None
+
+
+def parse_races(spec: str) -> set[int]:
+    if "-" in spec:
+        lo, hi = spec.split("-")
+        return set(range(int(lo), int(hi) + 1))
+    return {int(x) for x in spec.split(",")}
+
+
+def build(directory: Path, wanted: set[int] | None = None) -> dict:
     jockey: dict[str, list[int]] = defaultdict(list)
     sire: dict[str, list[int]] = defaultdict(list)
     races = 0
 
     for res in sorted(directory.glob("*_結果.csv")):
+        if wanted is not None:
+            rn = race_number(res.name.replace("_結果.csv", ""))
+            if rn is None or rn not in wanted:
+                continue
         rows = [r for r in csv.DictReader(open(res, encoding="utf-8"))
                 if (r.get("着順") or "").isdigit()]
         if not rows:
@@ -60,9 +83,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected")
     ap.add_argument("--out", default="data/ratings.json")
+    ap.add_argument("--races", help="対象レース番号で絞る (例: 1-9)")
     args = ap.parse_args()
 
-    ratings = build(Path(args.dir))
+    wanted = parse_races(args.races) if args.races else None
+    ratings = build(Path(args.dir), wanted)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(ratings, ensure_ascii=False, indent=1), encoding="utf-8")
