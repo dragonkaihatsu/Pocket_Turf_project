@@ -25,7 +25,9 @@ from .course import format_report as format_course_report
 from .daily import build_from_config
 from .expectation import Expectation
 from .feedback import RaceResult, generate_feedback_report, load_payouts
-from .horsedb import RECORDS_PATH, collect_horses, horse_ids_from_cache, rebuild_from_cache
+from .horsedb import RECORDS_PATH, collect_horses, horse_ids_from_cache
+from .horsedb import load_records as load_horse_records
+from .horsedb import rebuild_from_cache
 from .marks import assign_marks
 from .models import load_history, load_horses
 from .pace import forecast_pace
@@ -34,10 +36,31 @@ from .scoring import score_race
 from .stats import aggregate, format_report, load_records
 
 
+def _load_horse_records(path: str | None = None) -> dict[str, list[dict]] | None:
+    """馬別戦績を 馬名→行 の形で読む。無ければ None（コース適性は中立になる）。"""
+    by_id = load_horse_records(path)
+    if not by_id:
+        return None
+    by_name: dict[str, list[dict]] = {}
+    for rows in by_id.values():
+        if rows and rows[0]["馬名"]:
+            by_name.setdefault(rows[0]["馬名"], []).extend(rows)
+    for rows in by_name.values():
+        rows.sort(key=lambda r: r["日付"])
+    return by_name
+
+
 def _build_common(args) -> tuple:
     horses = load_horses(args.entries)
     history = load_history(args.history) if args.history else None
-    scores = score_race(horses, history, kyori=args.kyori)
+    records = _load_horse_records(getattr(args, "records", None))
+    as_of = getattr(args, "race_date", None)
+    scores = score_race(horses, history, kyori=args.kyori,
+                        records=records, as_of=as_of)
+    if records is not None:
+        hit = sum(1 for h in horses if h.name in records)
+        print(f"馬別戦績: {hit}/{len(horses)}頭に実績データあり"
+              f"（未取得の馬はコース適性・距離適性が中立値になります）")
     marked = assign_marks(scores, baba=args.baba)
     return horses, history, scores, marked
 
@@ -170,6 +193,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--kyori", type=int, help="レース距離(m)。高齢馬補正の軽減判定に使用")
     common.add_argument("--baba", default="良", choices=["良", "稍重", "重", "不良"], help="当日馬場状態")
     common.add_argument("--output", required=True, help="出力HTMLパス")
+    common.add_argument("--records", help="馬別戦績CSV（既定 data/horse_records.csv）")
+    common.add_argument("--race-date", help="レース日 (YYYY-MM-DD)。指定するとその日より前の戦績だけを使う")
 
     p_predict = sub.add_parser("predict", parents=[common], help="スコアリング・買い目プランを出力")
     p_predict.set_defaults(func=cmd_predict)

@@ -1,0 +1,36 @@
+{
+ "title": "2026-09-04 大井",
+ "heading": "2026-09-04 大井",
+ "races": [
+  {
+   "race_no": "10R",
+   "name": "こうま座特別競走(C2)",
+   "grade": "",
+   "post_time": "19:40",
+   "surface": "ダ1800m(右)",
+   "kyori": 1800,
+   "baba": "良",
+   "entries": "data/2026-09-04_大井10R_こうま座特別競走(C2)_出走馬.csv"
+  },
+  {
+   "race_no": "11R",
+   "name": "デイリースポーツ賞競走(B3)",
+   "grade": "",
+   "post_time": "20:15",
+   "surface": "ダ1400m(右)",
+   "kyori": 1400,
+   "baba": "良",
+   "entries": "data/2026-09-04_大井11R_デイリースポーツ賞競走(B3)_出走馬.csv"
+  },
+  {
+   "race_no": "12R",
+   "name": "月見特別競走(C1四)",
+   "grade": "",
+   "post_time": "20:50",
+   "surface": "ダ1200m(右)",
+   "kyori": 1200,
+   "baba": "良",
+   "entries": "data/2026-09-04_大井12R_月見特別競走(C1四)_出走馬.csv"
+  }
+ ]
+}
