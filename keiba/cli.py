@@ -25,6 +25,7 @@ from .course import format_report as format_course_report
 from .daily import build_from_config
 from .expectation import Expectation
 from .feedback import RaceResult, generate_feedback_report, load_payouts
+from .horsedb import RECORDS_PATH, collect_horses, horse_ids_from_cache, rebuild_from_cache
 from .marks import assign_marks
 from .models import load_history, load_horses
 from .pace import forecast_pace
@@ -130,6 +131,20 @@ def cmd_collect(args) -> None:
     print(f"\n取得完了: {len(collected)}レース → {args.outdir}")
 
 
+def cmd_horses(args) -> None:
+    if args.rebuild:
+        rebuild_from_cache(Path(args.horse_cache), Path(args.out))
+        return
+    ids = horse_ids_from_cache(Path(args.cache_dir))
+    if not ids:
+        print(f"{args.cache_dir} に馬柱HTMLのキャッシュがありません"
+              "（先に collect を実行してください）")
+        return
+    print(f"馬柱キャッシュから {len(ids)}頭 の馬IDを取得しました")
+    collect_horses(ids, outpath=Path(args.out), cache_dir=Path(args.horse_cache),
+                   interval=args.interval, limit=args.limit)
+
+
 def cmd_course(args) -> None:
     corpus = load_corpus(args.dir, kyori=args.kyori)
     if not len(corpus):
@@ -185,6 +200,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_collect.add_argument("--force", action="store_true",
                            help="取得済みのレースも再取得する（既定はスキップ）")
     p_collect.set_defaults(func=cmd_collect)
+
+    p_horses = sub.add_parser("horses", help="馬ごとの全戦績をnetkeibaから取得")
+    p_horses.add_argument("--cache-dir", default="data/raw",
+                          help="馬IDを拾う馬柱HTMLのキャッシュ先")
+    p_horses.add_argument("--horse-cache", default="data/raw_horse",
+                          help="馬別成績HTMLのキャッシュ先")
+    p_horses.add_argument("--out", default=str(RECORDS_PATH), help="戦績CSVの出力先")
+    p_horses.add_argument("--interval", type=float, default=1.5, help="リクエスト間隔(秒)")
+    p_horses.add_argument("--limit", type=int, help="先頭N頭だけ取得（動作確認用）")
+    p_horses.add_argument("--rebuild", action="store_true",
+                          help="通信せずキャッシュ済みHTMLだけからCSVを作り直す")
+    p_horses.set_defaults(func=cmd_horses)
 
     p_course = sub.add_parser("course", help="収集した結果からコース傾向を集計")
     p_course.add_argument("--dir", default="data/collected", help="収集済みCSVのディレクトリ")

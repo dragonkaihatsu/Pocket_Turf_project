@@ -30,6 +30,7 @@ MAX_BASE = MAX_KISO + MAX_ZENSO + MAX_COURSE + MAX_KYORI + MAX_CHOKYO  # 85
 RATINGS_PATH = Path(__file__).resolve().parent.parent / "data" / "ratings.json"
 MIN_RIDES = 20      # 騎手補正を効かせる最低騎乗数
 MIN_PROGENY = 20    # 血統補正を効かせる最低産駒数
+MIN_SELF_STARTS = 3 # 馬自身の戦績を適性判断に使う最低出走数
 
 # 騎手・血統補正の重み。CLAUDE.md の方針では騎手・血統は馬自身の能力に
 # 「上乗せされる価値」であって、能力評価を覆すものではない。
@@ -153,7 +154,9 @@ def score_zenso_naiyou(horse: Horse) -> ScoreItem:
 
 
 def score_course_tekisei(
-    horse: Horse, history: list[HistoryRecord] | None
+    horse: Horse,
+    history: list[HistoryRecord] | None,
+    self_record: dict | None = None,
 ) -> tuple[ScoreItem, bool | None]:
     """コース適性（15点）: 同レースの過去10年データに当該馬の出走歴があれば
     その平均着順から算出。出走歴が無ければ手動評価カラムか中立値にフォールバック。
@@ -162,6 +165,24 @@ def score_course_tekisei(
     history が None（過去10年データ自体が未提供）の場合は判定不能として None を返し、
     「未経験と確認された」わけではないことを区別する（全馬一律ペナルティを避けるため）。
     """
+    if self_record:
+        st = self_record
+        n = st["着順あり"]
+        if n >= MIN_SELF_STARTS:
+            avg = st["平均着順"]
+            # 平均1着→満点、平均8着以下→下限
+            pts = _scale(avg, 8, 1, MAX_COURSE * 0.3, MAX_COURSE)
+            return ScoreItem(
+                "コース適性", round(pts, 2),
+                f"当地{n}走・平均着順{avg:.1f}着"
+                f"（{st['勝']}勝・複勝率{st['複'] / n:.0%}）",
+            ), True
+        if n > 0:
+            return ScoreItem("コース適性", MAX_COURSE * 0.55,
+                              f"当地{n}走のみ（{MIN_SELF_STARTS}走未満）→中立値"), True
+        no_run = "当地の出走歴なし" if st["出走"] == 0 else "当地は出走のみで着順なし"
+        return ScoreItem("コース適性", MAX_COURSE * 0.55, f"{no_run}→中立値"), False
+
     if history is None:
         return ScoreItem("コース適性", MAX_COURSE * 0.55, "過去10年データ未提供→中立値"), None
 
@@ -186,6 +207,7 @@ def score_kyori_tekisei(
     horse: Horse,
     kyori_hyoka_override: float | None,
     ratings: dict | None = None,
+    self_kyori: dict | None = None,
 ) -> ScoreItem:
     """距離・展開・脚質（15点）。
 
@@ -208,6 +230,15 @@ def score_kyori_tekisei(
         return ScoreItem("距離・展開・脚質", pts, "距離適性評価カラムによる手動評価")
 
     ratings = ratings if ratings is not None else load_ratings()
+
+    # 距離パート: 馬自身の当該距離での成績があれば使う
+    kyori_pts, kyori_note = half * 0.55, "距離別の戦績なし→中立"
+    if self_kyori and self_kyori["着順あり"] >= MIN_SELF_STARTS:
+        n, avg = self_kyori["着順あり"], self_kyori["平均着順"]
+        kyori_pts = _scale(avg, 8, 1, half * 0.3, half)
+        kyori_note = (f"当該距離{n}走・平均着順{avg:.1f}着"
+                      f"（{self_kyori['勝']}勝・複勝率{self_kyori['複'] / n:.0%}）")
+
     table = ratings.get("脚質", {})
     kyaku = horse.kyakushitsu.strip()
     rec = table.get(kyaku)
@@ -215,19 +246,17 @@ def score_kyori_tekisei(
     if not rec or rec.get("n", 0) < MIN_KYAKUSHITSU:
         reason = (f"脚質「{kyaku}」の実測が母数不足(n={rec['n']})" if rec
                   else ("脚質データなし" if not kyaku else f"脚質「{kyaku}」の実測値なし"))
-        return ScoreItem("距離・展開・脚質", MAX_KYORI * 0.55,
-                          f"{reason}→中立値（距離適性評価カラムで上書き可）")
+        return ScoreItem("距離・展開・脚質", round(kyori_pts + half * 0.55, 2),
+                          f"{kyori_note}／{reason}→脚質は中立")
 
     # 実測複勝率を、その場のいちばん低い脚質〜いちばん高い脚質で正規化する
     rates = [v["複勝率"] for v in table.values() if v.get("n", 0) >= MIN_KYAKUSHITSU]
     lo, hi = min(rates), max(rates)
     kyaku_pts = _scale(rec["複勝率"], lo, hi, half * 0.3, half) if hi > lo else half * 0.55
 
-    pts = half * 0.55 + kyaku_pts
     return ScoreItem(
-        "距離・展開・脚質", round(pts, 2),
-        f"脚質「{kyaku}」実測複勝率{rec['複勝率']:.1%}(n={rec['n']})"
-        f"／距離は評価データ未入力のため中立",
+        "距離・展開・脚質", round(kyori_pts + kyaku_pts, 2),
+        f"{kyori_note}／脚質「{kyaku}」実測複勝率{rec['複勝率']:.1%}(n={rec['n']})",
     )
 
 
@@ -435,15 +464,28 @@ def score_horse(
     history: list[HistoryRecord] | None,
     kyori: int | None,
     jockey_tiers: dict[int, tuple[str, ...]] | None = None,
+    records: dict[str, list[dict]] | None = None,
+    as_of=None,
+    venue: str = "大井",
 ) -> HorseScore:
-    course_item, has_experience = score_course_tekisei(horse, history)
+    self_course = self_kyori = None
+    if records is not None:
+        from .horsedb import records_before, summarize
+        # 後知恵を排除するため、レース日より前の戦績だけを見る
+        past = records_before(records.get(horse.name, []), as_of)
+        if past:
+            self_course = summarize(past, ba=venue)
+            if kyori:
+                self_kyori = summarize(past, kyori=kyori)
+
+    course_item, has_experience = score_course_tekisei(horse, history, self_course)
     ratings = load_ratings()
 
     base_items = [
         score_kiso_nouryoku(horse, field_horses),
         score_zenso_naiyou(horse),
         course_item,
-        score_kyori_tekisei(horse, None, ratings),
+        score_kyori_tekisei(horse, None, ratings, self_kyori),
         score_chokyo(horse),
     ]
     corrections = [
@@ -469,5 +511,15 @@ def score_race(
     history: list[HistoryRecord] | None,
     kyori: int | None = None,
     jockey_tiers: dict[int, tuple[str, ...]] | None = None,
+    records: dict[str, list[dict]] | None = None,
+    as_of=None,
+    venue: str = "大井",
 ) -> list[HorseScore]:
-    return [score_horse(h, horses, history, kyori, jockey_tiers) for h in horses]
+    """出走馬をまとめて採点する。
+
+    records に馬別戦績（馬名→行）を渡すと、コース適性・距離適性を
+    その馬自身の実績から算出する。as_of にレース日を渡すと、それ以前の
+    戦績だけを使う（過去レースを採点するときは必ず指定すること）。
+    """
+    return [score_horse(h, horses, history, kyori, jockey_tiers,
+                        records, as_of, venue) for h in horses]
