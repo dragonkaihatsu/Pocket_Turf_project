@@ -887,7 +887,18 @@ const vetStop = h => !!h && h.fatigue > VET_STOP;
    休養も売店のアイテムも押す理由が無くなる。 */
 const FRESH_FAT = 25;
 const FRESH_MUL = 3;
-const freshLegs = h => !!h && h.fatigue < FRESH_FAT;
+/* --- ハードモード ---
+   2周目（一度でも愛馬を引退させたあと）から選べる腕試し用の締め方。
+   賞金には触らない。蛇口を絞ると詰むだけで難しさにならないため、
+   締めるのは「甘え」＝季節アイテム・好調帯・相手の格の3つに限る。
+     lvl        相手のレベルを一律で底上げする（レジェンドカップにも乗る）
+     fresh      伸び3倍の帯を狭める。休ませる周期がそのぶん厳しくなる
+     seasonMax  季節限定アイテムは愛馬1頭につき合計この数まで（通常は四季で4つ）
+   ここを触るときは hardsel.js の勝率表で通常との差を確かめること。 */
+const HARD = { lvl:5, fresh:15, seasonMax:1 };
+const isHard   = () => !!(typeof G!=='undefined' && G && G.hard);
+const freshFat = () => isHard() ? HARD.fresh : FRESH_FAT;
+const freshLegs = h => !!h && h.fatigue < freshFat();
 /* --- アルバイト ---
    メダルが尽きたときの救済であり、G1を勝ち切ったあとの「やることがない週」の受け皿でもある。
    仕事ごとに消費する週数（w）が違うので、取り逃がすレースを見比べて選ぶことになる。
@@ -955,7 +966,10 @@ function seasonItemNow(){
   const it=SEASON_ITEMS.find(x=>x.ms.includes(m));
   return it ? Object.assign({}, SEASON_BASE, it) : null;
 }
-const gotSeason = (h,k) => !!(h && h.season && h.season[k]);
+const seasonCount = h => (h && h.season) ? Object.keys(h.season).length : 0;
+/* 通常は「同じ品を二度は買えない」だけ。ハードでは四季あわせて HARD.seasonMax 個まで。 */
+const gotSeason = (h,k) => !!(h && h.season &&
+  (h.season[k] || (isHard() && seasonCount(h) >= HARD.seasonMax)));
 /* 売店の品揃え＝常設3種＋その季節のもの */
 function shopList(){
   const l=ITEMS.slice(), s=seasonItemNow();
@@ -1019,13 +1033,14 @@ function ratingOf(h, race){
 
 /* ライバル生成：クラスに応じた地力 */
 /* 相手のレベル。race.lvl があればそれを使う（レジェンドカップだけが上限を使う） */
-const fieldLevel = race => race.lvl!=null ? race.lvl
-  : (race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g]);
+const fieldLevel = race => (race.lvl!=null ? race.lvl
+  : (race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g]))
+  + (isHard() ? HARD.lvl : 0);
 function makeField(g, race){
   const lvl = fieldLevel(race);
   const field=[], used=new Set([g.horse&&g.horse.name]);
   for(let i=0;i<7;i++){
-    const b = clamp(lvl + rint(-9,9), 22, 120);   // 天井はレジェンドカップのためだけに高い
+    const b = clamp(lvl + rint(-9,9), 22, 128);   // 天井はレジェンドカップ（ハードで113）のためだけに高い
     const r = newHorse({base:b});
     r.cond = rint(45,92);
     r.fatigue = rint(0,25);
@@ -2282,6 +2297,13 @@ function drawPodium(field, res, mePos, t){
    5. ゲーム状態
    ======================================================================= */
 const SAVE_KEY='pocketturf.v2';   // 月→週カレンダー化で旧セーブとは互換がない
+/* 一度でも愛馬を引退させたかどうか。セーブ本体とは別に持つので、
+   「はじめから」でデータを作り直してもハードモードの選択肢は残る。 */
+const CLEAR_KEY=SAVE_KEY+'.cleared';
+const hardUnlocked = () => {
+  if(G && G.careers && G.careers.length) return true;
+  try{ return localStorage.getItem(CLEAR_KEY)==='1'; }catch(e){ return false; }
+};
 let G = null;
 const app = {
   scene:'title',      // title|stable|training|race|podium
@@ -2291,7 +2313,7 @@ const app = {
 function blank(){
   return {
     medals:3000, year:3, week:1, horse:null, cands:null, sgFound:[],
-    log:[], history:[], careers:[], legacy:0, tab:'home'
+    log:[], history:[], careers:[], legacy:0, tab:'home', hard:false
   };
 }
 /* 書いたつもりで消えている環境があるので、必ず読み返して確かめる。
@@ -2539,9 +2561,24 @@ const V = {
         </div>
         <div style="width:100%">${statBars(h)}</div>
       </button>`).join('');
+    const mode = hardUnlocked() ? `
+      <div class="card tight" style="border-color:${G.hard?'#8d2a20':'var(--line)'}">
+        <p class="eyebrow">難易度</p>
+        <div class="row" style="gap:6px;margin-bottom:7px">
+          <button class="btn center" data-act="setmode" data-h="0" style="flex:1;min-height:40px;${
+            G.hard?'':'border-color:var(--gold);background:#231d0d;color:var(--gold)'}">ノーマル</button>
+          <button class="btn center" data-act="setmode" data-h="1" style="flex:1;min-height:40px;${
+            G.hard?'border-color:#c4483a;background:#3a1410;color:#ff9a86':''}">ハード</button>
+        </div>
+        <p class="muted" style="margin:0;font-size:11px">${G.hard?`
+          相手のレベルが一律<b class="hot">+${HARD.lvl}</b>。伸び${FRESH_MUL}倍の帯は疲労<b class="hot">${HARD.fresh}</b>未満まで狭まり、
+          季節限定アイテムは四季あわせて<b class="hot">1周に${HARD.seasonMax}つだけ</b>。賞金は変わらない。`:`
+          いつもの難易度。ハードは相手が強くなり、伸び${FRESH_MUL}倍の帯と季節限定アイテムが絞られる。`}</p>
+      </div>` : '';
     return `<p class="eyebrow">SELECT YOUR HORSE</p>
       <h2 class="head">3頭から愛馬を選ぶ</h2>
       <p class="muted" style="margin:-4px 0 9px">成長型と適性はあとから変えられない。${G.legacy?`<b class="gold">継承ボーナス +${G.legacy}</b>`:''}</p>
+      ${mode}
       <div class="list">${c}</div>`;
   },
   name(){
@@ -2585,7 +2622,8 @@ const V = {
     const nx=rs.length?null:nextRaceInfo();
     return `<div class="row between" style="margin-bottom:6px">
         <p class="eyebrow" style="margin:0">${G.year}歳 ${dateLabel(G.week)}（第${G.week}週）</p>
-        <span class="dot" style="font-size:11px;color:var(--ink-3)">${CLASS_NAME[h.cls]}・${h.wins}勝</span>
+        <span class="dot" style="font-size:11px;color:var(--ink-3)">${
+          isHard()?'<b style="color:#ff9a86">HARD</b>・':''}${CLASS_NAME[h.cls]}・${h.wins}勝</span>
       </div>
       <div class="card tight" style="margin-bottom:9px">
         <div class="row between" style="margin-bottom:6px">
@@ -2601,7 +2639,7 @@ const V = {
           <span>疲労が${VET_STOP}を超えている。休養か、売店のアイテムで抜くまで、調教も出走もできない。</span>
         </div>`:freshLegs(h)?`<div class="fresh">
           <b>脚が軽い（伸び${FRESH_MUL}倍）</b>
-          <span>疲労が${FRESH_FAT}を切っているあいだは、調教で上がる能力が${FRESH_MUL}倍になる。</span>
+          <span>疲労が${freshFat()}を切っているあいだは、調教で上がる能力が${FRESH_MUL}倍になる。</span>
         </div>`:''}
       </div>
       ${rs.length?`
@@ -2761,10 +2799,11 @@ const V = {
         </div>
         <p class="muted" style="margin:0 0 7px;font-size:11px">${it.d}${
           it.mode==='pick'?`<br><span class="gold">対象：${selName}</span>`:''}${
-          it.season?`<br><span class="gold">疲労が完全に抜けて絶好調になり、全能力が${it.up}上がる。愛馬1頭につき一度だけ。</span>`:''}</p>
+          it.season?`<br><span class="gold">疲労が完全に抜けて絶好調になり、全能力が${it.up}上がる。${
+            isHard()?`この愛馬が受け取れる季節限定は<b>1周に${HARD.seasonMax}つだけ</b>。`:'愛馬1頭につき一度だけ。'}</span>`:''}</p>
         <button class="btn ${can?'primary':'ghost'} center wide" data-act="buy" data-i="${i}"
           style="min-height:38px" ${can?'':'disabled'}>${
-          done?'この馬にはもう与えた':can?'使う':'メダルが足りない'}</button>
+          done?(isHard()&&!(h.season&&h.season[it.k])?'この周ではもう受け取った':'この馬にはもう与えた'):can?'使う':'メダルが足りない'}</button>
       </div>`;
     }).join('');
     return `<div class="row between" style="margin-bottom:6px">
@@ -3127,7 +3166,7 @@ const V = {
   /* ---- 引退 ---- */
   end(d){
     return `<div class="center" style="padding:6px 2px">
-        <p class="eyebrow">RETIREMENT</p>
+        <p class="eyebrow">RETIREMENT${isHard()?' / <b style="color:#ff9a86">HARD</b>':''}</p>
         <h2 class="big" style="margin:4px 0">${esc(d.name)}</h2>
         <div class="rank gold" style="font-size:52px">${d.rank}</div>
         <p class="muted" style="margin:2px 0 12px">${d.comment}</p>
@@ -3294,7 +3333,11 @@ function doTrain(i){
 function buyItem(i){
   const it=shopList()[i], h=G.horse;
   if(!h||!it) return;
-  if(it.season && gotSeason(h,it.k)){ SFX.err(); toast('この馬にはもう与えた'); return; }
+  if(it.season && gotSeason(h,it.k)){
+    SFX.err();
+    toast(isHard()&&!(h.season&&h.season[it.k]) ? `季節限定は1周に${HARD.seasonMax}つだけ` : 'この馬にはもう与えた');
+    return;
+  }
   if(G.medals<it.p){ SFX.err(); toast('メダルが足りない'); return; }
   if(it.season){ h.season=h.season||{}; h.season[it.k]=true; }
   const lim=capOf(h,G.year)+ITEM_OVER;
@@ -3491,7 +3534,8 @@ function retire(){
     D:'結果は出なかった。次の馬に託そう。'
   })[rank];
   const legacy = {S:12,A:8,B:5,C:3,D:1}[rank];
-  G.careers.push({name:h.name,races:h.races,wins:h.wins,g1:h.g1,earned:h.earned,rank});
+  G.careers.push({name:h.name,races:h.races,wins:h.wins,g1:h.g1,earned:h.earned,rank,hard:!!G.hard});
+  try{ localStorage.setItem(CLEAR_KEY,'1'); }catch(e){}   // 使えない環境でも進行は止めない
   G.legacy = legacy;
   app.scene='podium'; app.podRes=[{h}]; app.podPos= rank==='S'?1:4; app.podT=0;
   SFX.win();
@@ -3621,6 +3665,7 @@ const ACT = {
   afterrace(){ app.scene='stable'; app.sim=null; app.spectate=false; app.sgTheme=null; app.omen=false;
     SFX.tap(); advanceWeek(); },
   nextgen(){ app.scene='stable'; SFX.tap(); show('pick'); save(); },
+  setmode(d){ G.hard = d.h==='1'; SFX.tap(); save(); show('pick'); },
   reset(){ if(!confirm('セーブデータを消して最初からやり直す？')) return; wipe(); G=blank(); app.scene='title'; tmap.hidden=true; show('title'); }
 };
 panel.addEventListener('click',e=>{
@@ -3868,9 +3913,10 @@ window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, di
                       seasonOf, SG_NEED_G1, GRADE_PRIZE, prizeOf, fieldLevel,
                       JOCKEYS, JOCKEY_INT, INTL_COURSES, HYO, hyoOf, makeOdds,
                       jockeyOf, jSkill, jRank, jockeyChoices, PRIZE_MUL,
-                      SEASON_ITEMS, seasonItemNow, shopList, gotSeason,
+                      SEASON_ITEMS, seasonItemNow, shopList,
                       VET_STOP, vetStop, opClosed,
-                      FRESH_FAT, FRESH_MUL, freshLegs, jobRoll, jobEV, jobRate, jobWin, jobLose, WORK_WEEKS,
+                      FRESH_FAT, FRESH_MUL, freshLegs, freshFat, jobRoll, jobEV, jobRate, jobWin, jobLose, WORK_WEEKS,
+                      HARD, isHard, hardUnlocked, gotSeason, seasonCount, CLEAR_KEY,
                       get state(){ return G; } };
 
 try{ boot(); }
