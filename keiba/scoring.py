@@ -16,6 +16,7 @@ import statistics
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import profile
 from .models import Horse, HistoryRecord
 
 # ---- 配点上限（CLAUDE.md の配点表） ----
@@ -26,8 +27,8 @@ MAX_KYORI = 15
 MAX_CHOKYO = 10
 MAX_BASE = MAX_KISO + MAX_ZENSO + MAX_COURSE + MAX_KYORI + MAX_CHOKYO  # 85
 
-# 実測成績（scripts/build_ratings.py が作る）。あれば内蔵リストより優先する
-RATINGS_PATH = Path(__file__).resolve().parent.parent / "data" / "ratings.json"
+# 実測成績（scripts/build_ratings.py が作る）。あれば内蔵リストより優先する。
+# どのプロファイル（地方/中央）の値を読むかは keiba.profile が決める
 MIN_RIDES = 20      # 騎手補正を効かせる最低騎乗数
 MIN_PROGENY = 20    # 血統補正を効かせる最低産駒数
 MIN_SELF_STARTS = 3 # 馬自身の戦績を適性判断に使う最低出走数
@@ -44,7 +45,7 @@ KISHU_KETTO_WEIGHT = 0.5
 
 def load_ratings(path: Path | str | None = None) -> dict:
     """実測の騎手・種牡馬成績を読み込む。無ければ空を返す。"""
-    p = Path(path) if path else RATINGS_PATH
+    p = Path(path) if path else profile.active().path("ratings.json")
     if not p.exists():
         return {}
     try:

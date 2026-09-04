@@ -20,7 +20,9 @@ from collections import defaultdict
 from pathlib import Path
 
 
-RACE_NO_RE = re.compile(r"_大井(\d{2})R_")
+# ファイル名は「日付_場名+レース番号R_レース名_種別.csv」。競馬場名は
+# 大井にも東京にも東京競馬場以外にもなるので、場名を決め打ちしない
+RACE_NO_RE = re.compile(r"_\D+?(\d{2})R_")
 
 
 def race_number(stem: str) -> int | None:

@@ -17,12 +17,12 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from pathlib import Path
 
-BOX_STATS_PATH = Path(__file__).resolve().parent.parent / "data" / "box_stats.json"
+from . import profile
 WIDTHS = (3, 4, 5, 6)
 
 
 def load_box_stats(path: Path | str | None = None) -> dict:
-    p = Path(path) if path else BOX_STATS_PATH
+    p = Path(path) if path else profile.active().path("box_stats.json")
     if not p.exists():
         return {}
     try:

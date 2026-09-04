@@ -24,10 +24,11 @@ from .collect import (JRA_VENUE_CODES, VENUE_CODES, collect_day,
                       collect_jra_day, collect_jra_month, collect_month)
 from .course import analyze, load_corpus
 from .course import format_report as format_course_report
+from . import profile
 from .daily import build_from_config
 from .expectation import Expectation
 from .feedback import RaceResult, generate_feedback_report, load_payouts
-from .horsedb import RECORDS_PATH, collect_horses, horse_ids_from_cache
+from .horsedb import collect_horses, horse_ids_from_cache
 from .horsedb import load_records as load_horse_records
 from .horsedb import rebuild_from_cache
 from .marks import assign_marks
@@ -201,7 +202,8 @@ def cmd_collect(args) -> None:
 
 def cmd_horses(args) -> None:
     if args.rebuild:
-        rebuild_from_cache(Path(args.horse_cache), Path(args.out))
+        out = Path(args.out) if args.out else profile.active().path("horse_records.csv")
+        rebuild_from_cache(Path(args.horse_cache), out)
         return
     ids = horse_ids_from_cache(Path(args.cache_dir))
     if not ids:
@@ -209,7 +211,8 @@ def cmd_horses(args) -> None:
               "（先に collect を実行してください）")
         return
     print(f"馬柱キャッシュから {len(ids)}頭 の馬IDを取得しました")
-    collect_horses(ids, outpath=Path(args.out), cache_dir=Path(args.horse_cache),
+    out = Path(args.out) if args.out else profile.active().path("horse_records.csv")
+    collect_horses(ids, outpath=out, cache_dir=Path(args.horse_cache),
                    interval=args.interval, limit=args.limit)
 
 
@@ -229,6 +232,9 @@ def cmd_course(args) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="競馬予想システム（100点スコアリング）")
+    p.add_argument("--profile", choices=[profile.NAR, profile.JRA],
+                   help="使う実測データ。省略時は競馬場名から自動判定し、"
+                        "判定できなければ地方(nar)")
     sub = p.add_subparsers(dest="command", required=True)
 
     common = argparse.ArgumentParser(add_help=False)
@@ -278,7 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
                           help="馬IDを拾う馬柱HTMLのキャッシュ先")
     p_horses.add_argument("--horse-cache", default="data/raw_horse",
                           help="馬別成績HTMLのキャッシュ先")
-    p_horses.add_argument("--out", default=str(RECORDS_PATH), help="戦績CSVの出力先")
+    p_horses.add_argument("--out", help="戦績CSVの出力先（既定はプロファイルの horse_records.csv）")
     p_horses.add_argument("--interval", type=float, default=1.5, help="リクエスト間隔(秒)")
     p_horses.add_argument("--limit", type=int, help="先頭N頭だけ取得（動作確認用）")
     p_horses.add_argument("--rebuild", action="store_true",
@@ -294,9 +300,23 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def resolve_profile(args) -> None:
+    """使うプロファイルを決めて有効化する。
+
+    明示指定 > 競馬場名からの自動判定 > 既定(地方) の順。中央のレースを
+    地方の対応表で採点する取り違えを防ぐため、必ずここを通す。
+    """
+    if getattr(args, "profile", None):
+        profile.use(args.profile)
+    elif venue := getattr(args, "venue", None):
+        profile.use_for_venue(venue)
+    print(profile.active().describe())
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
+    resolve_profile(args)
     args.func(args)
 
 

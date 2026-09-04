@@ -22,11 +22,21 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from itertools import combinations
 
+from . import profile
 from .marks import MarkedHorse
 
 # 荒れやすさの境界（1番人気の単勝オッズ）
+# 買い目の型を切り替える1番人気オッズの閾値。既定は地方（大井）の実測値だが、
+# 中央は1番人気の複勝率が一段低い（1倍台86%/2倍台68%/3倍台52%）ため、
+# プロファイルの thresholds.json で上書きできるようにしてある
 TEPPAN_MAX_ODDS = 2.0   # これ未満なら鉄板
 HARAN_MIN_ODDS = 3.0    # これ以上なら波乱
+
+
+def _thresholds() -> tuple[float, float]:
+    t = profile.active().thresholds
+    return (float(t.get("鉄板_上限オッズ", TEPPAN_MAX_ODDS)),
+            float(t.get("波乱_下限オッズ", HARAN_MIN_ODDS)))
 
 TEPPAN = "鉄板"
 HYOJUN = "標準"
@@ -81,9 +91,10 @@ def select_strategy(favorite_odds: float | None) -> str:
     """1番人気の単勝オッズから買い目の型を選ぶ。オッズ不明なら標準。"""
     if favorite_odds is None:
         return HYOJUN
-    if favorite_odds < TEPPAN_MAX_ODDS:
+    teppan_max, haran_min = _thresholds()
+    if favorite_odds < teppan_max:
         return TEPPAN
-    if favorite_odds >= HARAN_MIN_ODDS:
+    if favorite_odds >= haran_min:
         return HARAN
     return HYOJUN
 

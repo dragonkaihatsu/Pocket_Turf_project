@@ -23,7 +23,7 @@ from datetime import date
 from pathlib import Path
 
 RESULT_URL = "https://db.netkeiba.com/horse/result/{horse_id}/"
-RECORDS_PATH = Path(__file__).resolve().parent.parent / "data" / "horse_records.csv"
+from . import profile
 
 FIELDS = ["馬ID", "馬名", "日付", "場", "R", "レース名", "頭数", "枠番", "馬番",
           "オッズ", "人気", "着順", "騎手", "斤量", "馬場種別", "距離", "馬場"]
@@ -105,7 +105,7 @@ def parse_horse_results(html: str, horse_id: str, name: str = "") -> list[dict]:
 
 def load_records(path: Path | str | None = None) -> dict[str, list[dict]]:
     """馬ID → 戦績（日付昇順）を読み込む。"""
-    p = Path(path) if path else RECORDS_PATH
+    p = Path(path) if path else profile.active().path("horse_records.csv")
     if not p.exists():
         return {}
     by_horse: dict[str, list[dict]] = {}

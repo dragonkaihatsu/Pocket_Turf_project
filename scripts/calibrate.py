@@ -33,7 +33,9 @@ from keiba.models import load_horses
 from keiba.scoring import score_race
 
 FIELD_BUCKETS = [("〜9頭", 0, 9), ("10-12頭", 10, 12), ("13頭〜", 13, 99)]
-RACE_NO_RE = re.compile(r"_大井(\d{2})R_")
+# ファイル名は「日付_場名+レース番号R_レース名_種別.csv」。競馬場名は
+# 大井にも東京にも東京競馬場以外にもなるので、場名を決め打ちしない
+RACE_NO_RE = re.compile(r"_\D+?(\d{2})R_")
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
 
 
@@ -191,7 +193,9 @@ def main() -> None:
         print("対象レースが見つかりませんでした")
         return
 
-    target = f"大井{args.races}R" if args.races else "大井全レース"
+    # 対象の呼び名は収集ディレクトリから決める（大井決め打ちにしない）
+    where = "中央" if "jra" in args.dir else "大井"
+    target = f"{where}{args.races}R" if args.races else f"{where}全レース"
     payload = {
         "生成日": date.today().isoformat(),
         "対象": target,

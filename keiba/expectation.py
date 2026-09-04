@@ -12,7 +12,7 @@ import json
 import math
 from pathlib import Path
 
-CALIBRATION_PATH = Path(__file__).resolve().parent.parent / "data" / "calibration.json"
+from . import profile
 
 # この母数を下回る区分は数字を出さない（率が偶然に振られるため）
 MIN_SAMPLE = 30
@@ -38,7 +38,7 @@ def rank_key(rank: int) -> str:
 
 
 def load_calibration(path: Path | str | None = None) -> dict:
-    p = Path(path) if path else CALIBRATION_PATH
+    p = Path(path) if path else profile.active().path("calibration.json")
     if not p.exists():
         return {}
     try:

@@ -25,7 +25,9 @@ from keiba.models import load_horses
 from keiba.scoring import score_race
 
 STAKE = 100
-RACE_NO_RE = re.compile(r"_大井(\d{2})R_")
+# ファイル名は「日付_場名+レース番号R_レース名_種別.csv」。競馬場名は
+# 大井にも東京にも東京競馬場以外にもなるので、場名を決め打ちしない
+RACE_NO_RE = re.compile(r"_\D+?(\d{2})R_")
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
 
 
