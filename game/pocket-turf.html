@@ -756,7 +756,11 @@ const courseLine = r => `${r.c||'東京'} 直線${courseOf(r).straight}m ${cours
    並び順をそのまま踏襲し、絶対額は経済に収まる比率に圧縮してある。
    有馬記念・ジャパンカップ・宝塚記念はさらに race.lvl で相手のレベルも底上げし、
    格式の高さを賞金と難易度の両方で表す（fieldLevel）。 */
-const GRADE_PRIZE = {jo:0, op:5200, G3:8600, G2:5000, G1:7000, SG:25000};
+/* 格が上がるほど賞金も上がる、という並びを崩さないこと。
+   初版から G3:8600 > G1:7000、op:5200 > G2:5000 と逆転していて、
+   格の低いレースを回すほうが儲かる状態だった（ダートの重賞を増やすと
+   そのまま経済が壊れる）。実際のJRAの比（G3はG1の3〜4割）に寄せて直した。 */
+const GRADE_PRIZE = {jo:0, op:2200, G3:3500, G2:5000, G1:7000, SG:25000};
 const COND_PRIZE  = [900,1600,2400,3400];
 /* 1年＝50週。w がそのレースの開催週（1〜50）。 */
 const WEEKS_PER_YEAR = 50;
@@ -778,6 +782,24 @@ const RACES = [
   {n:'ラジオNIKKEI賞',  w:27, d:1800, s:'芝', g:'G3', cls:1, age:[3], c:'福島'},
   {n:'セントライト記念',w:37, d:2200, s:'芝', g:'G2', cls:1, age:[3], c:'中山'},
   {n:'菊花賞',          w:42, d:3000, s:'芝', g:'G1', cls:1, age:[3], c:'京都', prize:8500},
+  /* --- 裏開催のダート重賞（オリジナル） ---
+     芝の番組と同じ週に組んであるので、どちらに出るかを選ぶことになる。
+     ダート適性の高い馬に、芝の主流路線とは別の道を用意するための一群。
+     12月は3週しかないので、一発逆転ファイナルレースは年の最終週（第50週）
+     ＝有馬記念と同じ週に置いてある。 */
+  {n:'あけおめダート杯',      w:2,  d:1800, s:'ダート', g:'G3', cls:4, age:[4,5],   c:'中山'},
+  {n:'嫉妬の炎特別',          w:6,  d:1200, s:'ダート', g:'G3', cls:4, age:[4,5],   c:'小倉'},
+  {n:'牛乳飲もう杯',          w:11, d:1600, s:'ダート', g:'G3', cls:4, age:[4,5],   c:'中京'},
+  {n:'もういい、俺が走る記念', w:16, d:1800, s:'ダート', g:'G3', cls:4, age:[4,5],   c:'福島'},
+  {n:'こどもの日特別',        w:18, d:1200, s:'ダート', g:'G3', cls:4, age:[4,5],   c:'阪神'},
+  {n:'ウルトラソウル杯',      w:23, d:1600, s:'ダート', g:'G3', cls:4, age:[4,5],   c:'函館'},
+  {n:'ポケットダートダービー', w:30, d:2000, s:'ダート', g:'G1', cls:1, age:[3],     c:'福島'},
+  {n:'夏はビールでしょ杯',    w:32, d:2000, s:'ダート', g:'G3', cls:4, age:[4,5],   c:'札幌'},
+  {n:'ターフポケット誕生日記念',w:35, d:2400, s:'ダート', g:'G1', cls:4, age:[3,4,5], c:'阪神'},
+  {n:'銀河記念ダート',        w:37, d:1600, s:'ダート', g:'G3', cls:4, age:[3,4,5], c:'中山'},
+  {n:'ターフ新聞杯',          w:42, d:1400, s:'ダート', g:'G3', cls:4, age:[3,4,5], c:'東京'},
+  {n:'テレビポケット賞',      w:46, d:2000, s:'ダート', g:'G2', cls:4, age:[3,4,5], c:'阪神'},
+  {n:'一発逆転ファイナルレース',w:50, d:1000, s:'ダート', g:'G1', cls:4, age:[3,4,5], c:'新潟'},
   // 古馬・オープン
   {n:'日経新春杯',      w:3,  d:2400, s:'芝', g:'G2', cls:4, age:[4,5], c:'京都'},
   {n:'中山記念',        w:6,  d:1800, s:'芝', g:'G2', cls:4, age:[4,5], c:'中山'},
@@ -4446,7 +4468,7 @@ window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, di
                       HARD, isHard, hardUnlocked, gotSeason, seasonCount, CLEAR_KEY,
                       TRAIN, PACE, SPURT_ZONE, LENGTH_M, MAX_LEAD, RACE_SPEED,
                       CAP_CURVE, capOf, AGE_LVL, ageLvl, TR_STEP, TR_MUL, trLv, trCount, trNext,
-                      OMEN_AT, OMEN_RATE, COURSE_OMEN, COURSES, COURSE_LIST,
+                      OMEN_AT, OMEN_RATE, COURSE_OMEN, COURSES, COURSE_LIST, dateLabel, ymOf, MONTH_W,
                       SP_STEP, SP_COST, SP_UP, SP_FAT, spReady, spNext, spEarned,
                       get state(){ return G; }, get app(){ return app; } };
 
