@@ -2732,7 +2732,7 @@ const V = {
         </div>
         ${vetStop(h)?`<div class="vet">
           <b>ドクターストップ</b>
-          <span>疲労が${VET_STOP}を超えている。休養か、売店のアイテムで抜くまで、調教も出走もできない。</span>
+          <span>疲労度が${VET_STOP}を超えた。疲労が溜まっていて、このままではレースに参加できない。ゆっくり休もう。</span>
         </div>`:freshLegs(h)?`<div class="fresh">
           <b>脚が軽い（伸び${FRESH_MUL}倍）</b>
           <span>疲労が${freshFat()}を切っているあいだは、調教で上がる能力が${FRESH_MUL}倍になる。</span>
