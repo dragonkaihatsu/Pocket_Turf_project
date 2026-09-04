@@ -9,6 +9,7 @@ import html
 from datetime import date
 
 from .betting import BettingPlan, Ticket
+from .boxes import build_options
 from .expectation import Expectation
 from .marks import MarkedHorse
 from .pace import PaceForecast
@@ -108,7 +109,7 @@ def _card(score: HorseScore, marked: list[MarkedHorse]) -> str:
 
 def _score_table(scores: list[HorseScore], marked: list[MarkedHorse],
                  exp: Expectation) -> str:
-    header = ("<tr><th>印</th><th>馬番</th><th>馬名</th><th>基礎能力</th><th>前走内容</th>"
+    header = ("<tr><th>順位</th><th>印</th><th>馬番</th><th>馬名</th><th>基礎能力</th><th>前走内容</th>"
               "<th>コース適性</th><th>距離適性</th><th>調教</th><th>小計85</th>"
               "<th>補正計</th><th>良馬場</th><th>重馬場</th>"
               "<th>1着期待度</th><th>着内期待度</th></tr>")
@@ -117,7 +118,8 @@ def _score_table(scores: list[HorseScore], marked: list[MarkedHorse],
         cells = [f"<td>{i.points:.1f}</td>" for i in s.base_items]
         win_pct, place_pct = exp.format(rank)
         rows.append(
-            f"<tr><td>{_mark_of(s.horse.umaban, marked)}</td><td>{s.horse.umaban}</td>"
+            f"<tr><td>{rank}</td><td>{_mark_of(s.horse.umaban, marked) or '—'}</td>"
+            f"<td>{s.horse.umaban}</td>"
             f"<td style='text-align:left'>{html.escape(s.horse.name)}</td>{''.join(cells)}"
             f"<td><b>{s.base_subtotal:.1f}</b></td>"
             f"<td class='{_cls(s.correction_subtotal)}'>{_fmt(s.correction_subtotal)}</td>"
@@ -172,6 +174,35 @@ def _betting_section(plan: BettingPlan) -> str:
     return "".join(parts)
 
 
+def _box_options_section(marked: list[MarkedHorse], plan: BettingPlan) -> str:
+    """点数別の買い目候補。広げるかどうかは買う人が決めるため、実測値を併記する。"""
+    order = [m.score.horse.umaban for m in marked]
+    rec = ("ワイド", 3) if plan.wide else ("馬連", 4)
+    options = build_options(order, favorite_odds=plan.favorite_odds, recommended=rec)
+    if not options:
+        return ""
+    rows = []
+    for o in options:
+        st = o.stats
+        nums = "-".join(str(u) for u in o.umaban)
+        cells = (f"<td>{o.stats['的中率']:.0%}</td><td>{st['回収率']:.0%}</td>"
+                 f"<td>{st['区間下']:.0%}〜{st['区間上']:.0%}</td>"
+                 f"<td>{st['黒字確率']:.0%}</td>" if st
+                 else "<td>—</td><td>—</td><td>—</td><td>—</td>")
+        mark = "★" if o.recommended else ""
+        style = " style='background:var(--card2)'" if o.recommended else ""
+        rows.append(f"<tr{style}><td style='text-align:left'>{mark}{html.escape(o.kind)}"
+                    f" 上位{o.width}頭</td><td>{o.points}点</td>"
+                    f"<td style='text-align:left'>{nums}</td>{cells}</tr>")
+    return (
+        "<table class='wide'><tr><th>買い方</th><th>点数</th><th>馬番</th>"
+        "<th>的中率</th><th>回収率</th><th>90%区間</th><th>黒字確率</th></tr>"
+        + "".join(rows) + "</table>"
+        "<div class='note'>★がシステムの推奨。数字は大井9-12Rの実測（同じ1番人気オッズ帯）。"
+        "頭数を増やすと的中率は上がるが回収率は下がる。どこまで広げるかは買う人が決める。</div>"
+    )
+
+
 def generate_report(
     race_name: str,
     scores: list[HorseScore],
@@ -216,6 +247,9 @@ def generate_report(
 
 <h2>4. 買い目プラン</h2>
 {_betting_section(plan)}
+
+<h2>5. 点数別の買い目候補（参考）</h2>
+{_box_options_section(marked, plan)}
 
 <script>{_SCRIPT}</script>
 </body>

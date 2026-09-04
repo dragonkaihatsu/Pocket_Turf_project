@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 
 from .betting import make_betting_plan
+from .boxes import build_options
 from .collect import (JRA_VENUE_CODES, VENUE_CODES, collect_day,
                       collect_jra_day, collect_jra_month, collect_month)
 from .course import analyze, load_corpus
@@ -85,7 +86,28 @@ def cmd_predict(args) -> None:
         print(f"{m.mark} {m.score.horse.umaban:>2} {m.score.horse.name} "
               f"(良{m.score.total_yoi:.1f} / 重{m.score.total_omoi:.1f}) "
               f"1着{win_pct} / 着内{place_pct}")
+
+    # 印が付かなかった馬も順位つきで出す。買い目に入れるかは買う人が決める
+    marked_umaban = {m.score.horse.umaban for m in marked}
+    rest = [s for s in sorted(scores, key=lambda s: s.total_yoi, reverse=True)
+            if s.horse.umaban not in marked_umaban]
+    if rest:
+        print("\n--- 参考（印なし・スコア順） ---")
+        for rank, sc_ in enumerate(rest, start=len(marked) + 1):
+            win_pct, place_pct = exp.format(rank)
+            print(f"{rank:>2}位 {sc_.horse.umaban:>2} {sc_.horse.name} "
+                  f"(良{sc_.total_yoi:.1f}) 1着{win_pct} / 着内{place_pct}")
+
     print(f"\n{exp.source_note}")
+
+    order = [m.score.horse.umaban for m in marked]
+    fav_odds = plan.favorite_odds
+    rec = ("ワイド", 3) if plan.wide else ("馬連", 4)
+    print("\n--- 点数別の買い目候補（実測つき。広げるかは買う人の判断） ---")
+    for o in build_options(order, favorite_odds=fav_odds, recommended=rec):
+        head = "★推奨" if o.recommended else "    "
+        print(f"{head} {o.label:<22} {'-'.join(str(u) for u in o.umaban)}")
+        print(f"       {o.stat_text()}")
 
 
 def cmd_feedback(args) -> None:
