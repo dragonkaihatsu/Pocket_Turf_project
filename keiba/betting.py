@@ -32,7 +32,7 @@ TEPPAN = "鉄板"
 HYOJUN = "標準"
 HARAN = "波乱"
 
-MAX_POINTS = {TEPPAN: 3, HYOJUN: 10, HARAN: 12}
+MAX_POINTS = {TEPPAN: 3, HYOJUN: 10, HARAN: 6}
 
 
 @dataclass
@@ -125,20 +125,18 @@ def make_betting_plan(
         return BettingPlan(TEPPAN, [], wide, [], note, favorite_odds)
 
     if strategy == HARAN:
-        # 1番人気が信頼できない。2・3番人気を軸に馬連フォーメーション
-        axis = _by_ninki(marked, (2, 3))
-        axis_note = "2・3番人気を軸"
-        if len(axis) < 2:
-            axis = marked[1:3]  # 人気データが無ければスコア2・3位で代用
-            axis_note = "スコア2・3位を軸（人気データなし）"
-
-        partners = [m for m in marked if m not in axis][:n_partners]
-        umaren = [_ticket(a, p) for a in axis for p in partners]
+        # 荒れる帯こそ、軸を決め打たずスコア上位4頭を総当たりにする。
+        # 大井9-12R 43レースの実測（ブートストラップ1万回）:
+        #   馬連 上位4頭BOX(6点) 回収率300% / 90%区間 66-671% / 100%超84% / 最大DD -4,690円
+        #   旧・波乱型(12点)     回収率 60% / 90%区間 36- 86% / 100%超 1% / 最大DD -22,200円
+        # 旧型は軸を2・3番人気に固定するため、1番人気と4番人気で決まると買えない。
+        # 高配当は外れ値ではなく荒れる帯の本体なので、除かずに評価してこの結論。
+        box = marked[:4]
+        umaren = [_ticket(a, b) for a, b in combinations(box, 2)]
         note = (
-            f"{odds_text} → 波乱型。3倍台以上の1番人気は実測で複勝率50%まで落ち、"
-            f"馬連配当の中央値は約4倍に跳ねる（16レース）。"
-            f"1番人気を軸から外し、{axis_note}に相手{len(partners)}頭へ流す"
-            f"（馬連{len(umaren)}点）"
+            f"{odds_text} → 波乱型。3倍台以上の1番人気は実測で複勝率50%まで落ちるが、"
+            f"軸を決め打つと取り逃す。スコア上位4頭のBOXで受ける"
+            f"（馬連{len(umaren)}点・実測回収率300%／90%区間66-671%／43レース）"
         )
         return BettingPlan(HARAN, [], [], umaren, note, favorite_odds)
 

@@ -73,24 +73,39 @@ class TestPlanShapes(unittest.TestCase):
         for t in plan.umaren:
             self.assertIn(axis, [m.score.horse.umaban for m in t.horses])
 
-    def test_haran_is_12_points_from_2nd_and_3rd_favorites(self):
-        # 2番人気=13番, 3番人気=3番 を軸にする
+    def test_haran_is_a_6_point_box_of_the_top_four(self):
+        """波乱型はスコア上位4頭のBOX。
+
+        軸を2・3番人気に固定していた旧型は、1番人気と4番人気で決まると
+        買えなかった。実測（大井9-12R 43レース）でも旧型は回収率60%
+        （90%区間36-86%）で、上位4頭BOXの300%（同66-671%）に大きく劣る。
+        """
         marked = _marked({2: (1, 3.4), 13: (2, 4.1), 3: (3, 5.2)})
         plan = make_betting_plan(marked, favorite_odds=3.4)
         self.assertEqual(plan.strategy, HARAN)
-        self.assertEqual(plan.total_points, 12)
-        axes = {13, 3}
+        self.assertEqual(plan.total_points, 6)
+
+        top4 = {m.score.horse.umaban for m in marked[:4]}
         for t in plan.umaren:
             umabans = {m.score.horse.umaban for m in t.horses}
-            self.assertTrue(umabans & axes, f"{t.label} に軸が含まれていない")
+            self.assertTrue(umabans <= top4, f"{t.label} が上位4頭の外にある")
+        # 4頭の総当たりなので組み合わせは重複なく6通り
+        combos = {frozenset(m.score.horse.umaban for m in t.horses) for t in plan.umaren}
+        self.assertEqual(len(combos), 6)
 
-    def test_haran_excludes_the_unreliable_favorite_from_axis(self):
+    def test_haran_keeps_the_favorite_when_the_score_rates_it_highly(self):
+        """1番人気でもスコア上位なら買い目に含める。
+
+        ◎が1番人気と一致するとき、その馬の勝率は55%（n=109）ある。
+        旧型はこれを軸から外していたため、9/3の11Rで1着馬を取り逃した。
+        """
         marked = _marked({2: (1, 3.4), 13: (2, 4.1), 3: (3, 5.2)})
+        fav = 2
         plan = make_betting_plan(marked, favorite_odds=3.4)
-        # 1番人気(2番)は軸ではないが、相手としては買う
-        axis_only = [t for t in plan.umaren
-                     if {m.score.horse.umaban for m in t.horses} == {2, 13}]
-        self.assertTrue(axis_only, "1番人気は相手には含まれるべき")
+        if fav in {m.score.horse.umaban for m in marked[:4]}:
+            covered = [t for t in plan.umaren
+                       if fav in {m.score.horse.umaban for m in t.horses}]
+            self.assertTrue(covered, "スコア上位の1番人気が買い目に入っていない")
 
     def test_explicit_strategy_overrides_odds(self):
         plan = make_betting_plan(_marked(), favorite_odds=1.2, strategy=HARAN)
