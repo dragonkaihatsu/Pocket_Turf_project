@@ -815,6 +815,18 @@ const opClosed = h => !!h && (((h.g1w||0) >= SG_NEED_G1) || ((h.sgRun||0) > 0));
    出走条件は全レース共通で「G1を2勝」。満たした時点で招待状が届き、あとは
    季節ごとに巡ってくる各国のカップに挑んでいく。 */
 const OMEN_RATE = 0.18;
+/* --- 吉兆はレースの途中から現れる ---
+   以前はパドックの周回から見えていて、驚きがなかった（＝先バレになっていなかった）。
+   OMEN_AT を過ぎるまでは何も描かない。SGの吉兆（パンダ・タクシー・飛行機・
+   金のビッグベン）も、国内コースの名物（下記）も、出るのはここから。 */
+const OMEN_AT = 0.70;
+/* 国内コースの名物。レースが70%を過ぎた時点で愛馬が上位にいれば、
+   2回に1回だけ地平線に現れる。**能力には一切影響しない純粋な先バレ**で、
+   SGの吉兆（実際に強化がかかる）とは別物。実況では触れない。 */
+const COURSE_OMEN = {
+  東京:'モノレール', 中京:'城', 阪神:'トラック', 京都:'桜',
+  札幌:'カニ', 函館:'カニ', 小倉:'バイク'
+};
 const SG_NEED_G1 = 2;
 const seasonOf = w => (w>=9&&w<=21)?'春' : (w>=22&&w<=34)?'夏' : (w>=35&&w<=47)?'秋' : '冬';
 const sgReady = h => (h && (h.g1w||0) >= SG_NEED_G1);
@@ -1548,6 +1560,13 @@ class RaceSim{
       // レジェンドの月はここで昇る。色（黄／オレンジ）が上の判定を映す
       this.moonAt=performance.now();
     }
+    /* 国内コースの名物。SGと違って賞金にも能力にも関わらない、色だけの先バレ。 */
+    if(p>OMEN_AT && !this.cOmenRolled){
+      this.cOmenRolled=true;
+      const me=this.me;
+      if(me && me.rank<=3 && (this.order[0].x-me.x) < LENGTH_M*6 && Math.random()<0.5)
+        this.courseOmen=true;
+    }
     if(p>1-190/this.D && this.course.slope>=0.7) say('h',`最後の急坂だ！ここで脚が上がる！`, true);
     if(p>.90) say('e',`${this.order[0].h.name}先頭、${this.order[1].h.name}が並びかける！`);
     // 直線で人気薄が抜け出したら煽る
@@ -1920,7 +1939,120 @@ function skyGlow(){
   gl.addColorStop(1,'rgba(255,193,92,.50)');
   g.fillStyle=gl; g.fillRect(0,0,W,HZ);
 }
-function drawBack(camX, surface, sg, omen, red, glow, moon){
+/* 国内コースの名物。スタンドより奥（描くのはスタンドの前）なので、
+   下端は屋根の線に置いて「遠くに見えている」ように見せる。 */
+function drawOmenScene(kind, camX, gy){
+  const t=performance.now(), par=f=>-((camX*f)%(W*1.6));
+  if(kind==='モノレール'){
+    // 東京：オレンジの車両が高架を滑っていく
+    const y=gy-H*.115, ph=((t/5200)%1), tx=W*(1.25-ph*1.6), tw=W*.30, th=H*.036;
+    g.fillStyle='#c9d2da'; g.fillRect(0,y+th*1.05,W,H*.012);            // 桁
+    g.fillStyle='#aab5c0';
+    for(let x=par(0.05);x<W+120;x+=120) g.fillRect(x+40,y+th*1.05,H*.012,gy-(y+th*1.05));
+    g.fillStyle='#f08a1e'; g.fillRect(tx,y,tw,th);                       // 車両
+    g.fillStyle='#ffd9a8'; g.fillRect(tx+tw*.02,y+th*.22,tw*.96,th*.34); // 窓帯
+    g.fillStyle='#f7b26a'; g.fillRect(tx,y,tw,th*.14);
+  }
+  else if(kind==='城'){
+    // 中京：白壁と青緑の瓦を重ねた天守
+    const cx=par(0.06)+W*.62, base=gy;
+    g.fillStyle='#8b8f96';                                               // 石垣
+    g.beginPath(); g.moveTo(cx-W*.13,base); g.lineTo(cx-W*.09,base-H*.045);
+    g.lineTo(cx+W*.09,base-H*.045); g.lineTo(cx+W*.13,base); g.closePath(); g.fill();
+    const tiers=[[0.085,0.050],[0.062,0.044],[0.040,0.038]];
+    let y=base-H*.045;
+    tiers.forEach(([hw,hh],i)=>{
+      g.fillStyle='#f4f1e8'; g.fillRect(cx-W*hw,y-H*hh,W*hw*2,H*hh);      // 白壁
+      g.fillStyle='#2f6b63';                                              // 反りのある瓦
+      g.beginPath();
+      g.moveTo(cx-W*(hw+0.028), y-H*hh);
+      g.quadraticCurveTo(cx-W*hw*0.5, y-H*(hh+0.030), cx, y-H*(hh+0.030));
+      g.quadraticCurveTo(cx+W*hw*0.5, y-H*(hh+0.030), cx+W*(hw+0.028), y-H*hh);
+      g.closePath(); g.fill();
+      y-=H*(hh+0.026);
+    });
+    g.fillStyle='#e8c23a';                                                // 金の鯱
+    g.beginPath(); g.ellipse(cx,y-H*.006,W*.010,H*.010,0,0,7); g.fill();
+  }
+  else if(kind==='トラック'){
+    // 阪神：オレンジの大型トラックが走り抜ける
+    const ph=((t/4200)%1), x=W*(1.2-ph*1.55), y=gy-H*.052, bw=W*.26, bh=H*.048;
+    g.fillStyle='#e8731c'; g.fillRect(x,y,bw*.72,bh);                     // 箱
+    g.fillStyle='#f2913f'; g.fillRect(x+bw*.72,y+bh*.30,bw*.28,bh*.70);   // 運転席
+    g.fillStyle='#cfe6f5'; g.fillRect(x+bw*.80,y+bh*.38,bw*.16,bh*.28);   // 窓
+    g.fillStyle='#22262c';
+    [0.14,0.30,0.86].forEach(o=>{ g.beginPath(); g.arc(x+bw*o,y+bh,H*.012,0,7); g.fill(); });
+  }
+  else if(kind==='桜'){
+    // 京都：桜並木と、風に舞う花びら
+    const ox=par(0.07);
+    for(let i=-1;i<W/90+2;i++){
+      const x=ox+i*90+45, th=H*.055;
+      g.fillStyle='#6b4a33'; g.fillRect(x-2.5,gy-th,5,th);                // 幹
+      g.fillStyle='#f7b7cf';
+      [[0,-th-H*.012,W*.036],[-W*.024,-th+H*.004,W*.026],[W*.024,-th+H*.004,W*.026]]
+        .forEach(([dx,dy,r])=>{ g.beginPath(); g.arc(x+dx,gy+dy,r,0,7); g.fill(); });
+      g.fillStyle='#ffd7e6';
+      g.beginPath(); g.arc(x-W*.010,gy-th-H*.020,W*.020,0,7); g.fill();
+    }
+    g.fillStyle='#ffc9dd';                                                // 花びら
+    for(let i=0;i<14;i++){
+      const ph=((t/3400)+hash1(i*5.1))%1;
+      const px=(hash1(i*3.3)*W + t*0.02)%W, py=gy-H*.10+ph*H*.10;
+      g.globalAlpha=0.85*(1-ph);
+      g.fillRect(px,py,3,2);
+    }
+    g.globalAlpha=1;
+  }
+  else if(kind==='カニ'){
+    // 札幌・函館：赤いカニが3匹、屋根の上に並ぶ
+    const ox=par(0.05);
+    for(let i=0;i<3;i++){
+      const cx=ox+W*(0.20+i*0.28), cy=gy-H*.030, sc=H*.030;
+      const sw=Math.sin(t/380+i*1.4);
+      g.fillStyle='#d8382a';
+      g.beginPath(); g.ellipse(cx,cy,sc*1.25,sc*0.80,0,0,7); g.fill();     // 甲羅
+      g.strokeStyle='#d8382a'; g.lineWidth=Math.max(2,sc*0.20);
+      [-1,1].forEach(sgn=>{                                                // 脚
+        for(let k=0;k<3;k++){
+          g.beginPath();
+          g.moveTo(cx+sgn*sc*0.7, cy+sc*0.2);
+          g.lineTo(cx+sgn*sc*(1.4+k*0.28), cy+sc*(0.75+0.12*k)+sw*sc*0.10);
+          g.stroke();
+        }
+      });
+      [-1,1].forEach(sgn=>{                                                // ハサミ
+        const hx=cx+sgn*sc*1.55, hy=cy-sc*0.65+sw*sc*0.16;
+        g.beginPath(); g.moveTo(cx+sgn*sc*0.9, cy-sc*0.2); g.lineTo(hx,hy); g.stroke();
+        g.fillStyle='#e8503c';
+        g.beginPath(); g.ellipse(hx,hy,sc*0.42,sc*0.30,sgn*0.5,0,7); g.fill();
+        g.fillStyle='#d8382a';
+      });
+      g.fillStyle='#fff';                                                   // 目
+      [-1,1].forEach(sgn=>{ g.beginPath(); g.arc(cx+sgn*sc*0.34,cy-sc*0.48,sc*0.18,0,7); g.fill(); });
+      g.fillStyle='#22160f';
+      [-1,1].forEach(sgn=>{ g.beginPath(); g.arc(cx+sgn*sc*0.34,cy-sc*0.48,sc*0.09,0,7); g.fill(); });
+    }
+  }
+  else if(kind==='バイク'){
+    // 小倉：バイクが数台、隊列で走り抜ける
+    const ph=((t/3000)%1);
+    for(let i=0;i<4;i++){
+      const x=W*(1.25-ph*1.6)-i*W*.13, y=gy-H*.030, sc=H*.026;
+      if(x<-W*.2||x>W*1.2) continue;
+      const col=['#e23b3b','#2f6be0','#f0b52a','#2fb37a'][i%4];
+      g.fillStyle='#22262c';
+      [[-1,0],[1,0]].forEach(([o])=>{ g.beginPath(); g.arc(x+o*sc*1.05,y,sc*0.52,0,7); g.fill(); });
+      g.strokeStyle=col; g.lineWidth=Math.max(2,sc*0.34);
+      g.beginPath(); g.moveTo(x-sc*1.0,y); g.lineTo(x+sc*0.2,y-sc*0.55); g.lineTo(x+sc*1.0,y); g.stroke();
+      g.fillStyle='#1c2430';                                                // ライダー
+      g.beginPath(); g.ellipse(x-sc*0.1,y-sc*1.05,sc*0.34,sc*0.52,-0.25,0,7); g.fill();
+      g.fillStyle=col;
+      g.beginPath(); g.arc(x+sc*0.12,y-sc*1.60,sc*0.30,0,7); g.fill();      // ヘルメット
+    }
+  }
+}
+function drawBack(camX, surface, sg, omen, red, glow, moon, cOmen){
   if(sg){
     drawTheme(sg, camX, omen, glow, moon);
     // レジェンドは月の色そのものが先バレなので、空を洗わない
@@ -1948,6 +2080,8 @@ function drawBack(camX, surface, sg, omen, red, glow, moon){
     g.fillStyle='rgba(255,255,255,.9)';
     for(let k=0;k<4;k++) g.fillRect(x+19.5+k*5.5,H*.107,3.5,4);
   }
+  // コースの名物（スタンドの奥に見えるので、スタンドより先に描く）
+  if(cOmen) drawOmenScene(cOmen, camX, H*.305);
   // スタンド（屋根・段・色とりどりの観客）
   const top=H*.34, bot=H*.545;
   g.fillStyle='#dfe6ec'; g.fillRect(0,top-H*.035,W,H*.035);      // 屋根
@@ -3182,17 +3316,14 @@ const V = {
         <button class="btn ghost" data-act="cancelrace" style="min-height:0;padding:3px 9px;font-size:11px">${sp?'観戦をやめる':'出走取消'}</button></div>
       <h2 class="head">${esc(r.n)} ${raceMeta(r)}</h2>
       ${sp?`<p class="muted" style="margin:-4px 0 9px">愛馬は出走しない。馬券だけで勝負する一戦。<b class="gold">1週</b>を使う。</p>`:''}
-      ${app.sgTheme?`<div class="card tight ${app.omen?'pop':''}" style="margin-bottom:9px;${
-        app.omen?'border-color:var(--gold);background:#241d0b':''}">
+      ${app.sgTheme?`<div class="card tight" style="margin-bottom:9px;">
         <div class="row between">
           <b style="font-size:12px;color:${app.sgTheme.ink}">${esc(app.sgTheme.logo)}</b>
           <span class="row" style="gap:4px"><span class="pill jo">${seasonOf(app.sgTheme.w)}</span>
             <span class="pill sg">SG</span></span>
         </div>
         ${app.sgTheme.banner?`<p class="banner">${esc(app.sgTheme.banner)}</p>`:''}
-        <p class="muted" style="margin:5px 0 0;font-size:11px">${app.omen
-          ? `<b class="gold">${esc(app.sgTheme.omen)}が見えている。今日はいける。</b>`
-          : '招待制の一戦。滅多に見られないものが見えた日は、勝機がある。'}</p>
+        <p class="muted" style="margin:5px 0 0;font-size:11px">招待制の一戦。滅多に見られないものが見えた日は、勝機がある。</p>
       </div>`:''}
       <div class="card tight" style="margin-bottom:9px">
         <div class="row between" style="margin-bottom:5px">
@@ -4093,7 +4224,7 @@ function render(now, dt){
     }
   }
   else if(app.scene==='paddock'){
-    drawBack(now*0.002,app.race.s,app.sgTheme,app.omen); drawTrack(0,app.race.s,99999);
+    drawBack(now*0.002,app.race.s,app.sgTheme,false); drawTrack(0,app.race.s,99999);
     const sel=app.betSel;
     if(sel!=null && app.field[sel]){
       // 馬を選んだら、その1頭を枠色の勝負服つきで大きく見せる
@@ -4125,7 +4256,9 @@ function render(now, dt){
     }
     const me=sim.me, D=sim.D;
     const camX=clamp(me.x-16, 0, D+20);
-    drawBack(camX,app.race.s,app.sgTheme,app.omen,sim&&sim.redSky,sim&&sim.orangeSky,sim&&sim.moonAt);
+    const op = (sim && sim.order && sim.order[0]) ? sim.order[0].x/sim.D : 0;
+    drawBack(camX,app.race.s,app.sgTheme,app.omen&&op>OMEN_AT,sim&&sim.redSky,sim&&sim.orangeSky,
+             sim&&sim.moonAt, sim&&sim.courseOmen ? COURSE_OMEN[app.race&&app.race.c] : null);
     drawTrack(camX,app.race.s,D,sim.bendAt(me.x));
     drawField(sim,camX);
     const rem=Math.max(0,Math.round((D-me.x)/10)*10);
@@ -4184,7 +4317,9 @@ function render(now, dt){
     const sim=app.sim;
     if(sim){
       const camX=clamp(sim.me.x-16,0,sim.D+20);
-      drawBack(camX,app.race.s,app.sgTheme,app.omen,sim.redSky,sim.orangeSky,sim.moonAt); drawTrack(camX,app.race.s,sim.D,0);
+      drawBack(camX,app.race.s,app.sgTheme,app.omen,sim.redSky,sim.orangeSky,sim.moonAt,
+               sim.courseOmen ? COURSE_OMEN[app.race&&app.race.c] : null);
+      drawTrack(camX,app.race.s,sim.D,0);
       drawField(sim,camX);
     }
     setHud(`<span class="chip gold">GOAL!</span>`);
@@ -4221,6 +4356,7 @@ window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, di
                       HARD, isHard, hardUnlocked, gotSeason, seasonCount, CLEAR_KEY,
                       TRAIN, PACE, SPURT_ZONE, LENGTH_M, MAX_LEAD, RACE_SPEED,
                       CAP_CURVE, capOf, AGE_LVL, ageLvl, TR_STEP, TR_MUL, trLv, trCount, trNext,
+                      OMEN_AT, OMEN_RATE, COURSE_OMEN, COURSES, COURSE_LIST,
                       SP_STEP, SP_COST, SP_UP, SP_FAT, spReady, spNext, spEarned,
                       get state(){ return G; }, get app(){ return app; } };
 
