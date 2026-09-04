@@ -39,7 +39,27 @@ CALENDAR_URL = "https://nar.netkeiba.com/top/calendar.html?year={year}&month={mo
 SHUTUBA_PAST_URL = "https://nar.netkeiba.com/race/shutuba_past.html?race_id={race_id}"
 
 # 中央（JRA）の開催場。前走がここなら地方への転入初戦とみなす
-JRA_VENUES = {"札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"}
+# 中央（JRA）。race_idは日付ではなく「開催回・日目」で決まるため日付から
+# 組み立てられない。開催日→race_id はカレンダーとレース一覧から引く
+JRA_VENUE_CODES = {
+    "札幌": "01", "函館": "02", "福島": "03", "新潟": "04", "東京": "05",
+    "中山": "06", "中京": "07", "京都": "08", "阪神": "09", "小倉": "10",
+}
+JRA_VENUES = set(JRA_VENUE_CODES)
+
+JRA_RESULT_URL = "https://race.netkeiba.com/race/result.html?race_id={race_id}"
+JRA_SHUTUBA_PAST_URL = "https://race.netkeiba.com/race/shutuba_past.html?race_id={race_id}"
+JRA_CALENDAR_URL = "https://race.netkeiba.com/top/calendar.html?year={year}&month={month}"
+JRA_RACE_LIST_URL = "https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={date}"
+
+
+def jra_venue_of(race_id: str) -> str:
+    """race_id の3〜4桁目から競馬場名を返す（'202601020211' → '札幌'）。"""
+    code = race_id[4:6]
+    for name, c in JRA_VENUE_CODES.items():
+        if c == code:
+            return name
+    return ""
 LONG_LAYOFF_DAYS = 180  # これを超える間隔を長期休養明けとする
 
 PAYOUT_KINDS = {
@@ -170,17 +190,33 @@ class RaceData:
 RESULT_COLUMNS = ["着順", "枠番", "馬番", "馬名", "性齢", "斤量", "騎手", "タイム",
                   "着差", "人気", "単勝オッズ", "上がり3F", "厩舎", "馬体重"]
 
+# 着順テーブルの見出し → 保存する列名。中央と地方で列数が違う（中央には
+# 「コーナー通過順」が入る）ため、位置ではなく見出しで対応付ける
+RESULT_HEADER_ALIASES = {
+    "着順": ("着順",), "枠番": ("枠",), "馬番": ("馬番",), "馬名": ("馬名",),
+    "性齢": ("性齢",), "斤量": ("斤量",), "騎手": ("騎手",), "タイム": ("タイム",),
+    "着差": ("着差",), "人気": ("人気",), "単勝オッズ": ("単勝オッズ", "オッズ"),
+    "上がり3F": ("後3F", "上り", "上がり"), "厩舎": ("厩舎",), "馬体重": ("馬体重",),
+}
+
 
 def parse_result(html: str, race_id: str) -> RaceData | None:
     info = RaceInfo(race_id=race_id, race_no=int(race_id[-2:]))
 
-    if m := re.search(r'<div[^>]*class="RaceName"[^>]*>.*?</div>', html, re.S):
+    # レース名。中央は <h1 class="RaceName">、地方は <div class="RaceName">
+    if m := re.search(r'<(div|h1)[^>]*class="RaceName"[^>]*>.*?</\1>', html, re.S):
         raw_name = re.sub(r"\s+", " ", _text(m.group())).strip()
         for badge in (" 重賞", " OP", " Jpn1", " Jpn2", " Jpn3", " G1", " G2", " G3"):
             if raw_name.endswith(badge):
                 raw_name = raw_name[: -len(badge)].strip()
                 info.grade = badge.strip()
         info.name = raw_name
+
+    # 中央は等級が名前ではなくアイコンのクラスにしか出ないため、titleから拾う
+    # 例: 「キーンランドＣ(G3) 結果・払戻 | 2026年8月23日 札幌11R …」
+    if not info.grade and (t := re.search(r"<title>([^<|]+)", html)):
+        if g := re.search(r"\((G[123]|Jpn[123]|L|OP)\)", t.group(1)):
+            info.grade = g.group(1)
     if m := re.search(r'<div[^>]*class="RaceData01"[^>]*>.*?</div>', html, re.S):
         pass
 
@@ -198,7 +234,7 @@ def parse_result(html: str, race_id: str) -> RaceData | None:
 
     if m := re.search(r'<div[^>]*class="RaceData02"[^>]*>.*?</div>', html, re.S):
         line = _text(m.group())
-        for v in VENUE_CODES:
+        for v in list(VENUE_CODES) + sorted(JRA_VENUE_CODES):
             if v in line:
                 info.venue = v
                 break
@@ -208,19 +244,41 @@ def parse_result(html: str, race_id: str) -> RaceData | None:
     if m := re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", html):
         info.date = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
 
-    table = re.search(r'<table[^>]*ResultMain.*?</table>', html, re.S)
+    # 着順テーブル。中央と地方でクラス名が違う（地方だけ ResultMain が付く）ため、
+    # 両方に共通する id="All_Result_Table" で拾う
+    table = re.search(r'<table[^>]*id="All_Result_Table".*?</table>', html, re.S)
     if not table:
         return None
 
+    # 列は見出し名で対応付ける。中央には「コーナー通過順」が余分に入るため、
+    # 位置で切ると厩舎・馬体重が1つずつずれる
+    rows = re.findall(r"<tr[^>]*>.*?</tr>", table.group(), re.S)
+    header = [_compact(_text(c))
+              for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[0], re.S)] if rows else []
+    index = {}
+    for i, col in enumerate(header):
+        for want, keys in RESULT_HEADER_ALIASES.items():
+            if want not in index and any(k in col for k in keys):
+                index[want] = i
+
     horses = []
-    for row in re.findall(r"<tr[^>]*>.*?</tr>", table.group(), re.S):
+    for row in rows:
         if 'class="Header"' in row:
             continue
         cells = [_text(c) for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row, re.S)]
-        if len(cells) < len(RESULT_COLUMNS):
+        if len(cells) < len(RESULT_COLUMNS) - 1:
             continue
-        row_data = dict(zip(RESULT_COLUMNS, cells[: len(RESULT_COLUMNS)]))
-        row_data["馬体重"] = _compact(row_data.get("馬体重", ""))
+        if index:
+            row_data = {col: (cells[i] if i < len(cells) else "")
+                        for col, i in index.items()}
+            row_data = {col: row_data.get(col, "") for col in RESULT_COLUMNS}
+        else:
+            row_data = dict(zip(RESULT_COLUMNS, cells[: len(RESULT_COLUMNS)]))
+        # 見出し行（馬番セルが「馬 番」等）を確実に落とす
+        if not (row_data.get("馬番") or "").strip().isdigit():
+            continue
+        # 中央の厩舎欄などに改行が入るため、全セルを1行に潰す
+        row_data = {k: _compact(v) for k, v in row_data.items()}
         horses.append(row_data)
     if not horses:
         return None
@@ -307,6 +365,8 @@ def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
     確定結果には含まれない事前情報（脚質、前走からの間隔、前走の開催場、血統）が
     取れる。前走が中央の開催場なら転入初戦、間隔が180日超なら長期休養明けとする。
     """
+    # 馬名などのセルは、地方が <dt class="Horse01">、中央が <div class="Horse01">
+    # と囲みタグが違う。後方参照で開始タグと閉じタグを揃えて両方拾う
     horses = []
     for row in re.findall(r'<tr[^>]*class="HorseList".*?</tr>', html, re.S):
         row = row.replace("&nbsp;", " ")  # オッズ欄などに実体参照が混ざる
@@ -317,16 +377,20 @@ def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
             h["馬番"] = int(m.group(1))
         for key, cls in (("血統父", "Horse01"), ("馬名", "Horse02"),
                          ("血統母父", "Horse04"), ("厩舎", "Horse05")):
-            if m := re.search(rf'<dt class="{cls}[^"]*">(.*?)</dt>', row, re.S):
-                h[key] = _text(m.group(1)).strip("()")
-        if m := re.search(r'<dt class="Horse06[^"]*">(.*?)</dt>', row, re.S):
-            body = m.group(1)
-            if k := re.search(r'<div class="Type[^"]*"><span>(.*?)</span>', body):
+            if m := re.search(rf'<(dt|div) class="{cls}[^"]*">(.*?)</\1>', row, re.S):
+                h[key] = _text(m.group(2)).strip("()")
+        if m := re.search(r'<(dt|div) class="Horse06[^"]*">(.*?)</\1>', row, re.S):
+            body = m.group(2)
+            k = (re.search(r'<div class="Type[^"]*"><span>(.*?)</span>', body)
+                 or re.search(r'<span class="kyakusitu">(.*?)</span>', body))
+            if k:
                 h["脚質"] = KYAKUSHITSU.get(_text(k.group(1)), "")
-            h["間隔表記"] = _text(re.sub(r'<div class="Type.*?</div>', "", body, flags=re.S))
-        if m := re.search(r'<dt class="Horse07[^"]*">(.*?)</dt>', row, re.S):
-            body = m.group(1)
-            if w := re.search(r'<div class="Weight">(\d+)kg<span>\(([-+]?\d+)\)', body):
+            rest = re.sub(r'<div class="Type.*?</div>', "", body, flags=re.S)
+            rest = re.sub(r'<span class="kyakusitu">.*?</span>', "", rest, flags=re.S)
+            h["間隔表記"] = _text(rest)
+        if m := re.search(r'<(dt|div) class="Horse07[^"]*">(.*?)</\1>', row, re.S):
+            body = m.group(2)
+            if w := re.search(r'<div class="Weight[^"]*">(\d+)kg<span>\(([-+]?\d+)\)', body):
                 h["馬体重"] = f"{w.group(1)}({w.group(2)})"
             # 上位人気は <span class="Odds_Ninki"> で囲まれ、それ以外は素の数値で入る
             if pop := re.search(r'<div class="Popular">(.*?)</div>', body, re.S):
@@ -354,7 +418,10 @@ def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
             h["長期休養明け"] = "Y" if interval > LONG_LAYOFF_DAYS else ""
             h["転入初戦"] = "Y" if p0.get("開催場") in JRA_VENUES else ""
             h["直近3走JRA数"] = sum(1 for p in pasts[:3] if p.get("開催場") in JRA_VENUES)
-        horses.append(h)
+        # 馬番と馬名の両方が取れた行だけ採用する。中央の馬柱には
+        # 「[馬記号] 馬名 [ブリンカー]」という凡例行が混ざるため
+        if h.get("馬名") and isinstance(h.get("馬番"), int):
+            horses.append(h)
     return horses
 
 
@@ -434,6 +501,37 @@ def _already_collected(outdir: Path, date: str, venue: str, race_no: int) -> boo
     return has_result and has_entries
 
 
+def backfill_odds(data: "RaceData") -> int:
+    """馬柱にオッズが無い場合、結果ページの確定オッズ・人気を出走馬に補う。
+
+    中央の馬柱は発走後にオッズの配信を止めるため（`---.-` になる）、
+    過去レースを集めると単勝オッズ・人気が空になる。結果ページには
+    確定オッズと人気が載っているので、馬番で突き合わせて補う。
+
+    注意: これは**確定オッズ**であって朝のオッズではない。買い目の型は
+    最終オッズで判定するのが正しい（CLAUDE.md）ので検証用途には適するが、
+    「朝の時点で分かった情報」として扱ってはいけない。
+    """
+    by_umaban = {}
+    for row in data.horses:
+        if (u := row.get("馬番", "")).isdigit():
+            by_umaban[int(u)] = row
+    filled = 0
+    for e in data.entries:
+        if e.get("単勝オッズ") is not None:
+            continue
+        r = by_umaban.get(e.get("馬番"))
+        if not r:
+            continue
+        try:
+            e["単勝オッズ"] = float(r.get("単勝オッズ", ""))
+            e["人気"] = int(r.get("人気", ""))
+            filled += 1
+        except (TypeError, ValueError):
+            continue
+    return filled
+
+
 def collect_day(
     date: str,
     venue: str,
@@ -472,6 +570,7 @@ def collect_day(
         if past_html:
             y, mo, d = (int(x) for x in data.info.date.split("-"))
             data.entries = parse_shutuba_past(past_html, _Date(y, mo, d))
+            backfill_odds(data)
 
         paths = save_race(data, outdir)
         print(f"→ {data.info.name} ({len(data.horses)}頭, 払戻{len(data.payouts)}件"
@@ -479,3 +578,110 @@ def collect_day(
         collected.append(data)
 
     return collected
+
+
+# ---------------------------------------------------------------------------
+# 中央（JRA）の収集
+# ---------------------------------------------------------------------------
+
+def find_jra_race_days(year: int, month: int, fetcher: "Fetcher") -> list[str]:
+    """その月の中央開催日を返す（'YYYY-MM-DD' のリスト）。"""
+    html = fetcher.get(
+        JRA_CALENDAR_URL.format(year=year, month=month), f"jra_calendar_{year}{month:02d}"
+    )
+    if html is None:
+        return []
+    days = sorted({f"{d[:4]}-{d[4:6]}-{d[6:]}"
+                   for d in re.findall(r"kaisai_date=(\d{8})", html)})
+    return [d for d in days if d.startswith(f"{year}-{month:02d}")]
+
+
+def find_jra_race_ids(date: str, fetcher: "Fetcher", venue: str | None = None) -> list[str]:
+    """開催日のrace_idを返す。中央のrace_idは開催回・日目で決まり日付から
+    組み立てられないため、その日のレース一覧から引く。"""
+    key = date.replace("-", "")
+    html = fetcher.get(JRA_RACE_LIST_URL.format(date=key), f"jra_list_{key}")
+    if html is None:
+        return []
+    ids = sorted({r for r in re.findall(r"race_id=(\d{12})", html)})
+    if venue:
+        code = JRA_VENUE_CODES.get(venue)
+        ids = [r for r in ids if r[4:6] == code]
+    return ids
+
+
+def collect_jra_day(
+    date: str,
+    outdir: Path,
+    cache_dir: Path,
+    venue: str | None = None,
+    race_numbers: list[int] | None = None,
+    interval: float = REQUEST_INTERVAL,
+    fetcher: "Fetcher | None" = None,
+    force: bool = False,
+) -> list[RaceData]:
+    """中央のある開催日を収集する。venue省略時はその日の全場。"""
+    fetcher = fetcher or Fetcher(cache_dir, interval)
+    outdir = Path(outdir)
+    collected = []
+
+    for race_id in find_jra_race_ids(date, fetcher, venue):
+        no = int(race_id[-2:])
+        if race_numbers and no not in race_numbers:
+            continue
+        v = jra_venue_of(race_id)
+        if not force and _already_collected(outdir, date, v, no):
+            print(f"  {v}{no:>2}R → 取得済みのためスキップ")
+            continue
+        print(f"  {v}{no:>2}R (race_id={race_id})", end=" ")
+        html = fetcher.get(JRA_RESULT_URL.format(race_id=race_id), race_id, refresh=force)
+        if html is None:
+            print("→ 取得できず")
+            continue
+        data = parse_result(html, race_id)
+        if data is None or not data.horses:
+            print("→ 結果未確定またはレースなし")
+            continue
+        data.info.date = data.info.date or date
+        data.info.venue = data.info.venue or v
+
+        past_html = fetcher.get(
+            JRA_SHUTUBA_PAST_URL.format(race_id=race_id), f"{race_id}_past", refresh=force
+        )
+        if past_html:
+            y, mo, d = (int(x) for x in data.info.date.split("-"))
+            data.entries = parse_shutuba_past(past_html, _Date(y, mo, d))
+            n = backfill_odds(data)
+        else:
+            n = 0
+
+        save_race(data, outdir)
+        print(f"→ {data.info.name}{'(' + data.info.grade + ')' if data.info.grade else ''} "
+              f"({len(data.horses)}頭, 払戻{len(data.payouts)}件, 馬柱{len(data.entries)}頭"
+              f"{f', オッズ補完{n}頭' if n else ''})")
+        collected.append(data)
+    return collected
+
+
+def collect_jra_month(
+    year: int,
+    month: int,
+    outdir: Path,
+    cache_dir: Path,
+    venue: str | None = None,
+    race_numbers: list[int] | None = None,
+    interval: float = REQUEST_INTERVAL,
+    force: bool = False,
+) -> list[RaceData]:
+    fetcher = Fetcher(cache_dir, interval)
+    days = find_jra_race_days(year, month, fetcher)
+    if not days:
+        print(f"{year}-{month:02d} の中央開催日が見つかりませんでした")
+        return []
+    print(f"{year}-{month:02d} の中央開催日: {len(days)}日")
+    out = []
+    for d in days:
+        print(f"\n  [{d}]")
+        out.extend(collect_jra_day(d, outdir, cache_dir, venue, race_numbers,
+                                   interval, fetcher, force))
+    return out

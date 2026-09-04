@@ -19,7 +19,8 @@ import json
 from pathlib import Path
 
 from .betting import make_betting_plan
-from .collect import VENUE_CODES, collect_day, collect_month
+from .collect import (JRA_VENUE_CODES, VENUE_CODES, collect_day,
+                      collect_jra_day, collect_jra_month, collect_month)
 from .course import analyze, load_corpus
 from .course import format_report as format_course_report
 from .daily import build_from_config
@@ -136,6 +137,28 @@ def cmd_collect(args) -> None:
         print("--date か --month のどちらかを指定してください")
         return
 
+    # 中央は race_id が開催回・日目で決まるため、日付から組み立てられない。
+    # カレンダーとレース一覧を引く専用の経路に流す
+    if args.venue in JRA_VENUE_CODES or args.venue == "中央":
+        venue = None if args.venue == "中央" else args.venue
+        if args.month:
+            year, month = (int(x) for x in args.month.split("-"))
+            print(f"{args.month} の中央（{args.venue}）のレース結果を取得します")
+            collected = collect_jra_month(
+                year=year, month=month, venue=venue, race_numbers=numbers,
+                outdir=Path(args.outdir), cache_dir=Path(args.cache_dir),
+                interval=args.interval, force=args.force,
+            )
+        else:
+            print(f"{args.date} 中央（{args.venue}）のレース結果を取得します")
+            collected = collect_jra_day(
+                date=args.date, venue=venue, race_numbers=numbers,
+                outdir=Path(args.outdir), cache_dir=Path(args.cache_dir),
+                interval=args.interval, force=args.force,
+            )
+        print(f"\n取得完了: {len(collected)}レース → {args.outdir}")
+        return
+
     if args.month:
         year, month = (int(x) for x in args.month.split("-"))
         print(f"{args.month} の{args.venue}のレース結果を取得します")
@@ -217,7 +240,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_collect = sub.add_parser("collect", help="レース結果・払戻・通過順を取得して保存")
     p_collect.add_argument("--date", help="開催日 (YYYY-MM-DD)")
     p_collect.add_argument("--month", help="対象月 (YYYY-MM)。その月の開催日を自動で調べて全日取得")
-    p_collect.add_argument("--venue", required=True, choices=sorted(VENUE_CODES), help="競馬場")
+    p_collect.add_argument("--venue", required=True,
+                           choices=sorted(VENUE_CODES) + sorted(JRA_VENUE_CODES) + ["中央"],
+                           help="競馬場。中央の場名または「中央」（その日の全場）も指定できる")
     p_collect.add_argument("--races", default="1-12", help="レース番号 (例: 1-12 または 10,11,12)")
     p_collect.add_argument("--outdir", default="data/collected", help="CSV出力先")
     p_collect.add_argument("--cache-dir", default="data/raw", help="取得HTMLのキャッシュ先")

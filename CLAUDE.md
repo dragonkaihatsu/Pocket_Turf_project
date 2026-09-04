@@ -154,7 +154,28 @@ JRA重賞・地方重賞の予想と検証を継続的に行い、独自のス�
 | 確定配当 | Yahoo Sports keiba（`sports.yahoo.co.jp/keiba/race/result/[race-ID]`） |
 | 当日他レースの脚質傾向・結果 | 楽天競馬 |
 | 地方（浦和等）の結果確認 | keiba.go.jp（RaceMarkTable、`k_babaCode=18`等）※自動収集は不可、下記参照 |
+| 中央（JRA）の結果・出馬表 | race.netkeiba.com（`collect --venue 東京` 等、または `--venue 中央`） |
 | 南関東4場の公式データ | nankankeiba.com（`/uma_detail_search/`で馬検索、`/result/`、`/race_trend/`。文字コードはShift_JIS） |
+
+### 中央（JRA）収集の注意点
+`keiba/collect.py` は中央にも対応した。地方との違いで実際に踏んだ罠:
+
+- **race_idが日付から作れない**。中央は `YYYY+場コード2桁+開催回2桁+日目2桁+R2桁`
+  （例 202601020211 = 2026年 札幌(01) 2回 2日目 11R）。開催回・日目は
+  カレンダー（`race.netkeiba.com/top/calendar.html`）→レース一覧
+  （`race_list_sub.html?kaisai_date=`）から引く。地方の `YYYY+場+MMDD+RR` とは別物
+- **着順テーブルの列数が違う**。中央だけ「コーナー通過順」列があり、位置で
+  切ると厩舎と馬体重が1つずつずれる → **見出し名で対応付ける**
+- レース名は中央 `<h1 class="RaceName">` / 地方 `<div class="RaceName">`
+- **等級はアイコンのクラスにしか出ない**ため title から拾う
+- 馬柱のセルは中央 `<div class="Horse01">` / 地方 `<dt class="Horse01">`、
+  脚質は中央 `<span class="kyakusitu">` / 地方 `<div class="Type"><span>`
+- 馬柱に「[馬記号] 馬名 [ブリンカー]」という**凡例行**が混ざる（馬番で除く）
+- **中央は発走後にオッズ配信が止まる**（`---.-`）。過去レースを集めると
+  単勝オッズ・人気が空になるため、結果ページの確定オッズで補完している
+  （`backfill_odds`）。**これは確定オッズであって朝のオッズではない**点に注意。
+  買い目の型は最終オッズで判定するのが正しいので検証用途には適するが、
+  「朝の時点で分かった情報」として扱ってはいけない
 
 ### 自動収集してよいサイト・いけないサイト
 - **keiba.go.jp（地方競馬情報サイト）は robots.txt で `/KeibaWeb/TodayRaceInfo/`
