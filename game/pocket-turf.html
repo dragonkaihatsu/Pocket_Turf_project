@@ -400,6 +400,13 @@ table.res td.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-wi
 .spbtn small{color:#a9cf72}
 .spbtn[disabled]{animation:none;background:var(--panel-2);border-color:var(--line);opacity:.55}
 .spbtn[disabled] span,.spbtn[disabled] small{color:var(--ink-3)}
+/* レジェンドカップの惹句。1行だけの見世物なので、他のどの文字より大きく光る */
+.banner{
+  margin:7px 0 0;padding:6px 8px;border-radius:5px;text-align:center;
+  font-family:"Dela Gothic One",sans-serif;font-size:11.5px;line-height:1.5;
+  color:#ffe9a0;background:linear-gradient(#3a2a08,#241a06);
+  border:1px solid #b98f2a;letter-spacing:.02em;
+}
 /* 施設レベル。積み上げが見えるように、調教ボタンの名前の隣に出す */
 .trlv{
   font-size:9.5px;font-family:"DotGothic16",monospace;letter-spacing:.02em;
@@ -813,16 +820,19 @@ const seasonOf = w => (w>=9&&w<=21)?'春' : (w>=22&&w<=34)?'夏' : (w>=35&&w<=47
 const sgReady = h => (h && (h.g1w||0) >= SG_NEED_G1);
 /* 四季の4カップ。これを全部勝った馬にだけ、最後のレジェンドカップが見える。 */
 const SG_TOUR = ['チャイナカップ','アメリカンカップ','ブリテンカップ','パリカップ'];
-const legendReady = h => sgReady(h) && SG_TOUR.every(n=>wonRace(h,n));
+/* ラスボス。四季を全制覇では遠すぎたので、**SGをどれか1勝**すれば開く。
+   勝つ相手は依然として lvl:108 なので、扉が早く開くだけで一戦の重さは変わらない。 */
+const legendReady = h => sgReady(h) && (h && (h.sg||0) > 0);
 const tourWon = h => SG_TOUR.filter(n=>wonRace(h,n)).length;
 const SG_RACES = [
   {n:'チャイナカップ',     w:1,  d:1200, s:'芝',     g:'SG', cls:1, age:[4,5],   c:'チャイナ',
    theme:'china',   logo:'China CUP',   ink:'#ff8fc0', omen:'パンダ',
    cond:'G1を2勝する', test:sgReady},
-  /* 最後の一戦。相手は上限いっぱいの108で、四季のカップを総なめにしないと現れない。 */
+  /* 最後の一戦。相手は上限いっぱいの108で、SGを1つでも勝てば現れる。 */
   {n:'レジェンドカップ',   w:49, d:2000, s:'ダート', g:'SG', cls:1, age:[4,5],   c:'レジェンド',
    theme:'legend',  logo:'LEGEND CUP',  ink:'#ffd23f', omen:'流れ星', lvl:108,
-   cond:'四季のカップを全制覇する', test:legendReady},
+   banner:'全てのホースマンが夢見る舞台。サラブレッドのルーツ・ここに集結',
+   cond:'SGを1勝する', test:legendReady},
   {n:'ブリテンカップ',     w:33, d:2400, s:'芝',     g:'SG', cls:1, age:[3,4,5], c:'ブリテン',
    theme:'britain', logo:'Britain CUP', ink:'#ff9ad2', omen:'金のビッグベン',
    cond:'G1を2勝する', test:sgReady},
@@ -1526,6 +1536,18 @@ class RaceSim{
         say('r',`空が焼けている——これは大波乱の気配だ！`, true);
       }
     }
+    /* 隠し演出。SGで、直線に入った時点でカメラの馬に勝ち目が見えていたら、
+       2回に1回だけ空がオレンジに焼ける。**実況では何も言わない**（先バレは
+       色だけで伝える）。位置が良くても差し返されることはあるので、
+       出たのに負けることもある——そこも含めて演出。 */
+    if(p>this.sStart && !this.glowRolled && this.race.g==='SG'){
+      this.glowRolled=true;
+      const me=this.me;
+      if(me && me.rank<=3 && (this.order[0].x-me.x) < LENGTH_M*6 && Math.random()<0.5)
+        this.orangeSky=true;
+      // レジェンドの月はここで昇る。色（黄／オレンジ）が上の判定を映す
+      this.moonAt=performance.now();
+    }
     if(p>1-190/this.D && this.course.slope>=0.7) say('h',`最後の急坂だ！ここで脚が上がる！`, true);
     if(p>.90) say('e',`${this.order[0].h.name}先頭、${this.order[1].h.name}が並びかける！`);
     // 直線で人気薄が抜け出したら煽る
@@ -1597,15 +1619,18 @@ function roundRect(x,y,w,h,r){
 /* --- 隠しレースの舞台 ---
    sg があるときは通常のスタンドではなく、その国の景色を描く。
    omen（吉兆）はごく稀にしか出ない代わりに、出た日は本当に勝ちやすい。 */
-function drawTheme(sg, camX, omen){
+function drawTheme(sg, camX, omen, glow, moon){
   const t=performance.now();
   const HZ=H*.56;                                   // 地平線
   const par=f=>-((camX*f)%(W*1.5));
   const sky=g.createLinearGradient(0,0,0,HZ);
 
   if(sg.theme==='legend'){
-    // 星空と、地平線に立つ巨大な金の優勝杯。吉兆は流れ星。
-    sky.addColorStop(0,'#090b2a'); sky.addColorStop(.6,'#241a4d'); sky.addColorStop(1,'#5b3a6b');
+    /* サラブレッドのルーツ＝アラビアの月夜。ピラミッド・スフィンクス・
+       ラクダの隊列が地平線に並ぶ。**月は最初は出ていない**（直線に入ると昇る）。
+       昇った月の色がそのまま先バレで、黄なら通常・オレンジなら勝機。
+       演出の意味を色1つに預けているので、ここに他の強い光源を足してはいけない。 */
+    sky.addColorStop(0,'#070a26'); sky.addColorStop(.62,'#1b1746'); sky.addColorStop(1,'#4a2f57');
     g.fillStyle=sky; g.fillRect(0,0,W,HZ);
     for(let i=0;i<70;i++){                           // 星（席と同じく位置で決める。乱数だと瞬きが暴れる）
       const sx=hash1(i*3+1)*W, sy=hash1(i*3+2)*HZ*.85, tw=0.45+0.55*Math.sin(t/700+i);
@@ -1613,38 +1638,94 @@ function drawTheme(sg, camX, omen){
       g.fillStyle='#fff6d0'; g.fillRect(sx,sy,1.6,1.6);
     }
     g.globalAlpha=1;
-    const ox=par(0.08);
-    for(let k=-1;k<2;k++){
-      const bx=ox+k*W*1.5, cx=bx+W*.42, base=HZ, hh=H*.30;
-      const cup=g.createLinearGradient(cx-W*.12,base-hh,cx+W*.12,base);
-      cup.addColorStop(0,'#f7e08a'); cup.addColorStop(.5,'#d0a02c'); cup.addColorStop(1,'#7a5a12');
-      g.fillStyle=cup;
-      g.beginPath();                                 // 杯
-      g.moveTo(cx-W*.11,base-hh);
-      g.bezierCurveTo(cx-W*.10,base-hh*.45, cx-W*.05,base-hh*.34, cx,base-hh*.34);
-      g.bezierCurveTo(cx+W*.05,base-hh*.34, cx+W*.10,base-hh*.45, cx+W*.11,base-hh);
-      g.closePath(); g.fill();
-      g.fillRect(cx-W*.012,base-hh*.34,W*.024,hh*.20);   // 脚
-      g.fillRect(cx-W*.055,base-hh*.14,W*.11,hh*.06);    // 台座
-      g.fillRect(cx-W*.075,base-hh*.08,W*.15,hh*.08);
-      g.strokeStyle='#e6ca3a'; g.lineWidth=Math.max(2,W*.008);
-      [-1,1].forEach(sgn=>{                          // 取っ手
-        g.beginPath();
-        g.arc(cx+sgn*W*.115, base-hh*.78, H*.045, -Math.PI/2, Math.PI/2, sgn<0);
-        g.stroke();
+
+    /* 月。moon が立ってから MOON_RISE ミリ秒かけて昇る（場面が変わる）。 */
+    if(moon){
+      const k=clamp((t-moon)/1600,0,1), ease=1-Math.pow(1-k,3);
+      const mx=W*.86, my=HZ*(.86-.28*ease), mr=Math.min(W,H)*.074;
+      const face = glow ? '#ff9a3c' : '#ffe9a0';
+      const halo = glow ? 'rgba(255,138,40,' : 'rgba(255,232,150,';
+      const hg=g.createRadialGradient(mx,my,mr*.6,mx,my,mr*3.6);
+      hg.addColorStop(0,halo+(0.34*ease)+')'); hg.addColorStop(1,halo+'0)');
+      g.fillStyle=hg; g.beginPath(); g.arc(mx,my,mr*3.6,0,7); g.fill();
+      g.globalAlpha=ease;
+      g.fillStyle=face; g.beginPath(); g.arc(mx,my,mr,0,7); g.fill();
+      g.fillStyle= glow ? 'rgba(150,60,10,.30)' : 'rgba(150,140,80,.26)';   // クレーター
+      [[-.30,-.22,.26],[.24,.10,.20],[-.06,.34,.15],[.34,-.34,.12]].forEach(([ax,ay,ar])=>{
+        g.beginPath(); g.arc(mx+mr*ax,my+mr*ay,mr*ar,0,7); g.fill();
       });
-      [-1,1].forEach(sgn=>{                          // 篝火
-        const fx=cx+sgn*W*.26, fy=base-H*.02, fl=H*.045*(0.85+0.15*Math.sin(t/120+sgn));
-        g.fillStyle='#3a2a12'; g.fillRect(fx-W*.012,fy-H*.05,W*.024,H*.05);
-        const fg=g.createLinearGradient(fx,fy-H*.05-fl,fx,fy-H*.05);
-        fg.addColorStop(0,'rgba(255,240,160,.15)'); fg.addColorStop(.5,'#ffb03a'); fg.addColorStop(1,'#ff6a2a');
-        g.fillStyle=fg;
-        g.beginPath(); g.moveTo(fx,fy-H*.05-fl);
-        g.quadraticCurveTo(fx+W*.020,fy-H*.05-fl*.35, fx,fy-H*.05);
-        g.quadraticCurveTo(fx-W*.020,fy-H*.05-fl*.35, fx,fy-H*.05-fl);
-        g.fill();
-      });
+      g.globalAlpha=1;
     }
+
+    const ox=par(0.07);
+    for(let k=-1;k<2;k++){
+      const bx=ox+k*W*1.5;
+      // ピラミッド3基。月の側の面だけ明るい
+      [[0.05,0.30],[0.24,0.20],[0.42,0.26]].forEach(([px,ph])=>{
+        const cx=bx+W*px, hh=H*ph, hw=hh*0.92;
+        g.fillStyle='#2a1f3d';
+        g.beginPath(); g.moveTo(cx,HZ-hh); g.lineTo(cx-hw,HZ); g.lineTo(cx+hw,HZ); g.closePath(); g.fill();
+        g.fillStyle = glow&&moon ? '#6b4326' : '#3d3157';
+        g.beginPath(); g.moveTo(cx,HZ-hh); g.lineTo(cx+hw,HZ); g.lineTo(cx,HZ); g.closePath(); g.fill();
+      });
+      // スフィンクス。伏せた胴・前へ伸ばした脚・ネメス頭巾で横顔に見せる
+      const sx0=bx+W*.74, sb=HZ, sh=H*.14;
+      g.fillStyle='#1d1430';
+      g.beginPath();                                             // 胴（後ろは丸く）
+      g.moveTo(sx0-W*.19, sb);
+      g.quadraticCurveTo(sx0-W*.21, sb-sh*.52, sx0-W*.12, sb-sh*.56);
+      g.lineTo(sx0+W*.03, sb-sh*.60);
+      g.lineTo(sx0+W*.03, sb);
+      g.closePath(); g.fill();
+      g.fillRect(sx0+W*.02, sb-sh*.20, W*.155, sh*.20);          // 前へ伸ばした脚
+      g.beginPath();                                             // 胸から首
+      g.moveTo(sx0-W*.01, sb-sh*.58);
+      g.quadraticCurveTo(sx0+W*.035, sb-sh*.70, sx0+W*.045, sb-sh*.86);
+      g.lineTo(sx0+W*.115, sb-sh*.86);
+      g.lineTo(sx0+W*.10, sb-sh*.20);
+      g.lineTo(sx0+W*.00, sb-sh*.20);
+      g.closePath(); g.fill();
+      g.beginPath();                                             // ネメス頭巾（台形）
+      g.moveTo(sx0+W*.030, sb-sh*.84);
+      g.lineTo(sx0+W*.055, sb-sh*1.30);
+      g.lineTo(sx0+W*.112, sb-sh*1.30);
+      g.lineTo(sx0+W*.140, sb-sh*.84);
+      g.closePath(); g.fill();
+      g.fillStyle = glow&&moon ? '#8a5326' : '#40325e';           // 月に照らされる横顔
+      g.beginPath();
+      g.moveTo(sx0+W*.112, sb-sh*1.24);
+      g.lineTo(sx0+W*.150, sb-sh*1.14);
+      g.lineTo(sx0+W*.150, sb-sh*.94);
+      g.lineTo(sx0+W*.112, sb-sh*.86);
+      g.closePath(); g.fill();
+      g.fillStyle='#1d1430';                                     // 付け髭
+      g.fillRect(sx0+W*.118, sb-sh*.94, W*.016, sh*.16);
+    }
+
+    // ラクダの隊列。少し手前を、ゆっくり歩いていく
+    const cxo=par(0.15);
+    for(let k=-1;k<2;k++){
+      for(let i=0;i<3;i++){
+        const bx=cxo+k*W*1.5+W*(0.08+i*0.115), by=HZ-H*.004;
+        const sc=H*.052, bob=Math.sin(t/520+i*1.7)*sc*.05;
+        g.fillStyle='#1a1129';
+        g.save(); g.translate(bx,by+bob);
+        g.beginPath(); g.ellipse(0,-sc*.72,sc*.52,sc*.30,0,0,7); g.fill();      // 胴
+        g.beginPath();                                                           // こぶ（単峰）
+        g.moveTo(-sc*.20,-sc*.92); g.quadraticCurveTo(0,-sc*1.42, sc*.20,-sc*.92); g.fill();
+        g.beginPath();                                                           // 首と頭
+        g.moveTo(sc*.40,-sc*.86); g.quadraticCurveTo(sc*.86,-sc*1.30, sc*.74,-sc*1.58);
+        g.lineTo(sc*.96,-sc*1.62); g.quadraticCurveTo(sc*1.00,-sc*1.20, sc*.58,-sc*.80);
+        g.closePath(); g.fill();
+        [-.34,-.10,.20,.42].forEach((lx,li)=>{                                   // 脚
+          const sw=Math.sin(t/430+i*1.7+li)*sc*.10;
+          g.fillRect(sc*lx-sc*.045, -sc*.46, sc*.09, sc*.46);
+          g.fillRect(sc*lx-sc*.045+sw, -sc*.16, sc*.09, sc*.16);
+        });
+        g.restore();
+      }
+    }
+
     if(omen){                                        // 流れ星
       const ph=((t/2600)%1), sx=W*(1.05-ph*1.25), sy=HZ*(0.12+ph*0.35);
       const tail=g.createLinearGradient(sx,sy,sx+W*.16,sy-H*.05);
@@ -1654,9 +1735,9 @@ function drawTheme(sg, camX, omen){
       g.fillStyle='#fffbe8';
       g.beginPath(); g.arc(sx,sy,2.6,0,7); g.fill();
     }
-    g.fillStyle='#241a33';                           // 黒い岩肌の地面
+    g.fillStyle='#241a33';                           // 砂の地面
     g.fillRect(0,HZ-H*.008,W,H*.06);
-    g.fillStyle='rgba(212,168,58,.35)';              // 金の鉱脈
+    g.fillStyle='rgba(212,168,58,.28)';              // 月に光る砂
     for(let x=0;x<W;x+=W/10) g.fillRect(x+((camX*0.3)%(W/10)),HZ+H*.004,W/26,1.5);
   }
 
@@ -1815,6 +1896,14 @@ function drawTheme(sg, camX, omen){
   g.strokeText(sg.logo, W/2, H*0.135);
   g.fillStyle=sg.ink;
   g.fillText(sg.logo, W/2, H*0.135);
+  if(sg.banner){
+    const bs=Math.max(8,Math.min(11,W*0.026));
+    g.font=`${bs}px "DotGothic16", monospace`;
+    g.lineWidth=Math.max(2,bs*0.30); g.strokeStyle='rgba(0,0,0,.6)';
+    g.strokeText(sg.banner, W/2, H*0.135+bs*2.0);
+    g.fillStyle='#ffe9a0';
+    g.fillText(sg.banner, W/2, H*0.135+bs*2.0);
+  }
   g.restore();
 }
 
@@ -1822,8 +1911,22 @@ function drawTheme(sg, camX, omen){
 const CROWD=['#ff5b6e','#ffd23f','#4ad6ff','#7ef07a','#ff9f43','#c98bff','#ffffff','#ff7ac0','#5b8cff'];
 const hash1=n=>{ const s=Math.sin(n*127.1)*43758.5453; return s-Math.floor(s); };
 
-function drawBack(camX, surface, sg, omen, red){
-  if(sg){ drawTheme(sg, camX, omen); return; }
+/* 勝機のオレンジ。テーマごとに空の描き方が違うので、置き換えではなく
+   地平線までを暖色で洗う。こうすると5つのテーマすべてで同じ意味に読める。 */
+function skyGlow(){
+  const HZ=H*.56, gl=g.createLinearGradient(0,0,0,HZ);
+  gl.addColorStop(0,'rgba(122,38,10,.62)');
+  gl.addColorStop(.55,'rgba(226,110,32,.58)');
+  gl.addColorStop(1,'rgba(255,193,92,.50)');
+  g.fillStyle=gl; g.fillRect(0,0,W,HZ);
+}
+function drawBack(camX, surface, sg, omen, red, glow, moon){
+  if(sg){
+    drawTheme(sg, camX, omen, glow, moon);
+    // レジェンドは月の色そのものが先バレなので、空を洗わない
+    if(glow && sg.theme!=='legend') skyGlow();
+    return;
+  }
   // 昼の空。大波乱の気配があるときだけ焼けた赤に変わる
   const sky=g.createLinearGradient(0,0,0,H*.56);
   if(red){ sky.addColorStop(0,'#5c1020'); sky.addColorStop(.55,'#c3402a'); sky.addColorStop(1,'#f0a25a'); }
@@ -3086,6 +3189,7 @@ const V = {
           <span class="row" style="gap:4px"><span class="pill jo">${seasonOf(app.sgTheme.w)}</span>
             <span class="pill sg">SG</span></span>
         </div>
+        ${app.sgTheme.banner?`<p class="banner">${esc(app.sgTheme.banner)}</p>`:''}
         <p class="muted" style="margin:5px 0 0;font-size:11px">${app.omen
           ? `<b class="gold">${esc(app.sgTheme.omen)}が見えている。今日はいける。</b>`
           : '招待制の一戦。滅多に見られないものが見えた日は、勝機がある。'}</p>
@@ -4021,7 +4125,7 @@ function render(now, dt){
     }
     const me=sim.me, D=sim.D;
     const camX=clamp(me.x-16, 0, D+20);
-    drawBack(camX,app.race.s,app.sgTheme,app.omen,sim&&sim.redSky);
+    drawBack(camX,app.race.s,app.sgTheme,app.omen,sim&&sim.redSky,sim&&sim.orangeSky,sim&&sim.moonAt);
     drawTrack(camX,app.race.s,D,sim.bendAt(me.x));
     drawField(sim,camX);
     const rem=Math.max(0,Math.round((D-me.x)/10)*10);
@@ -4080,7 +4184,7 @@ function render(now, dt){
     const sim=app.sim;
     if(sim){
       const camX=clamp(sim.me.x-16,0,sim.D+20);
-      drawBack(camX,app.race.s,app.sgTheme,app.omen,sim.redSky); drawTrack(camX,app.race.s,sim.D,0);
+      drawBack(camX,app.race.s,app.sgTheme,app.omen,sim.redSky,sim.orangeSky,sim.moonAt); drawTrack(camX,app.race.s,sim.D,0);
       drawField(sim,camX);
     }
     setHud(`<span class="chip gold">GOAL!</span>`);
