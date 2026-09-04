@@ -400,6 +400,13 @@ table.res td.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-wi
 .spbtn small{color:#a9cf72}
 .spbtn[disabled]{animation:none;background:var(--panel-2);border-color:var(--line);opacity:.55}
 .spbtn[disabled] span,.spbtn[disabled] small{color:var(--ink-3)}
+/* 施設レベル。積み上げが見えるように、調教ボタンの名前の隣に出す */
+.trlv{
+  font-size:9.5px;font-family:"DotGothic16",monospace;letter-spacing:.02em;
+  color:#7ff0ac;background:#0f2a19;border:1px solid #2f7a4d;
+  padding:0 4px;border-radius:3px;vertical-align:1px;
+}
+.btn[disabled] .trlv{color:var(--ink-3);border-color:var(--line);background:transparent}
 @keyframes spglow{
   0%,100%{box-shadow:0 0 0 0 rgba(185,242,74,.00)}
   50%    {box-shadow:0 0 12px 2px rgba(185,242,74,.45)}
@@ -680,7 +687,6 @@ const MOB_NAMES = ['ドネルケバブ','モヤシセイカツ','オッタマゲ
   'ホームランダービー','モーレスター','アツクナレヨ','ムネオハウス','タンタンメン','キンニクン',
   'コンヤハオケラ','ネボスケサン'];
 const STYLES = ['逃げ','先行','差し','追込'];
-const GROWTH = ['早熟','普通','普通','晩成'];
 const APT_MULT = {S:1.055,A:1.025,B:1.0,C:.955,D:.90,E:.845};
 const APT_LET = ['S','A','B','C','D','E'];
 
@@ -891,6 +897,25 @@ const TRAIN = [
   {k:'ゲート', d:'賢さ（疲労小）',     f:4,  cost:50,  up:{wt:2.2}}
 ];
 const STAT_KEYS = [['sp','スピード'],['st','スタミナ'],['pw','パワー'],['gt','根性'],['wt','賢さ']];
+/* --- 施設レベル（ウマ娘のトレーニングレベルに倣う） ---
+   同じ調教を続けるほど施設のレベルが上がり、伸びが加速する。
+   成長型を廃止したぶんの「積み上げるほど強くなる」感触をここで作る。
+   Lv1から始まり、TR_STEP の回数でLv5（1.85倍）まで上がる。
+   回数は愛馬ごと（h.trn）なので、代が替わればまた一から。
+   **加速するのは伸びの速さだけで、到達点は capOf が押さえる。**
+   ここを外すと5歳の上限110をあっさり超えてレースが壊れる。 */
+/* 上限へ近づくほど伸びを鈍らせる指数。1.0だと全能力が上限に張りつく。 */
+const ROOM_POW = 1.5;
+const TR_STEP = [0, 5, 12, 22, 36];
+const TR_MUL  = [1.00, 1.18, 1.38, 1.60, 1.85];
+const trCount = (h,k) => (h && h.trn && h.trn[k]) || 0;
+function trLv(h,k){
+  const n=trCount(h,k);
+  let l=0;
+  for(let i=1;i<TR_STEP.length;i++) if(n>=TR_STEP[i]) l=i;
+  return l;                      // 0〜4（表示は+1してLv1〜Lv5）
+}
+const trNext = (h,k) => { const l=trLv(h,k); return l>=4 ? null : TR_STEP[l+1]-trCount(h,k); };
 /* --- スペシャル調教 ---
    馬券の払戻が累計で SP_STEP 貯まるごとに1回だけ受けられる、光る調教。
    500メダルと1週を払って、疲労が抜けたうえにランダムな能力が5〜10上がる。
@@ -1036,7 +1061,6 @@ function newHorse(opt={}){
     sex: pick(['牡','牡','牝']),
     coat: rint(0,COATS.length-1),
     style: pick(STYLES),
-    growth: pick(GROWTH),
     jockey: pick(JOCKEYS).n,
     sp: base+rint(-6,8), st: base+rint(-6,8), pw: base+rint(-6,8),
     gt: base+rint(-6,8), wt: base+rint(-6,8),
@@ -1048,9 +1072,13 @@ function newHorse(opt={}){
   };
 }
 /* 成長型による年齢別キャップ */
+/* 成長上限は全馬おなじ1本の曲線。3歳は伸びしろだらけ、5歳で頂点。
+   早熟・普通・晩成は廃止した。「どこまで伸びるか」を生まれで決めるのをやめ、
+   **どれだけ鍛えたか**（施設レベル・下記 TR_MUL）に一本化するため。
+   傾きを寝かせると「加速度的に強くなる」手応えが消える。 */
+const CAP_CURVE = [78, 94, 110];
 function capOf(h, year){
-  const t = h.growth==='早熟' ? [88,96,92] : h.growth==='晩成' ? [70,90,105] : [78,95,100];
-  return t[clamp(year-3,0,2)] + (h.legacy||0);
+  return CAP_CURVE[clamp(year-3,0,2)] + ((h&&h.legacy)||0);
 }
 function ratingOf(h, race){
   const c = COND_NAME[condIdx(h)].m;
@@ -1065,11 +1093,24 @@ function ratingOf(h, race){
 
 /* ライバル生成：クラスに応じた地力 */
 /* 相手のレベル。race.lvl があればそれを使う（レジェンドカップだけが上限を使う） */
-const fieldLevel = race => (race.lvl!=null ? race.lvl
-  : (race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g]))
-  + (isHard() ? HARD.lvl : 0);
+/* 年齢で相手の層が厚くなる。実際のJRAでも3歳限定戦（皐月賞・ダービー・菊花賞）は
+   古馬混合G1（天皇賞・有馬記念）より層が薄い。
+   **上げるのはカレンダーであって、愛馬の能力ではない。** 能力に連動させると
+   鍛えるほど相手も強くなり、調教した意味が消える（ラバーバンドAI）。
+   愛馬の上限は3年で72→110（+38）上がるのに対し、ここは-8→+4（+12）しか
+   上がらないので、育てた馬は確実に相手を突き放していく。 */
+const AGE_LVL = {3:-9, 4:0, 5:4};
+const ageLvl = year => AGE_LVL[clamp(year||((typeof G!=='undefined'&&G)?G.year:4),3,5)] || 0;
+/* race.lvl を持つレース（有馬・ジャパンC・宝塚・レジェンドカップ）は
+   相手の格を手で決めてあるので、年齢の係数は乗せない。
+   ここに乗せるとレジェンドカップだけ狙った難易度から外れる。 */
+const fieldLevel = (race, year) => race.lvl!=null
+  ? race.lvl + (isHard() ? HARD.lvl : 0)
+  : (race.g==='jo' ? 34+(race.lv||0)*9 : ({op:70,G3:76,G2:82,G1:89,SG:97})[race.g])
+    + ageLvl(year)
+    + (isHard() ? HARD.lvl : 0);
 function makeField(g, race){
-  const lvl = fieldLevel(race);
+  const lvl = fieldLevel(race, g && g.year);
   const field=[], used=new Set([g.horse&&g.horse.name]);
   for(let i=0;i<7;i++){
     const b = clamp(lvl + rint(-9,9), 22, 128);   // 天井はレジェンドカップ（ハードで113）のためだけに高い
@@ -2650,7 +2691,6 @@ const V = {
         </div>
         <div class="row" style="gap:5px;flex-wrap:wrap">
           <span class="pill jo">${h.style}</span>
-          <span class="pill jo">${h.growth}</span>
           <span class="pill turf">芝${h.aptTurf}</span>
           <span class="pill dirt">ダ${h.aptDirt}</span>
           <span class="pill jo">得意 ${Object.keys(h.aptD).find(k=>h.aptD[k]==='S')||Object.keys(h.aptD).find(k=>h.aptD[k]==='A')||'中距離'}</span>
@@ -2692,8 +2732,6 @@ const V = {
       <div class="card tight">
         <div class="row between"><span class="muted">脚質</span><b>${h.style}</b></div>
         <div class="sep"></div>
-        <div class="row between"><span class="muted">成長型</span><b>${h.growth}</b></div>
-        <div class="sep"></div>
         <div class="row between"><span class="muted">騎手</span><b>${h.jockey} 騎手</b></div>
       </div>`;
   },
@@ -2710,11 +2748,12 @@ const V = {
     const rs=racesFor(G);
     const fat = Math.round(h.fatigue);
     const fatCol = fat>82?'var(--hot)':fat>60?'var(--gold)':'var(--ok)';
-    const menus = TRAIN.map((t,i)=>`
-      <button class="btn" data-act="train" data-i="${i}" ${(G.medals<t.cost||vetStop(h))?'disabled':''}>
-        <span>${t.k} <span class="dot gold" style="font-size:10px">◉${t.cost}</span></span>
-        <small>${t.d}・疲労+${t.f}</small>
-      </button>`).join('');
+    const menus = TRAIN.map((t,i)=>{
+      const lv=trLv(h,t.k), nx=trNext(h,t.k);
+      return `<button class="btn" data-act="train" data-i="${i}" ${(G.medals<t.cost||vetStop(h))?'disabled':''}>
+        <span>${t.k} <span class="trlv">Lv${lv+1}</span> <span class="dot gold" style="font-size:10px">◉${t.cost}</span></span>
+        <small>${t.d}・疲労+${t.f}${lv?`・伸び×${TR_MUL[lv].toFixed(2)}`:''}${nx?`（あと${nx}回で Lv${lv+2}）`:''}</small>
+      </button>`;}).join('');
     const nx=rs.length?null:nextRaceInfo();
     return `<div class="row between" style="margin-bottom:6px">
         <p class="eyebrow" style="margin:0">${G.year}歳 ${dateLabel(G.week)}（第${G.week}週）</p>
@@ -2794,7 +2833,6 @@ const V = {
           <span class="pill jo">${h.sex}${G.year}</span>
           <span class="pill jo">${COATS[h.coat].n}</span>
           <span class="pill jo">${h.style}</span>
-          <span class="pill jo">${h.growth}</span>
           ${condBadge(h)}
         </div>
         ${statBars(h)}
@@ -3406,20 +3444,29 @@ function doTrain(i){
   const cap=capOf(h,G.year), cm=COND_NAME[condIdx(h)].m;
   // 疲労が抜けているうちは伸びが FRESH_MUL 倍。判定は疲労を足す前に行う
   const fm = freshLegs(h) ? FRESH_MUL : 1;
+  // 施設レベル。同じ調教を積むほど加速する（回数を数えるのは伸ばしたあと）
+  const lvBefore = trLv(h,m.k);
+  const tm = TR_MUL[lvBefore];
   const gains=[];
   for(const [k,mul] of Object.entries(m.up)){
-    const room=clamp(1-h[k]/cap,0.05,1);
-    const g0 = mul*1.55*room*cm*rnd(1.35,.7)*fm;
+    /* 上限に近づくほど伸びが鈍る。指数を寝かせると、5種を回すだけで
+       全能力が上限に張りついて「何を鍛えるか」の選択が消える（実測で
+       分散育成でも全能力102〜112になった）。ROOM_POW はそのための締め。 */
+    const room=Math.pow(clamp(1-h[k]/cap,0.04,1), ROOM_POW);
+    const g0 = mul*1.55*room*cm*rnd(1.35,.7)*fm*tm;
     h[k]=Math.min(cap+2,h[k]+g0);
     gains.push([k,g0]);
   }
   h.fatigue=clamp(h.fatigue+m.f+rint(-1,2),0,100);
   h.cond=clamp(h.cond-(m.f>9?3:1)+rint(-2,3),5,100);
+  h.trn=h.trn||{}; h.trn[m.k]=trCount(h,m.k)+1;
+  const lvUp = trLv(h,m.k) > lvBefore;
   app.trainMenu=m.k; app.trainT=0; app.scene='training';
   app.gains=gains;
   SFX.tap();
   const txt = gains.map(([k,v])=>`${STAT_KEYS.find(s=>s[0]===k)[1]}+${v.toFixed(1)}`).join('　');
-  say(`${m.k}調教。${txt}${fm>1?'　脚が軽い！':''}`);
+  say(`${m.k}調教。${txt}${fm>1?'　脚が軽い！':''}${lvUp?`　${m.k}が Lv${trLv(h,m.k)+1} になった！`:''}`);
+  if(lvUp){ SFX.coin(); toast(`${m.k} Lv${trLv(h,m.k)+1}　伸びが上がった`); }
   // メダルと能力はここで確定している。演出中に閉じられても週送り前の
   // この時点までは残るよう、advanceWeek を待たずにここで一度保存する。
   save();
@@ -4069,6 +4116,7 @@ window.PocketTurf = { RaceSim, newHorse, makeField, makeWatchField, ratingOf, di
                       FRESH_FAT, FRESH_MUL, freshLegs, freshFat, jobRoll, jobEV, jobRate, jobWin, jobLose, WORK_WEEKS,
                       HARD, isHard, hardUnlocked, gotSeason, seasonCount, CLEAR_KEY,
                       TRAIN, PACE, SPURT_ZONE, LENGTH_M, MAX_LEAD, RACE_SPEED,
+                      CAP_CURVE, capOf, AGE_LVL, ageLvl, TR_STEP, TR_MUL, trLv, trCount, trNext,
                       SP_STEP, SP_COST, SP_UP, SP_FAT, spReady, spNext, spEarned,
                       get state(){ return G; }, get app(){ return app; } };
 
