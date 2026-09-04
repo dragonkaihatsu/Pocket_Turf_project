@@ -825,7 +825,8 @@ const OMEN_AT = 0.70;
    SGの吉兆（実際に強化がかかる）とは別物。実況では触れない。 */
 const COURSE_OMEN = {
   東京:'モノレール', 中京:'城', 阪神:'トラック', 京都:'桜',
-  札幌:'カニ', 函館:'カニ', 小倉:'バイク'
+  札幌:'カニ', 函館:'カニ', 小倉:'バイク',
+  福島:'鳥居', 中山:'白馬', 新潟:'フラミンゴ'
 };
 const SG_NEED_G1 = 2;
 const seasonOf = w => (w>=9&&w<=21)?'春' : (w>=22&&w<=34)?'夏' : (w>=35&&w<=47)?'秋' : '冬';
@@ -1564,8 +1565,11 @@ class RaceSim{
     if(p>OMEN_AT && !this.cOmenRolled){
       this.cOmenRolled=true;
       const me=this.me;
-      if(me && me.rank<=3 && (this.order[0].x-me.x) < LENGTH_M*6 && Math.random()<0.5)
+      if(me && me.rank<=3 && (this.order[0].x-me.x) < LENGTH_M*6 && Math.random()<0.5){
         this.courseOmen=true;
+        this.omenLv=4-me.rank;          // 1番手=3・2番手=2・3番手=1
+        this.cOmenAt=performance.now(); // 下から現れる演出の起点
+      }
     }
     if(p>1-190/this.D && this.course.slope>=0.7) say('h',`最後の急坂だ！ここで脚が上がる！`, true);
     if(p>.90) say('e',`${this.order[0].h.name}先頭、${this.order[1].h.name}が並びかける！`);
@@ -1941,8 +1945,9 @@ function skyGlow(){
 }
 /* 国内コースの名物。スタンドより奥（描くのはスタンドの前）なので、
    下端は屋根の線に置いて「遠くに見えている」ように見せる。 */
-function drawOmenScene(kind, camX, gy){
+function drawOmenScene(kind, camX, gy, lv, at){
   const t=performance.now(), par=f=>-((camX*f)%(W*1.6));
+  const rise=clamp((t-(at||0))/1400,0,1);   // 下から現れるものの進み具合
   if(kind==='モノレール'){
     // 東京：オレンジの車両が高架を滑っていく
     const y=gy-H*.115, ph=((t/5200)%1), tx=W*(1.25-ph*1.6), tw=W*.30, th=H*.036;
@@ -2034,6 +2039,90 @@ function drawOmenScene(kind, camX, gy){
       [-1,1].forEach(sgn=>{ g.beginPath(); g.arc(cx+sgn*sc*0.34,cy-sc*0.48,sc*0.09,0,7); g.fill(); });
     }
   }
+  else if(kind==='鳥居'){
+    // 福島：赤い鳥居が小・中・大と大きくなって並ぶ
+    const ox=par(0.06);
+    [[0.18,0.34],[0.44,0.62],[0.74,1.00]].forEach(([px,sc])=>{
+      const cx=ox+W*px, hh=H*.105*sc, hw=W*.052*sc, th=Math.max(2,H*.008*sc);
+      g.fillStyle='#c8382c';
+      g.fillRect(cx-hw*0.78, gy-hh, th*1.2, hh);                    // 柱
+      g.fillRect(cx+hw*0.78-th*1.2, gy-hh, th*1.2, hh);
+      g.fillRect(cx-hw*0.90, gy-hh*0.72, hw*1.80, th);              // 貫
+      g.fillStyle='#a82a20';
+      g.beginPath();                                                 // 笠木（反り）
+      g.moveTo(cx-hw*1.16, gy-hh*0.88);
+      g.quadraticCurveTo(cx, gy-hh*1.06, cx+hw*1.16, gy-hh*0.88);
+      g.lineTo(cx+hw*1.16, gy-hh*0.82);
+      g.quadraticCurveTo(cx, gy-hh*1.00, cx-hw*1.16, gy-hh*0.82);
+      g.closePath(); g.fill();
+      g.fillStyle='#c8382c'; g.fillRect(cx-hw*0.98, gy-hh*0.82, hw*1.96, th*0.9);
+    });
+  }
+  else if(kind==='白馬'){
+    // 中山：黒いハットの白馬が、スタンドの奥からゆっくり顔を出す
+    const cx=par(0.05)+W*.56, sc=H*.085, ease=1-Math.pow(1-rise,3);
+    const by=gy+sc*1.30-sc*2.05*ease;                                // 下から上へ
+    g.save(); g.beginPath(); g.rect(0,0,W,gy); g.clip();             // 屋根から下は隠す
+    g.fillStyle='#f4f2ee';
+    g.beginPath(); g.ellipse(cx,by+sc*0.80,sc*0.86,sc*0.62,0,0,7); g.fill();   // 胸元
+    g.beginPath();                                                    // 首
+    g.moveTo(cx-sc*0.30,by+sc*0.90);
+    g.quadraticCurveTo(cx-sc*0.34,by-sc*0.10, cx+sc*0.06,by-sc*0.34);
+    g.lineTo(cx+sc*0.46,by-sc*0.16);
+    g.quadraticCurveTo(cx+sc*0.22,by+sc*0.60, cx+sc*0.34,by+sc*0.95);
+    g.closePath(); g.fill();
+    g.beginPath();                                                    // 耳
+    [[0.10,-0.62],[0.30,-0.66]].forEach(([ex,ey])=>{
+      g.moveTo(cx+sc*ex, by+sc*ey);
+      g.lineTo(cx+sc*(ex+0.05), by+sc*(ey-0.26));
+      g.lineTo(cx+sc*(ex+0.14), by+sc*ey);
+    });
+    g.fill();
+    g.beginPath(); g.ellipse(cx+sc*0.40,by-sc*0.34,sc*0.56,sc*0.24,-0.16,0,7); g.fill(); // 長い鼻づら
+    g.fillStyle='#e2ded6';                                            // 鼻先
+    g.beginPath(); g.ellipse(cx+sc*0.88,by-sc*0.24,sc*0.14,sc*0.12,0,0,7); g.fill();
+    g.fillStyle='#22160f';                                            // 目
+    g.beginPath(); g.arc(cx+sc*0.20,by-sc*0.44,sc*0.07,0,7); g.fill();
+    g.fillStyle='#d8d2c8';                                            // たてがみ
+    g.beginPath();
+    g.moveTo(cx-sc*0.02,by-sc*0.44); g.quadraticCurveTo(cx-sc*0.42,by+sc*0.10, cx-sc*0.26,by+sc*0.72);
+    g.quadraticCurveTo(cx-sc*0.06,by+sc*0.20, cx+sc*0.06,by-sc*0.30); g.closePath(); g.fill();
+    g.fillStyle='#151515';                                            // 黒いハット
+    g.beginPath(); g.ellipse(cx+sc*0.26,by-sc*0.72,sc*0.62,sc*0.13,-0.14,0,7); g.fill();
+    g.save(); g.translate(cx+sc*0.30,by-sc*0.76); g.rotate(-0.14);
+    g.fillRect(-sc*0.30,-sc*0.42,sc*0.60,sc*0.44);
+    g.fillStyle='#6b1f26'; g.fillRect(-sc*0.30,-sc*0.10,sc*0.60,sc*0.10);   // ハットバンド
+    g.restore();
+    g.restore();
+  }
+  else if(kind==='フラミンゴ'){
+    // 新潟：勝ち目が濃いほど羽数が増える（1番手なら3羽）
+    const n=clamp(lv||1,1,3), ox=par(0.06);
+    for(let i=0;i<n;i++){
+      const cx=ox+W*(0.22+i*0.24), sc=H*.074, sw=Math.sin(t/700+i*1.3);
+      g.strokeStyle='#f2879f'; g.lineWidth=Math.max(2,sc*0.16);
+      g.beginPath();                                                  // 立ち脚
+      g.moveTo(cx,gy-sc*0.10); g.lineTo(cx,gy);
+      g.stroke();
+      g.beginPath();                                                  // 折りたたんだ脚
+      g.moveTo(cx,gy-sc*0.14); g.lineTo(cx-sc*0.26,gy-sc*0.30); g.stroke();
+      g.fillStyle='#f79ab2';
+      g.beginPath(); g.ellipse(cx,gy-sc*0.42,sc*0.44,sc*0.30,0,0,7); g.fill();  // 胴
+      g.strokeStyle='#f79ab2'; g.lineWidth=Math.max(2,sc*0.20);
+      g.beginPath();                                                  // S字の首
+      g.moveTo(cx+sc*0.22,gy-sc*0.56);
+      g.bezierCurveTo(cx+sc*0.70,gy-sc*0.80, cx+sc*0.20,gy-sc*1.10, cx+sc*0.52,gy-sc*1.22+sw*sc*0.05);
+      g.stroke();
+      g.fillStyle='#f79ab2';
+      g.beginPath(); g.ellipse(cx+sc*0.56,gy-sc*1.24+sw*sc*0.05,sc*0.16,sc*0.12,0.2,0,7); g.fill();
+      g.fillStyle='#22160f';                                          // くちばし
+      g.beginPath();
+      g.moveTo(cx+sc*0.68,gy-sc*1.26+sw*sc*0.05);
+      g.lineTo(cx+sc*0.96,gy-sc*1.14+sw*sc*0.05);
+      g.lineTo(cx+sc*0.68,gy-sc*1.14+sw*sc*0.05);
+      g.closePath(); g.fill();
+    }
+  }
   else if(kind==='バイク'){
     // 小倉：バイクが数台、隊列で走り抜ける
     const ph=((t/3000)%1);
@@ -2081,7 +2170,7 @@ function drawBack(camX, surface, sg, omen, red, glow, moon, cOmen){
     for(let k=0;k<4;k++) g.fillRect(x+19.5+k*5.5,H*.107,3.5,4);
   }
   // コースの名物（スタンドの奥に見えるので、スタンドより先に描く）
-  if(cOmen) drawOmenScene(cOmen, camX, H*.305);
+  if(cOmen && cOmen.k) drawOmenScene(cOmen.k, camX, H*.305, cOmen.lv, cOmen.at);
   // スタンド（屋根・段・色とりどりの観客）
   const top=H*.34, bot=H*.545;
   g.fillStyle='#dfe6ec'; g.fillRect(0,top-H*.035,W,H*.035);      // 屋根
@@ -4258,7 +4347,8 @@ function render(now, dt){
     const camX=clamp(me.x-16, 0, D+20);
     const op = (sim && sim.order && sim.order[0]) ? sim.order[0].x/sim.D : 0;
     drawBack(camX,app.race.s,app.sgTheme,app.omen&&op>OMEN_AT,sim&&sim.redSky,sim&&sim.orangeSky,
-             sim&&sim.moonAt, sim&&sim.courseOmen ? COURSE_OMEN[app.race&&app.race.c] : null);
+             sim&&sim.moonAt,
+             (sim&&sim.courseOmen) ? {k:COURSE_OMEN[app.race&&app.race.c], lv:sim.omenLv, at:sim.cOmenAt} : null);
     drawTrack(camX,app.race.s,D,sim.bendAt(me.x));
     drawField(sim,camX);
     const rem=Math.max(0,Math.round((D-me.x)/10)*10);
@@ -4318,7 +4408,7 @@ function render(now, dt){
     if(sim){
       const camX=clamp(sim.me.x-16,0,sim.D+20);
       drawBack(camX,app.race.s,app.sgTheme,app.omen,sim.redSky,sim.orangeSky,sim.moonAt,
-               sim.courseOmen ? COURSE_OMEN[app.race&&app.race.c] : null);
+               sim.courseOmen ? {k:COURSE_OMEN[app.race&&app.race.c], lv:sim.omenLv, at:sim.cOmenAt} : null);
       drawTrack(camX,app.race.s,sim.D,0);
       drawField(sim,camX);
     }
