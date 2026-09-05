@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 import time
 import unicodedata
@@ -51,6 +52,34 @@ JRA_RESULT_URL = "https://race.netkeiba.com/race/result.html?race_id={race_id}"
 JRA_SHUTUBA_PAST_URL = "https://race.netkeiba.com/race/shutuba_past.html?race_id={race_id}"
 JRA_CALENDAR_URL = "https://race.netkeiba.com/top/calendar.html?year={year}&month={month}"
 JRA_RACE_LIST_URL = "https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={date}"
+# 発走前のオッズ。馬柱ページのオッズ欄はJSで埋まるため（HTMLは常に ---.-）、
+# 予想時はこのAPIから取る。過去レースは結果ページの確定オッズで補完する
+JRA_ODDS_URL = ("https://race.netkeiba.com/api/api_get_jra_odds.html"
+                "?race_id={race_id}&type=1&action=init")
+
+
+def fetch_jra_odds(race_id: str, fetcher: "Fetcher",
+                   refresh: bool = True) -> dict[int, tuple[float, int]]:
+    """発走前の単勝オッズを取る。戻り値は 馬番 → (オッズ, 人気)。
+
+    オッズは刻々と変わるので既定でキャッシュを使わない。
+    取れなければ空の辞書を返す（呼び出し側は中立に倒すこと）。
+    """
+    html = fetcher.get(JRA_ODDS_URL.format(race_id=race_id),
+                       f"odds_{race_id}", refresh=refresh)
+    if not html:
+        return {}
+    try:
+        data = json.loads(html).get("data", {}).get("odds", {}).get("1", {})
+    except (json.JSONDecodeError, AttributeError):
+        return {}
+    out: dict[int, tuple[float, int]] = {}
+    for umaban, vals in data.items():
+        try:
+            out[int(umaban)] = (float(vals[0]), int(vals[2]))
+        except (ValueError, IndexError, TypeError):
+            continue
+    return out
 
 
 def jra_venue_of(race_id: str) -> str:
