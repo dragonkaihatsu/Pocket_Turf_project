@@ -143,7 +143,8 @@ def cmd_text(args) -> None:
                                  favorite_odds=fav.tansho_odds if fav else None)
         title = f"{r.get('venue', '')}{r['race_no']} {r['name']}"
         blocks.append(format_race(title, r.get("surface", ""), r.get("post_time", ""),
-                                  marked, scores, plan, exp))
+                                  marked, scores, plan, exp,
+                                  measure=args.measure))
     text = format_day(blocks, cfg.get("heading", "予想"))
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -291,6 +292,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_text.add_argument("--output", required=True, help="出力テキストパス")
     p_text.add_argument("--records", help="馬別戦績CSV")
     p_text.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_text.add_argument("--measure", action="store_true",
+                        help="100点メジャー（馬単体能力45/好走傾向40/騎手8/血統7）の"
+                             "内訳を添える。順位は変わらない")
     p_text.add_argument("--encoding", default="utf-8-sig",
                         choices=["utf-8-sig", "utf-8", "cp932"],
                         help="出力の文字コード。既定はBOM付きUTF-8（Windowsで"

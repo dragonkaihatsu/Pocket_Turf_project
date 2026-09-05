@@ -60,7 +60,8 @@ class TestTextReport(unittest.TestCase):
                         or "◎と1番人気: 不一致" in self.text)
 
     def test_notes_that_training_is_not_scored(self):
-        self.assertIn("調教は採点対象外", self.text)
+        self.assertIn("採点対象外", self.text)
+        self.assertIn("調教", self.text)
         self.assertIn("満点75点", self.text)
 
     def test_missing_expectation_shows_a_dash_not_a_made_up_number(self):
@@ -82,3 +83,37 @@ class TestTextReport(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMeasure(unittest.TestCase):
+    """100点メジャーは順位を変えず、同じスコアを4軸で読み直すだけ。"""
+
+    def _score(self):
+        from keiba.models import Horse
+        from keiba.scoring import score_race
+        field = [Horse.from_row({
+            "馬番": str(i), "枠番": "1", "馬名": f"馬{i}", "性齢": "牡4", "斤量": "56",
+            "騎手": "テスト", "前走着順": str(i), "前走レース名": "X",
+            "上がり3F": f"{34.0 + i * 0.2:.1f}", "調教評価": "", "脚質": "先行",
+        }) for i in range(1, 7)]
+        return score_race(field, None)
+
+    def test_categories_and_totals(self):
+        from keiba.measure import MAX_TOTAL, measure_of
+        m = measure_of(self._score()[0])
+        self.assertEqual([c.label for c in m.categories],
+                         ["馬単体能力", "好走傾向", "騎手", "血統"])
+        # 調教・好走傾向が採点対象外なので満点は100点に届かない。
+        # 届かないぶんを引き伸ばして100点にはしない
+        self.assertLess(m.max_points, MAX_TOTAL)
+        self.assertLessEqual(m.points, m.max_points)
+        self.assertFalse(m.is_full_scale)
+
+    def test_measure_does_not_change_the_order(self):
+        from keiba.marks import assign_marks
+        from keiba.measure import measure_of
+        marked = assign_marks(self._score(), baba="良")
+        by_score = [m.score.horse.umaban for m in marked]
+        by_measure = [m.score.horse.umaban for m in
+                      sorted(marked, key=lambda m: -measure_of(m.score).points)]
+        self.assertEqual(by_score, by_measure)

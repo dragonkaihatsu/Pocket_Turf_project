@@ -14,8 +14,10 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
 class TestScoringBasics(unittest.TestCase):
-    def test_max_base_is_85(self):
-        self.assertEqual(MAX_BASE, 85)
+    def test_max_base_is_95(self):
+        """基礎能力25+前走内容20+コース適性15+距離15+調教10+好走傾向10。
+        調教と好走傾向はデータが無ければ採点対象外になり、実質75点になる。"""
+        self.assertEqual(MAX_BASE, 95)
 
     def test_age_parsing(self):
         h = Horse.from_row({"馬番": "1", "枠番": "1", "馬名": "A", "性齢": "牡7", "斤量": "58",
@@ -156,8 +158,10 @@ class TestChokyoOptOut(unittest.TestCase):
         self.assertFalse(item.scored)
         self.assertEqual(item.points, 0.0)
         self.assertIn("採点対象外", item.note)
-        self.assertEqual(s.max_base, MAX_BASE - MAX_CHOKYO)
-        self.assertEqual(s.skipped_items, ["調教"])
+        # 馬別戦績も渡していないので好走傾向も同時に外れる
+        from keiba.scoring import MAX_KOSOU
+        self.assertEqual(s.max_base, MAX_BASE - MAX_CHOKYO - MAX_KOSOU)
+        self.assertEqual(s.skipped_items, ["調教", "好走傾向"])
 
     def test_scoring_resumes_when_someone_has_data(self):
         """一部の馬だけ評価がある場合は採点を続ける。
@@ -172,8 +176,10 @@ class TestChokyoOptOut(unittest.TestCase):
         self.assertTrue(graded.scored)
         self.assertTrue(blank.scored)
         self.assertGreater(graded.points, blank.points)
-        self.assertEqual(scores[1].max_base, MAX_BASE)
-        self.assertEqual(scores[1].skipped_items, [])
+        from keiba.scoring import MAX_KOSOU
+        # 好走傾向は馬別戦績が無いので外れたまま
+        self.assertEqual(scores[1].max_base, MAX_BASE - MAX_KOSOU)
+        self.assertEqual(scores[1].skipped_items, ["好走傾向"])
 
     def test_skipping_does_not_change_the_order(self):
         """全馬から同じ定数を引くだけなので、順位は変わらない。"""
@@ -183,3 +189,48 @@ class TestChokyoOptOut(unittest.TestCase):
                  sorted(score_race(field, None), key=lambda s: s.total_yoi, reverse=True)]
         self.assertEqual(len(order), 3)
         self.assertEqual(sorted(order), [1, 2, 3])
+
+
+class TestKosouKeiko(unittest.TestCase):
+    """好走傾向（直近5走の着内率）は、レースの6割が戦績を持つときだけ採点する。
+
+    一部の馬しか戦績が無い状態で採点すると、実力ではなく「データが取れて
+    いるかどうか」で差が付く。大井244レースの実測では、戦績を持つ馬が24%
+    しかいない状態で採点した結果、馬連上位4頭BOXの回収率が135%→99%に落ちた。
+    """
+
+    def _rows(self, chakujun):
+        return [{"日付": f"2026-0{i+1}-01", "着順": str(c), "馬名": "A"}
+                for i, c in enumerate(chakujun)]
+
+    def test_all_in_the_money_scores_full_marks(self):
+        from keiba.scoring import MAX_KOSOU, score_kosou_keiko
+        item = score_kosou_keiko(self._rows([1, 2, 3, 1, 2]), field_coverage=1.0)
+        self.assertTrue(item.scored)
+        self.assertEqual(item.points, MAX_KOSOU)
+        self.assertIn("100%", item.note)
+
+    def test_never_in_the_money_scores_zero(self):
+        from keiba.scoring import score_kosou_keiko
+        item = score_kosou_keiko(self._rows([8, 9, 7, 10, 6]), field_coverage=1.0)
+        self.assertEqual(item.points, 0.0)
+
+    def test_only_the_latest_five_runs_count(self):
+        from keiba.scoring import score_kosou_keiko
+        # 古い6走はすべて1着だが、直近5走がすべて着外なら0点
+        item = score_kosou_keiko(self._rows([1] * 6 + [9] * 5), field_coverage=1.0)
+        self.assertEqual(item.points, 0.0)
+
+    def test_skipped_when_the_field_lacks_records(self):
+        from keiba.scoring import MAX_KOSOU, score_kosou_keiko
+        item = score_kosou_keiko(self._rows([1, 1, 1]), field_coverage=0.24)
+        self.assertFalse(item.scored)
+        self.assertEqual(item.points, 0.0)
+        self.assertIn("採点対象外", item.note)
+        self.assertEqual(item.max_points, MAX_KOSOU)
+
+    def test_a_horse_without_records_gets_the_neutral_value(self):
+        from keiba.scoring import MAX_KOSOU, score_kosou_keiko
+        item = score_kosou_keiko([], field_coverage=1.0)
+        self.assertTrue(item.scored)
+        self.assertEqual(item.points, MAX_KOSOU * 0.5)

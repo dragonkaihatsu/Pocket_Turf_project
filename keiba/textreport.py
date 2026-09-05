@@ -12,6 +12,7 @@ from .betting import BettingPlan
 from .boxes import build_options
 from .expectation import Expectation
 from .marks import MarkedHorse
+from .measure import measure_of
 from .scoring import HorseScore
 from .single import best_single
 
@@ -50,8 +51,14 @@ def format_race(
     plan: BettingPlan,
     exp: Expectation | None = None,
     n_show: int = 8,
+    measure: bool = False,
 ) -> str:
-    """1レース分をテキストにする。"""
+    """1レース分をテキストにする。
+
+    measure=True で【100点メジャー】を添える。馬単体能力・好走傾向・騎手・
+    血統の4軸に束ね直した内訳で、**順位は変わらない**（同じスコアの読み方を
+    変えるだけ）。順位まで動かすと回収率が落ちることは実測してある。
+    """
     exp = exp if exp is not None else Expectation()
     out: list[str] = [RULE, f"{title}  {surface}  発走{post_time}"]
 
@@ -86,6 +93,14 @@ def format_race(
     out.append("【スコア順】")
     for i, m in enumerate(marked[:n_show], start=1):
         out.append(_horse_line(i, m, exp))
+
+    if measure:
+        out.append("")
+        out.append("【100点メジャー】馬単体能力45 / 好走傾向40 / 騎手8 / 血統7")
+        for m in marked[:n_show]:
+            mm = measure_of(m.score)
+            out.append(f"  {m.mark} {m.score.horse.umaban:>2} "
+                       f"{m.score.horse.name:<14}{mm.line()}")
 
     marked_umaban = {m.score.horse.umaban for m in marked}
     rest = [s for s in sorted(scores, key=lambda s: s.total_yoi, reverse=True)

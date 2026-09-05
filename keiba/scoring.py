@@ -25,13 +25,22 @@ MAX_ZENSO = 20
 MAX_COURSE = 15
 MAX_KYORI = 15
 MAX_CHOKYO = 10
-MAX_BASE = MAX_KISO + MAX_ZENSO + MAX_COURSE + MAX_KYORI + MAX_CHOKYO  # 85
+MAX_KOSOU = 10
+MAX_BASE = (MAX_KISO + MAX_ZENSO + MAX_COURSE + MAX_KYORI
+            + MAX_CHOKYO + MAX_KOSOU)  # 95（調教を採点対象外にすると85）
 
 # 実測成績（scripts/build_ratings.py が作る）。あれば内蔵リストより優先する。
 # どのプロファイル（地方/中央）の値を読むかは keiba.profile が決める
 MIN_RIDES = 20      # 騎手補正を効かせる最低騎乗数
 MIN_PROGENY = 20    # 血統補正を効かせる最低産駒数
 MIN_SELF_STARTS = 3 # 馬自身の戦績を適性判断に使う最低出走数
+MIN_KOSOU_STARTS = 3  # 好走傾向を採点する最低出走数
+KOSOU_WINDOW = 5      # 好走傾向を見る直近レース数
+# 好走傾向を採点するのに必要な「戦績を持つ馬」の割合。一部の馬しか戦績が
+# 無い状態で採点すると、実力ではなく**データが取れているかどうか**で差が
+# 付いてしまう。大井244レースで実測したところ、24%しか戦績が無い状態で
+# 採点した結果、馬連上位4頭BOXの回収率が135%→99%に落ちた。
+MIN_KOSOU_COVERAGE = 0.6
 
 # 騎手・血統補正の重み。CLAUDE.md の方針では騎手・血統は馬自身の能力に
 # 「上乗せされる価値」であって、能力評価を覆すものではない。
@@ -321,6 +330,47 @@ def score_chokyo(horse: Horse, field_horses: list[Horse] | None = None) -> Score
     return ScoreItem("調教", 5, "調教評価データなし→中立値", max_points=MAX_CHOKYO)
 
 
+def score_kosou_keiko(past: list[dict] | None,
+                     field_coverage: float = 1.0) -> ScoreItem:
+    """好走傾向（10点）: 直近5走の着内率をそのまま点数にする。
+
+    大井9-12R 244レースの実測で、直近5走の着内率は実際の着内率と単調に対応した
+    （0%の馬 14.0% → 80-100%の馬 66.0%）。しかもスコア順位で層別しても
+    差が残る（1-2位で50.0%対69.7%、3-4位で34.4%対53.7%、5-8位で14.7%対
+    25.7%）ため、既存の能力スコアが取りこぼしている情報がここにある。
+
+    ただし**市場はこれをかなり織り込んでいる**（人気で層別すると差が
+    安定しない）。スコアの当てはまりは良くなるが、それだけで妙味が
+    出るわけではない点に注意。
+
+    戦績が3走に満たない馬は判断材料が無いので中立値。ただし**戦績を持つ馬が
+    レースの6割に満たない場合は項目ごと採点対象外**にする。一部の馬だけ
+    採点すると、実力ではなくデータが取れているかどうかで差が付くためで、
+    実測でも回収率が明確に落ちた（135%→99%）。
+    """
+    if field_coverage < MIN_KOSOU_COVERAGE:
+        return ScoreItem(
+            "好走傾向", 0.0,
+            f"採点対象外（戦績を持つ馬が{field_coverage:.0%}しかいない／"
+            f"{MIN_KOSOU_COVERAGE:.0%}必要）",
+            scored=False, max_points=MAX_KOSOU)
+    if past is None or len(past) < MIN_KOSOU_STARTS:
+        return ScoreItem("好走傾向", MAX_KOSOU * 0.5, "直近戦績が3走未満→中立値",
+                         max_points=MAX_KOSOU)
+
+    recent = past[-KOSOU_WINDOW:]
+    ok = [r for r in recent if str(r.get("着順", "")).isdigit()]
+    if not ok:
+        return ScoreItem("好走傾向", MAX_KOSOU * 0.5, "直近走の着順が取れず→中立値",
+                         max_points=MAX_KOSOU)
+    rate = sum(1 for r in ok if int(r["着順"]) <= 3) / len(ok)
+    pts = round(_scale(rate, 0.0, 1.0, 0.0, MAX_KOSOU), 2)
+    return ScoreItem("好走傾向", pts,
+                     f"直近{len(ok)}走の着内率 {rate:.0%}"
+                     f"（{'-'.join(str(r['着順']) for r in ok)}着）",
+                     max_points=MAX_KOSOU)
+
+
 # ---------------------------------------------------------------------------
 # 補正項目（加減算）
 # ---------------------------------------------------------------------------
@@ -518,6 +568,8 @@ def score_horse(
     中央のレースで大井の実績を探しに行く潜在バグだったため None にした。
     """
     self_course = self_kyori = None
+    past: list[dict] | None = None
+    kosou_coverage = 0.0
     if records is not None:
         from .horsedb import records_before, summarize
         # 後知恵を排除するため、レース日より前の戦績だけを見る
@@ -527,6 +579,12 @@ def score_horse(
                 self_course = summarize(past, ba=venue)
             if kyori:
                 self_kyori = summarize(past, kyori=kyori)
+        # 好走傾向は「レース内の何割が戦績を持っているか」で採点可否を決める
+        if field_horses:
+            have = sum(
+                1 for h in field_horses
+                if len(records_before(records.get(h.name, []), as_of)) >= MIN_KOSOU_STARTS)
+            kosou_coverage = have / len(field_horses)
 
     course_item, has_experience = score_course_tekisei(horse, history, self_course)
     ratings = load_ratings()
@@ -537,6 +595,7 @@ def score_horse(
         course_item,
         score_kyori_tekisei(horse, None, ratings, self_kyori),
         score_chokyo(horse, field_horses),
+        score_kosou_keiko(past, kosou_coverage),
     ]
     corrections = [
         correction_kishu(horse, jockey_tiers, ratings),
