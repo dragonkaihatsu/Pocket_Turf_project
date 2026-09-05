@@ -913,7 +913,10 @@ function racesFor(g){
 }
 /* 騎手手当を導入したぶん、賞金の額面そのものを1.5倍に引き上げてある。
    手取りは prizeOf × 着順率 −（騎手の手当%）。 */
-const PRIZE_MUL = 1.5;
+/* 賞金はすべてここを通る（条件戦・重賞・SGとも）。全体の額面を動かすなら
+   個々の表ではなくこの1か所を触ること。騎手手当は賞金からの歩合なので
+   自動で追随し、「安い騎手か、勝ち星か」の選択は崩れない。 */
+const PRIZE_MUL = 2.25;
 const prizeOf = r => Math.round(PRIZE_MUL * (r.prize!=null ? r.prize
   : (r.g==='jo' ? COND_PRIZE[clamp(r.lv||0,0,3)] : GRADE_PRIZE[r.g])));
 /* 次に出走できる週を先読みする（50週あるので目安がないと待ち方が分からない） */
