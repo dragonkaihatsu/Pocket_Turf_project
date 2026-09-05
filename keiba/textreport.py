@@ -13,8 +13,22 @@ from .boxes import build_options
 from .expectation import Expectation
 from .marks import MarkedHorse
 from .scoring import HorseScore
+from .single import best_single
 
 RULE = "━" * 46
+
+# cp932（Shift_JIS）に無い文字の置き換え。古いWindows環境向けに
+# 出力するとき、1文字のせいで書き出しごと失敗するのを防ぐ
+CP932_SUBSTITUTES = {"—": "－"}
+
+
+def to_encoding(text: str, encoding: str) -> str:
+    """指定の文字コードで表現できない文字を、近い形の文字に置き換える。"""
+    if encoding.lower().replace("_", "-") not in ("cp932", "shift-jis", "shift-jis"):
+        return text
+    for src, dst in CP932_SUBSTITUTES.items():
+        text = text.replace(src, dst)
+    return text
 
 
 def _horse_line(rank: int, m: MarkedHorse, exp: Expectation) -> str:
@@ -54,6 +68,19 @@ def format_race(
 
     if marked and (skipped := marked[0].score.skipped_items):
         out.append(f"※ {'・'.join(skipped)}は採点対象外（満点{marked[0].score.max_base:.0f}点）")
+
+    # 目玉: ワイド1点。当てにいくのではなく、損を小さく保って回収率を取る
+    pick = best_single(order, favorite_odds=fav)
+    out.append("")
+    if pick is None:
+        out.append("【ワイド1点】実測データなし → 判断材料なし")
+    elif pick.recommended:
+        out.append(f"【ワイド1点】★ {pick.combo}  （{pick.label}）")
+        out.append(f"    {pick.stat_text()}")
+    else:
+        out.append(f"【ワイド1点】見送り推奨  参考: {pick.combo}（{pick.label}）")
+        out.append(f"    {pick.reason}")
+        out.append(f"    {pick.stat_text()}")
 
     out.append("")
     out.append("【スコア順】")

@@ -36,7 +36,7 @@ from .models import load_history, load_horses
 from .pace import forecast_pace
 from .report import generate_report
 from .scoring import score_race
-from .textreport import format_day, format_race
+from .textreport import format_day, format_race, to_encoding
 from .stats import aggregate, format_report, load_records
 
 
@@ -147,7 +147,8 @@ def cmd_text(args) -> None:
     text = format_day(blocks, cfg.get("heading", "予想"))
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(text, encoding="utf-8")
+    # BOM付きUTF-8。Windowsのメモ帳・Excelが文字コードを取り違えないようにする
+    out.write_text(to_encoding(text, args.encoding), encoding=args.encoding)
     print(text)
     print(f"\n書き出し完了: {out}")
 
@@ -290,6 +291,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_text.add_argument("--output", required=True, help="出力テキストパス")
     p_text.add_argument("--records", help="馬別戦績CSV")
     p_text.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_text.add_argument("--encoding", default="utf-8-sig",
+                        choices=["utf-8-sig", "utf-8", "cp932"],
+                        help="出力の文字コード。既定はBOM付きUTF-8（Windowsで"
+                             "文字化けしない）。古い環境向けに cp932 も選べる")
     p_text.set_defaults(func=cmd_text)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
