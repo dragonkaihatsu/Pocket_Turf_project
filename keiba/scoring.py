@@ -236,6 +236,8 @@ def score_kyori_tekisei(
     kyori_hyoka_override: float | None,
     ratings: dict | None = None,
     self_kyori: dict | None = None,
+    ichi_band: str = "",
+    ichi_note: str = "",
 ) -> ScoreItem:
     """距離・展開・脚質（15点）。
 
@@ -267,25 +269,29 @@ def score_kyori_tekisei(
         kyori_note = (f"当該距離{n}走・平均着順{avg:.1f}着"
                       f"（{self_kyori['勝']}勝・複勝率{self_kyori['複'] / n:.0%}）")
 
-    table = ratings.get("脚質", {})
+    # 展開パート: その馬自身の4角履歴から推定した位置を優先し、
+    # 無ければ脚質ラベルに落とす。中央の「逃げ」は4割弱しかハナを取れず
+    # 複勝率も差し馬と同じで、ラベルだけでは順序尺度にならないため
     kyaku = horse.kyakushitsu.strip()
-    rec = table.get(kyaku)
+    for key, label, note_head in (("位置推定", ichi_band, ichi_note),
+                                  ("脚質", kyaku, f"脚質「{kyaku}」")):
+        table = ratings.get(key, {})
+        rec = table.get(label) if label else None
+        if not rec or rec.get("n", 0) < MIN_KYAKUSHITSU:
+            continue
+        # 実測複勝率を、その表のいちばん低い区分〜いちばん高い区分で正規化する
+        rates = [v["複勝率"] for v in table.values() if v.get("n", 0) >= MIN_KYAKUSHITSU]
+        lo, hi = min(rates), max(rates)
+        pts = _scale(rec["複勝率"], lo, hi, half * 0.3, half) if hi > lo else half * 0.55
+        head = note_head if key == "脚質" else f"推定位置「{label}」{note_head}"
+        return ScoreItem(
+            "距離・展開・脚質", round(kyori_pts + pts, 2),
+            f"{kyori_note}／{head} 実測複勝率{rec['複勝率']:.1%}(n={rec['n']})",
+        )
 
-    if not rec or rec.get("n", 0) < MIN_KYAKUSHITSU:
-        reason = (f"脚質「{kyaku}」の実測が母数不足(n={rec['n']})" if rec
-                  else ("脚質データなし" if not kyaku else f"脚質「{kyaku}」の実測値なし"))
-        return ScoreItem("距離・展開・脚質", round(kyori_pts + half * 0.55, 2),
-                          f"{kyori_note}／{reason}→脚質は中立")
-
-    # 実測複勝率を、その場のいちばん低い脚質〜いちばん高い脚質で正規化する
-    rates = [v["複勝率"] for v in table.values() if v.get("n", 0) >= MIN_KYAKUSHITSU]
-    lo, hi = min(rates), max(rates)
-    kyaku_pts = _scale(rec["複勝率"], lo, hi, half * 0.3, half) if hi > lo else half * 0.55
-
-    return ScoreItem(
-        "距離・展開・脚質", round(kyori_pts + kyaku_pts, 2),
-        f"{kyori_note}／脚質「{kyaku}」実測複勝率{rec['複勝率']:.1%}(n={rec['n']})",
-    )
+    reason = "脚質データなし" if not kyaku else f"脚質「{kyaku}」の実測値なし・母数不足"
+    return ScoreItem("距離・展開・脚質", round(kyori_pts + half * 0.55, 2),
+                     f"{kyori_note}／{reason}→展開は中立")
 
 
 CHOKYO_TABLE = {"S": 10, "A": 8, "B": 6, "C": 4, "D": 2}
@@ -562,6 +568,7 @@ def score_horse(
     records: dict[str, list[dict]] | None = None,
     as_of=None,
     venue: str | None = None,
+    corner_records: dict[str, list[dict]] | None = None,
 ) -> HorseScore:
     """venue は開催場名。コース適性はその場での自己成績から出すため、
     **渡さないとコース適性は中立になる**。以前は既定が「大井」だったが、
@@ -586,6 +593,14 @@ def score_horse(
                 if len(records_before(records.get(h.name, []), as_of)) >= MIN_KOSOU_STARTS)
             kosou_coverage = have / len(field_horses)
 
+    # 4角の位置推定。過去の通過順と脚質ラベルを合わせて「何番手にいそうか」を出す
+    ichi_band = ichi_note = ""
+    if corner_records is not None:
+        from .tenkai import band_of, estimate, records_before as corner_before
+        past_c = corner_before(corner_records.get(horse.name, []), as_of)
+        rel, ichi_note = estimate(past_c, horse.kyakushitsu)
+        ichi_band = band_of(rel)
+
     course_item, has_experience = score_course_tekisei(horse, history, self_course)
     ratings = load_ratings()
 
@@ -593,7 +608,7 @@ def score_horse(
         score_kiso_nouryoku(horse, field_horses),
         score_zenso_naiyou(horse),
         course_item,
-        score_kyori_tekisei(horse, None, ratings, self_kyori),
+        score_kyori_tekisei(horse, None, ratings, self_kyori, ichi_band, ichi_note),
         score_chokyo(horse, field_horses),
         score_kosou_keiko(past, kosou_coverage),
     ]
@@ -623,6 +638,7 @@ def score_race(
     records: dict[str, list[dict]] | None = None,
     as_of=None,
     venue: str | None = None,
+    corner_records: dict[str, list[dict]] | None = None,
 ) -> list[HorseScore]:
     """出走馬をまとめて採点する。
 
@@ -633,4 +649,4 @@ def score_race(
     渡さなければコース適性は中立のままになる。
     """
     return [score_horse(h, horses, history, kyori, jockey_tiers,
-                        records, as_of, venue) for h in horses]
+                        records, as_of, venue, corner_records) for h in horses]

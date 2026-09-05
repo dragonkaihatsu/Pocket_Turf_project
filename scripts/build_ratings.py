@@ -16,8 +16,13 @@ import argparse
 import csv
 import json
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keiba.tenkai import band_of, estimate, load_corner_records, records_before
 
 
 # ファイル名は「日付_場名+レース番号R_レース名_種別.csv」。競馬場名は
@@ -37,10 +42,15 @@ def parse_races(spec: str) -> set[int]:
     return {int(x) for x in spec.split(",")}
 
 
-def build(directory: Path, wanted: set[int] | None = None) -> dict:
+DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
+
+
+def build(directory: Path, wanted: set[int] | None = None,
+          corner_records: dict[str, list[dict]] | None = None) -> dict:
     jockey: dict[str, list[int]] = defaultdict(list)
     sire: dict[str, list[int]] = defaultdict(list)
     kyakushitsu: dict[str, list[int]] = defaultdict(list)
+    ichi: dict[str, list[int]] = defaultdict(list)
     races = 0
 
     for res in sorted(directory.glob("*_結果.csv")):
@@ -48,6 +58,9 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
             rn = race_number(res.name.replace("_結果.csv", ""))
             if rn is None or rn not in wanted:
                 continue
+        stem = res.name.replace("_結果.csv", "")
+        m = DATE_RE.match(stem)
+        as_of = m.group(1) if m else None
         rows = [r for r in csv.DictReader(open(res, encoding="utf-8-sig"))
                 if (r.get("着順") or "").isdigit()]
         if not rows:
@@ -56,12 +69,14 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
 
         sires: dict[int, str] = {}
         kyaku: dict[int, str] = {}
+        names: dict[int, str] = {}
         ent = directory / res.name.replace("_結果.csv", "_出走馬.csv")
         if ent.exists():
             for e in csv.DictReader(open(ent, encoding="utf-8-sig")):
                 if (e.get("馬番") or "").isdigit():
                     sires[int(e["馬番"])] = (e.get("血統父") or "").strip()
                     kyaku[int(e["馬番"])] = (e.get("脚質") or "").strip()
+                    names[int(e["馬番"])] = (e.get("馬名") or "").strip()
 
         for r in rows:
             chaku = int(r["着順"])
@@ -72,6 +87,13 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
                 sire[s].append(chaku)
             if k := kyaku.get(umaban, ""):
                 kyakushitsu[k].append(chaku)
+            # 推定位置。後知恵を避けるためレース日より前の4角履歴だけ使う
+            if corner_records is not None:
+                name = names.get(umaban) or (r.get("馬名") or "").strip()
+                past = records_before(corner_records.get(name, []), as_of)
+                rel, _ = estimate(past, kyaku.get(umaban, ""))
+                if (b := band_of(rel)):
+                    ichi[b].append(chaku)
 
     def summarize(d: dict[str, list[int]]) -> dict:
         return {
@@ -83,8 +105,11 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
             for k, v in sorted(d.items()) if v
         }
 
-    return {"レース数": races, "騎手": summarize(jockey), "種牡馬": summarize(sire),
-            "脚質": summarize(kyakushitsu)}
+    out = {"レース数": races, "騎手": summarize(jockey), "種牡馬": summarize(sire),
+           "脚質": summarize(kyakushitsu)}
+    if ichi:
+        out["位置推定"] = summarize(ichi)
+    return out
 
 
 def main() -> None:
@@ -92,17 +117,22 @@ def main() -> None:
     ap.add_argument("--dir", default="data/collected")
     ap.add_argument("--out", default="data/ratings.json")
     ap.add_argument("--races", help="対象レース番号で絞る (例: 1-9)")
+    ap.add_argument("--corner-records", help="4角履歴CSV。渡すと「位置推定」も作る")
     args = ap.parse_args()
 
     wanted = parse_races(args.races) if args.races else None
-    ratings = build(Path(args.dir), wanted)
+    corners = load_corner_records(args.corner_records) if args.corner_records else None
+    ratings = build(Path(args.dir), wanted, corners)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(ratings, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{ratings['レース数']}レースから作成: 騎手{len(ratings['騎手'])}人 / "
           f"種牡馬{len(ratings['種牡馬'])}頭 / 脚質{len(ratings['脚質'])}種 → {out}")
     for k, v in sorted(ratings["脚質"].items(), key=lambda x: -x[1]["複勝率"]):
-        print(f"    {k:<6} n={v['n']:>5}  勝率{v['勝率']:.1%}  複勝率{v['複勝率']:.1%}")
+        print(f"    脚質 {k:<6} n={v['n']:>5}  勝率{v['勝率']:.1%}  複勝率{v['複勝率']:.1%}")
+    for k in ("最前", "前", "中前", "中後", "後"):
+        if v := ratings.get("位置推定", {}).get(k):
+            print(f"    位置 {k:<6} n={v['n']:>5}  勝率{v['勝率']:.1%}  複勝率{v['複勝率']:.1%}")
 
 
 if __name__ == "__main__":

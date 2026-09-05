@@ -36,6 +36,7 @@ from .models import load_history, load_horses
 from .pace import forecast_pace
 from .report import generate_report
 from .scoring import score_race
+from .blog import format_day_html, format_race_html
 from .textreport import format_day, format_race, to_encoding
 from .stats import aggregate, format_report, load_records
 
@@ -131,12 +132,17 @@ def cmd_text(args) -> None:
     """開催日の設定JSONから、スコア順・候補一覧のテキストを書き出す。"""
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
     records = _load_horse_records(args.records)
+    corners = None
+    if getattr(args, "corner_records", None):
+        from .tenkai import load_corner_records
+        corners = load_corner_records(args.corner_records)
     exp = Expectation()
     blocks = []
     for r in cfg["races"]:
         horses = load_horses(r["entries"])
         scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
-                            as_of=args.race_date, venue=r.get("venue"))
+                            as_of=args.race_date, venue=r.get("venue"),
+                            corner_records=corners)
         marked = assign_marks(scores, baba=r.get("baba", "良"))
         fav = min((h for h in horses if h.ninki), key=lambda h: h.ninki, default=None)
         plan = make_betting_plan(marked, baba=r.get("baba", "良"),
@@ -152,6 +158,70 @@ def cmd_text(args) -> None:
     out.write_text(to_encoding(text, args.encoding), encoding=args.encoding)
     print(text)
     print(f"\n書き出し完了: {out}")
+
+
+def cmd_blog(args) -> None:
+    """アメーバブログのHTML編集にそのまま貼れるHTMLを書き出す。
+
+    アメブロには外部投稿APIが無いため、自動投稿はできない。生成した
+    ファイルを開いて中身をコピーし、記事作成画面の「HTML表示」に貼る。
+    """
+    cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    records = _load_horse_records(args.records)
+    corners = None
+    if args.corner_records:
+        from .tenkai import load_corner_records
+        corners = load_corner_records(args.corner_records)
+    exp = Expectation()
+    blocks: list[str] = []
+    titles: list[str] = []
+    for r in cfg["races"]:
+        horses = load_horses(r["entries"])
+        scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
+                            as_of=args.race_date, venue=r.get("venue"),
+                            corner_records=corners)
+        marked = assign_marks(scores, baba=r.get("baba", "良"))
+        fav = min((h for h in horses if h.ninki), key=lambda h: h.ninki, default=None)
+        plan = make_betting_plan(marked, baba=r.get("baba", "良"),
+                                 favorite_odds=fav.tansho_odds if fav else None)
+        title = f"{r.get('venue', '')}{r['race_no']} {r['name']}"
+        titles.append(title)
+        blocks.append(format_race_html(title, r.get("surface", ""),
+                                       r.get("post_time", ""), marked, scores, plan, exp))
+    from .blog import AMEBA_LIMIT, SAFE_LIMIT, fits_ameba
+
+    heading = cfg.get("heading", "予想")
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    written: list[tuple[Path, int]] = []
+    if args.split:
+        # 1記事1レース。レース数が多い日でも確実に上限に収まる
+        for i, (block, title) in enumerate(zip(blocks, titles), start=1):
+            html_out = format_day_html([block], f"{heading}　{title}", args.note)
+            p = out.with_name(f"{out.stem}_{i:02d}{out.suffix}")
+            p.write_text(html_out, encoding="utf-8")
+            written.append((p, len(html_out)))
+    else:
+        html_out = format_day_html(blocks, heading, args.note)
+        out.write_text(html_out, encoding="utf-8")
+        written.append((out, len(html_out)))
+
+    for p, n in written:
+        ok, _ = fits_ameba(p.read_text(encoding="utf-8"))
+        mark = "" if ok else ("  ← 上限超過" if n > AMEBA_LIMIT else "  ← 上限に近い")
+        print(f"書き出し: {p}  {n:,}文字{mark}")
+    over = [p for p, n in written if n > SAFE_LIMIT]
+    if over:
+        print(f"\nアメブロの本文はHTMLタグ込みで半角{AMEBA_LIMIT:,}文字までです"
+              f"（投稿時の自動整形で増えることがあるため{SAFE_LIMIT:,}文字を目安に）。")
+        print("--split を付けると1レース1記事に分けて書き出します。")
+    print("\nアメブロへの貼り方:")
+    print("  1. ファイルをテキストエディタで開き、中身を全部コピー")
+    print("  2. 記事作成画面で「HTML表示」に切り替える")
+    print("  3. 貼り付けて保存（プレビューはスマホ幅で確認）")
+    print("  ※ style属性は残るが <style> ブロックは落とされるため、"
+          "すべてインラインで組んである")
 
 
 def cmd_daily(args) -> None:
@@ -292,6 +362,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_text.add_argument("--output", required=True, help="出力テキストパス")
     p_text.add_argument("--records", help="馬別戦績CSV")
     p_text.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_text.add_argument("--corner-records",
+                        help="4角履歴CSV。渡すと脚質ラベルの代わりに位置推定を使う"
+                             "（既定オフ）")
     p_text.add_argument("--measure", action="store_true",
                         help="100点メジャー（馬単体能力45/好走傾向40/騎手8/血統7）の"
                              "内訳を添える。順位は変わらない")
@@ -300,6 +373,19 @@ def build_parser() -> argparse.ArgumentParser:
                         help="出力の文字コード。既定はBOM付きUTF-8（Windowsで"
                              "文字化けしない）。古い環境向けに cp932 も選べる")
     p_text.set_defaults(func=cmd_text)
+
+    p_blog = sub.add_parser("blog", help="アメブロ貼り付け用HTML（スマホ表示優先）を出力")
+    p_blog.add_argument("config", help="開催日設定JSON")
+    p_blog.add_argument("--output", required=True, help="出力HTMLパス")
+    p_blog.add_argument("--records", help="馬別戦績CSV")
+    p_blog.add_argument("--corner-records",
+                        help="4角履歴CSV。渡すと脚質ラベルの代わりに位置推定を使う"
+                             "（既定オフ。実測では回収率の改善が確認できていない）")
+    p_blog.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_blog.add_argument("--note", default="", help="記事末尾の注意書きを差し替える")
+    p_blog.add_argument("--split", action="store_true",
+                        help="1レース1記事に分けて書き出す（レース数が多い日向け）")
+    p_blog.set_defaults(func=cmd_blog)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
     p_daily.add_argument("config", help="開催日設定JSON")

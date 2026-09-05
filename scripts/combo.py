@@ -29,6 +29,7 @@ from backtest import (load_race, load_race_info, parse_races, race_date,
                       race_number, race_venue)
 from keiba.cli import _load_horse_records
 from keiba.marks import assign_marks
+from keiba.tenkai import load_corner_records
 
 STAKE = 100
 
@@ -102,6 +103,8 @@ def main() -> None:
     ap.add_argument("--race-info", default=None)
     ap.add_argument("--bootstrap", type=int, default=10000)
     ap.add_argument("--json", help="結果をJSONで書き出す")
+    ap.add_argument("--no-corner", action="store_true",
+                    help="4角履歴による位置推定を使わない（脚質ラベルのみ。A/B比較用）")
     args = ap.parse_args()
 
     prof = profile.use(args.profile)
@@ -115,6 +118,7 @@ def main() -> None:
     wanted = parse_races(args.races)
     kyori_by = load_race_info(info_path)
     records = _load_horse_records(str(prof.path("horse_records.csv")))
+    corners = None if args.no_corner else load_corner_records()
 
     series: dict[tuple[str, str], list[tuple[int, int]]] = {}
     n_races = 0
@@ -130,7 +134,7 @@ def main() -> None:
             continue
         scores = sc.score_race(race["horses"], None, kyori=kyori_by.get(stem),
                                records=records, as_of=race_date(stem),
-                               venue=race_venue(stem))
+                               venue=race_venue(stem), corner_records=corners)
         marked = assign_marks(scores, baba="良")
         if len(marked) < 6:
             continue
