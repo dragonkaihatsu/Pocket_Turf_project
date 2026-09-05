@@ -4,5 +4,8 @@ output/*.html
 !output/.gitkeep
 
 # 取得したHTMLのキャッシュ（再取得を避けるためのもの。リポジトリには含めない）
+# 地方・中央それぞれの結果/馬柱と、馬別成績のキャッシュ
 data/raw/
+data/raw_jra/
 data/raw_horse/
+data/raw_horse_jra/
