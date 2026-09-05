@@ -21,7 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import keiba.scoring as sc
-from backtest import load_race, load_race_info, parse_races, race_date, race_number, settle
+import re
+from backtest import (load_race, load_race_info, parse_races, race_date,
+                      race_number, race_venue, settle)
 from keiba.cli import _load_horse_records
 from keiba.marks import assign_marks
 
@@ -78,7 +80,8 @@ def main() -> None:
         if fav is None or not fav.tansho_odds:
             continue
         scores = sc.score_race(race["horses"], None, kyori=kyori_by.get(stem),
-                               records=records, as_of=race_date(stem))
+                               records=records, as_of=race_date(stem),
+                               venue=race_venue(stem))
         marked = assign_marks(scores, baba="良")
         if len(marked) < max(WIDTHS):
             continue

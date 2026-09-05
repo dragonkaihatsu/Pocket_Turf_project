@@ -64,6 +64,13 @@ def race_number(stem: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def race_venue(stem: str) -> str | None:
+    """ファイル名から開催場名を取る。コース適性はその場の自己成績から
+    出すため、score_race に必ず渡すこと。"""
+    m = re.search(r"_(\D+?)\d{2}R_", stem)
+    return m.group(1) if m else None
+
+
 def parse_races(spec: str) -> set[int]:
     if "-" in spec:
         lo, hi = spec.split("-")
@@ -171,7 +178,8 @@ def main() -> None:
         if race is None:
             continue
         scores = score_race(race["horses"], None, kyori=kyori_by_stem.get(stem),
-                            records=records, as_of=race_date(stem))
+                            records=records, as_of=race_date(stem),
+                               venue=race_venue(stem))
         ranked = sorted(scores, key=lambda s: s.total_yoi, reverse=True)
         used += 1
         fb = field_bucket(race["field"])

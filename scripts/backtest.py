@@ -56,6 +56,13 @@ def race_number(stem: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def race_venue(stem: str) -> str | None:
+    """ファイル名から開催場名を取る。コース適性はその場の自己成績から出すため、
+    score_race に必ず渡すこと（渡さないと中立に倒れて数字が変わる）。"""
+    m = re.search(r"_(\D+?)\d{2}R_", stem)
+    return m.group(1) if m else None
+
+
 def parse_races(spec: str) -> set[int]:
     if "-" in spec:
         lo, hi = spec.split("-")
@@ -202,7 +209,8 @@ def main() -> None:
             continue
         marked = assign_marks(
             score_race(race["horses"], None, kyori=kyori_by_stem.get(stem),
-                       records=records, as_of=race_date(stem)), baba="良")
+                       records=records, as_of=race_date(stem),
+                       venue=race_venue(stem)), baba="良")
         if len(marked) < 6:
             continue
         used += 1

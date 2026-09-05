@@ -58,8 +58,8 @@ def _build_common(args) -> tuple:
     history = load_history(args.history) if args.history else None
     records = _load_horse_records(getattr(args, "records", None))
     as_of = getattr(args, "race_date", None)
-    scores = score_race(horses, history, kyori=args.kyori,
-                        records=records, as_of=as_of)
+    scores = score_race(horses, history, kyori=args.kyori, records=records,
+                        as_of=as_of, venue=getattr(args, "venue", None))
     if records is not None:
         hit = sum(1 for h in horses if h.name in records)
         print(f"馬別戦績: {hit}/{len(horses)}頭に実績データあり"
@@ -246,6 +246,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--output", required=True, help="出力HTMLパス")
     common.add_argument("--records", help="馬別戦績CSV（既定 data/horse_records.csv）")
     common.add_argument("--race-date", help="レース日 (YYYY-MM-DD)。指定するとその日より前の戦績だけを使う")
+    common.add_argument("--venue", help="開催場名。コース適性をその場の自己成績から出す。"
+                                        "省略するとコース適性は中立になる")
 
     p_predict = sub.add_parser("predict", parents=[common], help="スコアリング・買い目プランを出力")
     p_predict.set_defaults(func=cmd_predict)

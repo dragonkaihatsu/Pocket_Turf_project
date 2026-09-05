@@ -467,15 +467,20 @@ def score_horse(
     jockey_tiers: dict[int, tuple[str, ...]] | None = None,
     records: dict[str, list[dict]] | None = None,
     as_of=None,
-    venue: str = "大井",
+    venue: str | None = None,
 ) -> HorseScore:
+    """venue は開催場名。コース適性はその場での自己成績から出すため、
+    **渡さないとコース適性は中立になる**。以前は既定が「大井」だったが、
+    中央のレースで大井の実績を探しに行く潜在バグだったため None にした。
+    """
     self_course = self_kyori = None
     if records is not None:
         from .horsedb import records_before, summarize
         # 後知恵を排除するため、レース日より前の戦績だけを見る
         past = records_before(records.get(horse.name, []), as_of)
         if past:
-            self_course = summarize(past, ba=venue)
+            if venue:
+                self_course = summarize(past, ba=venue)
             if kyori:
                 self_kyori = summarize(past, kyori=kyori)
 
@@ -514,13 +519,15 @@ def score_race(
     jockey_tiers: dict[int, tuple[str, ...]] | None = None,
     records: dict[str, list[dict]] | None = None,
     as_of=None,
-    venue: str = "大井",
+    venue: str | None = None,
 ) -> list[HorseScore]:
     """出走馬をまとめて採点する。
 
     records に馬別戦績（馬名→行）を渡すと、コース適性・距離適性を
     その馬自身の実績から算出する。as_of にレース日を渡すと、それ以前の
     戦績だけを使う（過去レースを採点するときは必ず指定すること）。
+    venue に開催場名を渡すとコース適性がその場の自己成績になる。
+    渡さなければコース適性は中立のままになる。
     """
     return [score_horse(h, horses, history, kyori, jockey_tiers,
                         records, as_of, venue) for h in horses]

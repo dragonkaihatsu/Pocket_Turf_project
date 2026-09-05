@@ -111,6 +111,28 @@ class TestHorseLinkExtraction(unittest.TestCase):
 class TestLookaheadGuardInScoring(unittest.TestCase):
     """score_race に as_of を渡すと未来の戦績が効かないことを確認する。"""
 
+    def test_course_aptitude_needs_the_venue(self):
+        """venue を渡さないとコース適性は中立のまま。
+
+        以前は既定が「大井」で、中央のレースでも大井の実績を探しに行く
+        潜在バグだった。開催場は必ず明示する。
+        """
+        from keiba.models import Horse
+        from keiba.scoring import score_race
+
+        horse = Horse.from_row({
+            "馬番": "1", "枠番": "1", "馬名": "テストホース", "性齢": "牡4",
+            "斤量": "56", "騎手": "テスト", "前走着順": "3", "前走レース名": "X",
+            "上がり3F": "38.0", "調教評価": "", "脚質": "差し",
+        })
+        records = {"テストホース": parse_horse_results(SAMPLE_TABLE, "9999999999")}
+        without = score_race([horse], None, kyori=1200, records=records)
+        with_venue = score_race([horse], None, kyori=1200, venue="大井", records=records)
+        c_without = next(i for i in without[0].base_items if i.label == "コース適性")
+        c_with = next(i for i in with_venue[0].base_items if i.label == "コース適性")
+        self.assertLess(c_without.points, c_with.points)
+        self.assertIn("未提供", c_without.note)
+
     def test_future_record_does_not_change_score(self):
         from keiba.models import Horse
         from keiba.scoring import score_race
@@ -128,10 +150,11 @@ class TestLookaheadGuardInScoring(unittest.TestCase):
         records = {"テストホース": parse_horse_results(SAMPLE_TABLE, "9999999999")}
 
         # 2026-02-02 時点で見えるのは大井1走（+中止1走）だけ → 母数不足で中立
-        before = score_race([horse, other], None, kyori=1200,
+        before = score_race([horse, other], None, kyori=1200, venue="大井",
                             records=records, as_of=date(2026, 2, 2))
         # 全戦績を見れば大井で1勝・平均2.0着 → 加点される
-        after = score_race([horse, other], None, kyori=1200, records=records)
+        after = score_race([horse, other], None, kyori=1200, venue="大井",
+                           records=records)
 
         c_before = next(i for i in before[0].base_items if i.label == "コース適性")
         c_after = next(i for i in after[0].base_items if i.label == "コース適性")
