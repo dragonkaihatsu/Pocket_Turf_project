@@ -113,7 +113,7 @@ def main() -> None:
         info = parse_race_header(html)
         safe = re.sub(r'[\\/:*?"<>|\s]+', "", info["name"]) or f"{no:02d}R"
         path = outdir / f"{args.date}_{venue_name}{no:02d}R_{safe}_出走馬.csv"
-        with open(path, "w", encoding="utf-8", newline="") as f:
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
             w = csv.DictWriter(f, fieldnames=ENTRY_COLUMNS)
             w.writeheader()
             w.writerows(entries)

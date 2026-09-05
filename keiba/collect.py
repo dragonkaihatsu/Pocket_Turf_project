@@ -460,7 +460,7 @@ def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
 
 def _write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)

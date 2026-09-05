@@ -47,7 +47,7 @@ def main() -> None:
         odds = {h.umaban: h.tansho_odds for h in horses if h.tansho_odds}
         if len(odds) < 5:
             continue
-        for p in csv.DictReader(open(pay, encoding="utf-8")):
+        for p in csv.DictReader(open(pay, encoding="utf-8-sig")):
             try:
                 combo = [int(x) for x in p["組み合わせ"].split("-")]
                 actual = int(p["配当"]) / 100.0

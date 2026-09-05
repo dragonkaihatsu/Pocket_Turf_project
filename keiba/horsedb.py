@@ -109,7 +109,7 @@ def load_records(path: Path | str | None = None) -> dict[str, list[dict]]:
     if not p.exists():
         return {}
     by_horse: dict[str, list[dict]] = {}
-    with open(p, encoding="utf-8") as f:
+    with open(p, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             by_horse.setdefault(row["馬ID"], []).append(row)
     for rows in by_horse.values():

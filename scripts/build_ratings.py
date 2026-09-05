@@ -48,7 +48,7 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
             rn = race_number(res.name.replace("_結果.csv", ""))
             if rn is None or rn not in wanted:
                 continue
-        rows = [r for r in csv.DictReader(open(res, encoding="utf-8"))
+        rows = [r for r in csv.DictReader(open(res, encoding="utf-8-sig"))
                 if (r.get("着順") or "").isdigit()]
         if not rows:
             continue
@@ -58,7 +58,7 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
         kyaku: dict[int, str] = {}
         ent = directory / res.name.replace("_結果.csv", "_出走馬.csv")
         if ent.exists():
-            for e in csv.DictReader(open(ent, encoding="utf-8")):
+            for e in csv.DictReader(open(ent, encoding="utf-8-sig")):
                 if (e.get("馬番") or "").isdigit():
                     sires[int(e["馬番"])] = (e.get("血統父") or "").strip()
                     kyaku[int(e["馬番"])] = (e.get("脚質") or "").strip()

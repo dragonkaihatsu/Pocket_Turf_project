@@ -28,14 +28,14 @@ STAKE = 100
 
 
 def load_result(path: Path) -> tuple[list[int], dict[str, dict]]:
-    rows = [r for r in csv.DictReader(open(path, encoding="utf-8"))
+    rows = [r for r in csv.DictReader(open(path, encoding="utf-8-sig"))
             if (r.get("着順") or "").isdigit()]
     rows.sort(key=lambda r: int(r["着順"]))
     order = [int(r["馬番"]) for r in rows if (r.get("馬番") or "").isdigit()]
     pay: dict[str, dict] = {}
     p = path.with_name(path.name.replace("_結果.csv", "_配当.csv"))
     if p.exists():
-        for r in csv.DictReader(open(p, encoding="utf-8")):
+        for r in csv.DictReader(open(p, encoding="utf-8-sig")):
             try:
                 combo = frozenset(int(x) for x in r["組み合わせ"].split("-"))
                 pay.setdefault(r["券種"], {})[combo] = int(r["配当"])
@@ -80,7 +80,7 @@ def main() -> None:
     kyori_by_no: dict[int, int] = {}
     info = Path(args.race_info)
     if info.exists():
-        for row in csv.DictReader(open(info, encoding="utf-8")):
+        for row in csv.DictReader(open(info, encoding="utf-8-sig")):
             if row["stem"].startswith(f"{args.date}_{args.venue}") and (row.get("距離") or "").isdigit():
                 kyori_by_no[int(row["stem"].split("_")[1][len(args.venue):][:2])] = int(row["距離"])
 

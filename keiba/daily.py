@@ -461,5 +461,5 @@ def build_daily_page(config: dict) -> str:
 
 
 def build_from_config(config_path: str | Path) -> str:
-    with open(config_path, encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8-sig") as f:
         return build_daily_page(json.load(f))

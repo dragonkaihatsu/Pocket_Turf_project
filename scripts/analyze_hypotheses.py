@@ -45,28 +45,28 @@ def load(directory: Path):
     races, runners = [], []
     for res in sorted(directory.glob("*_結果.csv")):
         stem = res.name.replace("_結果.csv", "")
-        rows = [r for r in csv.DictReader(open(res, encoding="utf-8")) if _int(r.get("着順"))]
+        rows = [r for r in csv.DictReader(open(res, encoding="utf-8-sig")) if _int(r.get("着順"))]
         if len(rows) < 5:
             continue
 
         entries = {}
         ent_path = directory / f"{stem}_出走馬.csv"
         if ent_path.exists():
-            for e in csv.DictReader(open(ent_path, encoding="utf-8")):
+            for e in csv.DictReader(open(ent_path, encoding="utf-8-sig")):
                 if (u := _int(e.get("馬番"))) is not None:
                     entries[u] = e
 
         umaren = None
         pay_path = directory / f"{stem}_配当.csv"
         if pay_path.exists():
-            for p in csv.DictReader(open(pay_path, encoding="utf-8")):
+            for p in csv.DictReader(open(pay_path, encoding="utf-8-sig")):
                 if p["券種"] == "馬連":
                     umaren = _int(p["配当"])
 
         corner = {}
         cn_path = directory / f"{stem}_通過順.csv"
         if cn_path.exists():
-            cs = {r["コーナー"]: r["通過順"] for r in csv.DictReader(open(cn_path, encoding="utf-8"))}
+            cs = {r["コーナー"]: r["通過順"] for r in csv.DictReader(open(cn_path, encoding="utf-8-sig"))}
             if t := (cs.get("4コーナー") or cs.get("3コーナー")):
                 corner = parse_passing_order(t)
 

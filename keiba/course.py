@@ -74,13 +74,13 @@ def load_corpus(directory: str | Path, kyori: int | None = None) -> Corpus:
         corner_path = directory / f"{stem}_通過順.csv"
         corner4: dict[int, int] = {}
         if corner_path.exists():
-            with open(corner_path, encoding="utf-8") as f:
+            with open(corner_path, encoding="utf-8-sig") as f:
                 corners = {r["コーナー"]: r["通過順"] for r in csv.DictReader(f)}
             text = corners.get("4コーナー") or corners.get("3コーナー")
             if text:
                 corner4 = parse_passing_order(text)
 
-        with open(result_path, encoding="utf-8") as f:
+        with open(result_path, encoding="utf-8-sig") as f:
             rows = [r for r in csv.DictReader(f) if _to_int(r.get("着順"))]
         if not rows:
             continue

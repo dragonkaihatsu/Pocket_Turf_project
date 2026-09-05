@@ -51,7 +51,7 @@ def load_race_info(path: str | None) -> dict[str, int]:
     if not p.exists():
         return {}
     out = {}
-    with open(p, encoding="utf-8") as f:
+    with open(p, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             if (row.get("距離") or "").isdigit():
                 out[row["stem"]] = int(row["距離"])
@@ -83,7 +83,7 @@ def load_race(directory: Path, stem: str):
     res = directory / f"{stem}_結果.csv"
     if not (ent.exists() and res.exists()):
         return None
-    rows = [r for r in csv.DictReader(open(res, encoding="utf-8"))
+    rows = [r for r in csv.DictReader(open(res, encoding="utf-8-sig"))
             if (r.get("着順") or "").isdigit() and (r.get("馬番") or "").isdigit()]
     if len(rows) < 5:
         return None

@@ -43,7 +43,7 @@ def load_race_info(path: str | None) -> dict[str, int]:
     if not p.exists():
         return {}
     out = {}
-    with open(p, encoding="utf-8") as f:
+    with open(p, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             if (row.get("距離") or "").isdigit():
                 out[row["stem"]] = int(row["距離"])
@@ -77,7 +77,7 @@ def load_race(directory: Path, stem: str):
     if not (ent.exists() and res.exists() and pay.exists()):
         return None
 
-    rows = [r for r in csv.DictReader(open(res, encoding="utf-8"))
+    rows = [r for r in csv.DictReader(open(res, encoding="utf-8-sig"))
             if (r.get("着順") or "").isdigit()]
     if len(rows) < 5:
         return None
@@ -87,7 +87,7 @@ def load_race(directory: Path, stem: str):
         return None
 
     payouts: dict[str, dict[frozenset, int]] = {}
-    for p in csv.DictReader(open(pay, encoding="utf-8")):
+    for p in csv.DictReader(open(pay, encoding="utf-8-sig")):
         try:
             combo = frozenset(int(x) for x in p["組み合わせ"].split("-"))
             payouts.setdefault(p["券種"], {})[combo] = int(p["配当"])

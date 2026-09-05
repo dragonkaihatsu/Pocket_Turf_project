@@ -76,7 +76,7 @@ def load_records(config_paths: list[str | Path]) -> tuple[list[RaceRecord], list
     skipped: list[str] = []
 
     for path in config_paths:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:
             config = json.load(f)
         day = config.get("heading") or config.get("title") or str(path)
 
