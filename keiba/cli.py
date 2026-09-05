@@ -36,6 +36,7 @@ from .models import load_history, load_horses
 from .pace import forecast_pace
 from .report import generate_report
 from .scoring import score_race
+from .textreport import format_day, format_race
 from .stats import aggregate, format_report, load_records
 
 
@@ -124,6 +125,31 @@ def cmd_feedback(args) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html_out, encoding="utf-8")
     print(f"書き出し完了: {out_path}")
+
+
+def cmd_text(args) -> None:
+    """開催日の設定JSONから、スコア順・候補一覧のテキストを書き出す。"""
+    cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    records = _load_horse_records(args.records)
+    exp = Expectation()
+    blocks = []
+    for r in cfg["races"]:
+        horses = load_horses(r["entries"])
+        scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
+                            as_of=args.race_date, venue=r.get("venue"))
+        marked = assign_marks(scores, baba=r.get("baba", "良"))
+        fav = min((h for h in horses if h.ninki), key=lambda h: h.ninki, default=None)
+        plan = make_betting_plan(marked, baba=r.get("baba", "良"),
+                                 favorite_odds=fav.tansho_odds if fav else None)
+        title = f"{r.get('venue', '')}{r['race_no']} {r['name']}"
+        blocks.append(format_race(title, r.get("surface", ""), r.get("post_time", ""),
+                                  marked, scores, plan, exp))
+    text = format_day(blocks, cfg.get("heading", "予想"))
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(text)
+    print(f"\n書き出し完了: {out}")
 
 
 def cmd_daily(args) -> None:
@@ -258,6 +284,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_feedback.add_argument("--results", required=True, help="結果CSV（馬番,着順）")
     p_feedback.add_argument("--payouts", help="配当CSV（券種,組み合わせ,配当）")
     p_feedback.set_defaults(func=cmd_feedback)
+
+    p_text = sub.add_parser("text", help="スコア順・5-6頭の候補をテキストで出力")
+    p_text.add_argument("config", help="開催日設定JSON")
+    p_text.add_argument("--output", required=True, help="出力テキストパス")
+    p_text.add_argument("--records", help="馬別戦績CSV")
+    p_text.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_text.set_defaults(func=cmd_text)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
     p_daily.add_argument("config", help="開催日設定JSON")
