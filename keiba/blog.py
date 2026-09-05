@@ -206,3 +206,169 @@ def fits_ameba(html: str) -> tuple[bool, int]:
     """
     n = len(html)
     return n <= SAFE_LIMIT, n
+
+
+# ---------------------------------------------------------------------------
+# テキスト版（HTMLを使わずに貼る場合）
+# ---------------------------------------------------------------------------
+# ブログの本文は**等幅フォントではない**。cli text の桁揃え（半角スペースで
+# 列を合わせる形式）はターミナルやメモ帳では読めるが、ブログに貼ると列が
+# 崩れて読めなくなる。そこで貼り付け用のテキストは
+#   - 桁揃えに頼らない（1項目1行、または全角スペース区切り）
+#   - スマホの1行に収まる幅（全角26字程度）に抑える
+# という別のレイアウトにする。
+
+TXT_RULE = "━" * 13          # 全角13字ぶん。スマホの1行に収まる
+TXT_THIN = "─" * 13
+
+
+def _txt_section(title: str) -> str:
+    return f"\n【{title}】"
+
+
+def _txt_width(text: str) -> int:
+    """全角を2、半角を1として数える。スマホの折り返し位置の目安にする。"""
+    return sum(2 if ord(c) > 0x2000 else 1 for c in text)
+
+
+def _chunk(token: str, limit: int) -> list[str]:
+    """空白の無い長い文字列（日本語の文など）を幅で切る。"""
+    out, cur = [], ""
+    for ch in token:
+        if _txt_width(cur + ch) > limit and cur:
+            out.append(cur)
+            cur = ch
+        else:
+            cur += ch
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _wrap_tokens(text: str, limit: int = 34) -> list[str]:
+    """スマホの1行に収まる幅で折り返す。
+
+    ブログはプロポーショナルフォントなので桁揃えはできないが、
+    1行が長すぎると勝手に折り返されて読みにくくなる。ここで区切る。
+    空白で切れない日本語の文は文字数で切る。
+    """
+    lines: list[str] = []
+    cur = ""
+    for token in text.split():
+        if _txt_width(token) > limit:
+            # 単独で幅を超えるトークン（日本語の文など）は文字で切る
+            if cur:
+                lines.append(cur)
+                cur = ""
+            pieces = _chunk(token, limit)
+            lines.extend(pieces[:-1])
+            cur = pieces[-1]
+            continue
+        cand = f"{cur} {token}".strip()
+        if cur and _txt_width(cand) > limit:
+            lines.append(cur)
+            cur = token
+        else:
+            cur = cand
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def format_race_text(
+    title: str,
+    surface: str,
+    post_time: str,
+    marked: list[MarkedHorse],
+    scores: list[HorseScore],
+    plan: BettingPlan,
+    exp: Expectation | None = None,
+    n_show: int = 8,
+) -> str:
+    """1レース分のテキスト。ブログの通常エディタにそのまま貼れる。"""
+    exp = exp if exp is not None else Expectation()
+    fav = plan.favorite_odds
+    order = [m.score.horse.umaban for m in marked]
+    fav_umaban = next((s.horse.umaban for s in scores if s.horse.ninki == 1), None)
+    agree = fav_umaban is not None and order and order[0] == fav_umaban
+
+    out = [TXT_RULE, title]
+    if surface or post_time:
+        out.append(f"{surface}{'  発走' + post_time if post_time else ''}")
+    out.append(f"1番人気 {f'{fav:.1f}倍' if fav else 'オッズ不明'} → {plan.strategy}型")
+    out.append(f"◎と1番人気: {'一致' if agree else '不一致'}")
+
+    pick = best_single(order, favorite_odds=fav)
+    out.append(_txt_section("ワイド1点"))
+    if pick is None:
+        out.append("実測データなし → 判断材料なし")
+    elif pick.recommended:
+        out.append(f"★ {pick.combo}（{pick.label}）")
+        out.extend(_wrap_tokens(pick.stat_text()))
+    else:
+        out.append("見送り推奨")
+        out.append(f"参考 {pick.combo}（{pick.label}）")
+        out.extend(_wrap_tokens(pick.reason))
+        out.extend(_wrap_tokens(pick.stat_text()))
+
+    out.append(_txt_section("スコア順"))
+    for i, m in enumerate(marked[:n_show], start=1):
+        h = m.score.horse
+        out.append(f"{m.mark} {h.umaban} {h.name}　{m.score.total_yoi:.1f}点")
+        # スマホの1行（全角17字ぶん）に収めるため、区切りは「 / 」ではなく
+        # 空白1つにし、「番人気」も「人気」に詰める
+        bits = [f"{h.ninki}人気" if h.ninki else "人気—",
+                f"{h.tansho_odds:.1f}倍" if h.tansho_odds else "オッズ—",
+                h.kyakushitsu or "脚質—"]
+        win, place = exp.format(i)
+        if not (win == "—" and place == "—"):
+            bits.append(f"1着{win} 着内{place}")
+        out.append("　" + " ".join(bits))
+
+    marked_umaban = {m.score.horse.umaban for m in marked}
+    rest = [s for s in sorted(scores, key=lambda s: s.total_yoi, reverse=True)
+            if s.horse.umaban not in marked_umaban]
+    if rest:
+        out.append("参考(印なし)")
+        for line in _wrap_tokens(
+                " ".join(f"{s.horse.umaban}{s.horse.name}" for s in rest[:5]), 32):
+            out.append("　" + line)
+
+    out.append(_txt_section("候補（スコア順の馬番）"))
+    for w in (3, 4, 5, 6):
+        if len(order) >= w:
+            out.append(f"{w}頭　" + "-".join(str(u) for u in order[:w]))
+
+    rec = ("ワイド", 3) if plan.wide else ("馬連", 4)
+    options = [o for o in build_options(order, favorite_odds=fav, recommended=rec)
+               if o.width in (3, 4, 5, 6)]
+    out.append(_txt_section("買い目"))
+    for o in options:
+        if not o.recommended:
+            continue
+        st = o.stats
+        out.append(f"★ {o.kind} {o.width}頭BOX {o.points}点")
+        for line in _wrap_tokens(" ".join(f"{a}-{b}" for a, b in o.combos), 24):
+            out.append("　" + line.replace(" ", "　"))
+        if st:
+            out.append(f"　的中{st['的中率']:.0%}／回収{st['回収率']:.0%}"
+                       f"／黒字{st['黒字確率']:.0%}")
+    others = []
+    for o in options:
+        if o.recommended:
+            continue
+        st = o.stats
+        # 1行に収めるため、見出しで項目名を示して値だけ並べる
+        stat = (f"{st['的中率']:.0%}/{st['回収率']:.0%}/{st['黒字確率']:.0%}"
+                if st else "実測なし")
+        others.append(f"{o.kind}{o.width}頭 {o.points}点　{stat}")
+    if others:
+        out.append(TXT_THIN)
+        out.append("幅を広げる場合（的中/回収/黒字）")
+        out.extend(others)
+    return "\n".join(out)
+
+
+def format_day_text(blocks: list[str], heading: str, note: str = "") -> str:
+    body = "\n\n".join(blocks)
+    return f"{heading}\n\n{body}\n\n{TXT_RULE}\n{note or DEFAULT_NOTE}\n"

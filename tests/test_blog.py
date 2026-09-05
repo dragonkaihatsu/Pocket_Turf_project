@@ -66,3 +66,38 @@ class TestAmebaHtml(unittest.TestCase):
     def test_marks_and_numbers_survive(self):
         for token in ("◎", "○", "▲", "スコア順", "買い目", "候補"):
             self.assertIn(token, self.block)
+
+
+class TestAmebaText(unittest.TestCase):
+    """ブログは等幅フォントではないので、貼り付け用テキストは桁揃えに頼らない。"""
+
+    def setUp(self):
+        from keiba.blog import format_day_text, format_race_text
+        _, scores, marked, plan = _race()
+        self.block = format_race_text("テスト11R テストS", "ダ1200m", "15:30",
+                                      marked, scores, plan)
+        self.day = format_day_text([self.block] * 9, "2026-09-05 予想")
+
+    def test_no_html(self):
+        self.assertNotIn("<", self.day)
+
+    def test_lines_fit_a_phone(self):
+        """本文の行は全角17字（34桁）程度に収める。注意書きの散文は除く。"""
+        from keiba.blog import _txt_width
+        wide = [ln for ln in self.block.splitlines() if _txt_width(ln) > 40]
+        self.assertEqual(wide, [], f"長すぎる行: {wide}")
+
+    def test_no_column_padding(self):
+        """半角スペースの連続で列を合わせていないこと（貼ると崩れるため）。"""
+        self.assertNotIn("   ", self.block)
+
+    def test_contains_the_essentials(self):
+        for token in ("ワイド1点", "スコア順", "候補", "買い目", "◎"):
+            self.assertIn(token, self.block)
+
+    def test_wrapping_keeps_every_token(self):
+        from keiba.blog import _wrap_tokens
+        text = "回収156% 的中8% 90%区間80%〜246% 黒字86% 最大29連敗"
+        lines = _wrap_tokens(text)
+        self.assertGreater(len(lines), 1)
+        self.assertEqual(" ".join(lines).split(), text.split())

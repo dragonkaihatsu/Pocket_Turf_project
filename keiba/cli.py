@@ -36,7 +36,8 @@ from .models import load_history, load_horses
 from .pace import forecast_pace
 from .report import generate_report
 from .scoring import score_race
-from .blog import format_day_html, format_race_html
+from .blog import (format_day_html, format_day_text, format_race_html,
+                   format_race_text)
 from .textreport import format_day, format_race, to_encoding
 from .stats import aggregate, format_report, load_records
 
@@ -174,6 +175,7 @@ def cmd_blog(args) -> None:
         corners = load_corner_records(args.corner_records)
     exp = Expectation()
     blocks: list[str] = []
+    texts: list[str] = []
     titles: list[str] = []
     for r in cfg["races"]:
         horses = load_horses(r["entries"])
@@ -186,26 +188,38 @@ def cmd_blog(args) -> None:
                                  favorite_odds=fav.tansho_odds if fav else None)
         title = f"{r.get('venue', '')}{r['race_no']} {r['name']}"
         titles.append(title)
-        blocks.append(format_race_html(title, r.get("surface", ""),
-                                       r.get("post_time", ""), marked, scores, plan, exp))
+        args_ = (title, r.get("surface", ""), r.get("post_time", ""),
+                 marked, scores, plan, exp)
+        blocks.append(format_race_html(*args_))
+        texts.append(format_race_text(*args_))
     from .blog import AMEBA_LIMIT, SAFE_LIMIT, fits_ameba
 
     heading = cfg.get("heading", "予想")
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
 
+    # 出力する形式。text はブログの通常エディタに貼る用（等幅前提の
+    # 桁揃えを使わないレイアウト）。html はHTML編集モードに貼る用
+    kinds: list[tuple[str, str, list[str], object, object]] = []
+    if args.format in ("html", "both"):
+        kinds.append(("html", ".html", blocks, format_day_html, format_day_html))
+    if args.format in ("text", "both"):
+        kinds.append(("text", ".txt", texts, format_day_text, format_day_text))
+
     written: list[tuple[Path, int]] = []
-    if args.split:
-        # 1記事1レース。レース数が多い日でも確実に上限に収まる
-        for i, (block, title) in enumerate(zip(blocks, titles), start=1):
-            html_out = format_day_html([block], f"{heading}　{title}", args.note)
-            p = out.with_name(f"{out.stem}_{i:02d}{out.suffix}")
-            p.write_text(html_out, encoding="utf-8")
-            written.append((p, len(html_out)))
-    else:
-        html_out = format_day_html(blocks, heading, args.note)
-        out.write_text(html_out, encoding="utf-8")
-        written.append((out, len(html_out)))
+    for kind, ext, items, joiner, _ in kinds:
+        base = out.with_suffix(ext) if args.format == "both" else out
+        if args.split:
+            # 1記事1レース。レース数が多い日でも確実に上限に収まる
+            for i, (item, title) in enumerate(zip(items, titles), start=1):
+                body = joiner([item], f"{heading}　{title}", args.note)
+                p = base.with_name(f"{base.stem}_{i:02d}{base.suffix}")
+                p.write_text(body, encoding=args.encoding)
+                written.append((p, len(body)))
+        else:
+            body = joiner(items, heading, args.note)
+            base.write_text(body, encoding=args.encoding)
+            written.append((base, len(body)))
 
     for p, n in written:
         ok, _ = fits_ameba(p.read_text(encoding="utf-8"))
@@ -385,6 +399,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_blog.add_argument("--note", default="", help="記事末尾の注意書きを差し替える")
     p_blog.add_argument("--split", action="store_true",
                         help="1レース1記事に分けて書き出す（レース数が多い日向け）")
+    p_blog.add_argument("--format", choices=["html", "text", "both"], default="html",
+                        help="html=HTML編集モードに貼る / text=通常エディタに貼る"
+                             "（等幅前提の桁揃えを使わないレイアウト） / both=両方")
+    p_blog.add_argument("--encoding", default="utf-8-sig",
+                        choices=["utf-8-sig", "utf-8", "cp932"],
+                        help="出力の文字コード。既定はBOM付きUTF-8")
     p_blog.set_defaults(func=cmd_blog)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
