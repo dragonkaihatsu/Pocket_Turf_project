@@ -101,3 +101,52 @@ class TestAmebaText(unittest.TestCase):
         lines = _wrap_tokens(text)
         self.assertGreater(len(lines), 1)
         self.assertEqual(" ".join(lines).split(), text.split())
+
+
+class TestSiteBuilder(unittest.TestCase):
+    """docs/ に出す静的サイト。テンプレートの差し込み口が壊れていないか見る。"""
+
+    def test_template_has_both_placeholders(self):
+        from keiba.site import TEMPLATE
+        tpl = TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn("__DATA__", tpl)
+        self.assertIn("__ARCHIVE__", tpl)
+
+    def test_render_fills_data_and_leaves_no_placeholder(self):
+        from keiba.site import render
+        html = render({"heading": "2026-09-05 中央", "date": "2026-09-05",
+                       "races": []}, archive=["2026-09-04"])
+        self.assertNotIn("__DATA__", html)
+        self.assertNotIn("__ARCHIVE__", html)
+        self.assertIn('href="d/2026-09-04.html"', html)
+
+    def test_archive_block_is_dropped_when_empty(self):
+        from keiba.site import render
+        html = render({"heading": "x", "date": None, "races": []})
+        self.assertNotIn("__ARCHIVE__", html)
+
+    def test_json_cannot_close_the_script_tag(self):
+        """馬名などに '</' が現れてもスクリプトが途中で閉じないこと。"""
+        from keiba.site import render
+        html = render({"heading": "</script><b>x", "date": None, "races": []})
+        self.assertNotIn("</script><b>x", html)
+
+
+class TestSiteLookups(unittest.TestCase):
+    """設定ファイルの書式が揃っていないので、日付と競馬場は複数の場所から拾う。"""
+
+    def test_iso_and_compact_dates(self):
+        from keiba.site import find_date
+        self.assertEqual(find_date("2026-09-05 中央"), "2026-09-05")
+        self.assertEqual(find_date(None, "20260831_大井"), "2026-08-31")
+        self.assertEqual(find_date("大井 8月31日 10R–12R", "20260831_大井"),
+                         "2026-08-31")
+        self.assertIsNone(find_date("見出しだけ", "config"))
+
+    def test_venue_from_heading_or_filename(self):
+        from keiba.site import find_venue
+        # 大井の設定は競馬場が1つなので race ごとの venue を持たない
+        self.assertEqual(find_venue(None, "大井 9月3日 10R–12R"), "大井")
+        self.assertEqual(find_venue(None, None, None, "20260904_大井"), "大井")
+        self.assertEqual(find_venue(None, "2026-09-05 中央", None, "20260905_中央"), "")
+        self.assertEqual(find_venue("札幌", "x"), "札幌")

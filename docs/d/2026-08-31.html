@@ -1,0 +1,485 @@
+<title>ポケットターフWeb</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;500&family=Shippori+Mincho:wght@400;500&display=swap">
+<style>
+/* ─────────────────────────────────────────────
+   競馬専門紙の二色刷り（墨＋朱）。印は必ず朱、データは墨。
+   1レースずつ差し替えて表示し、縦スクロールを短く保つ。
+   ───────────────────────────────────────────── */
+:root{
+  --paper:#f4f4f1; --sheet:#fcfcfa; --sunk:#eaeae5;
+  --sumi:#17171a; --sumi-2:#45454c; --muted:#7c7c82;
+  --rule:#dcdcd5; --hair:#c7c7bf;
+  --shu:#c62b23; --shu-soft:#f8eae8;
+  --w1:#fcfcfa;--w1i:#17171a;--w2:#17171a;--w2i:#fcfcfa;--w3:#c62b23;--w3i:#fff;
+  --w4:#2a5f9e;--w4i:#fff;--w5:#e0b41f;--w5i:#17171a;--w6:#2c7a45;--w6i:#fff;
+  --w7:#dd6b1c;--w7i:#fff;--w8:#e08fa6;--w8i:#17171a;
+  --min:"Shippori Mincho","Hiragino Mincho ProN",serif;
+  --got:"Noto Sans JP",-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;
+  /* 英字・数字は Bebas Neue。背が高く詰まった大文字書体で、馬番・オッズ・
+     スコアがオッズ板のように読める。太さは1種のみなので自然と細字に揃う */
+  --num:"Bebas Neue","Noto Sans JP",sans-serif;
+  /* 題字も本文の英字と同じ Bebas Neue で統一し、斜体で流れを付ける */
+  --logo:"Bebas Neue","Noto Sans JP",sans-serif;
+  --brand-blue:#1b4b86; --brand-green:#1d6b46;
+  /* WEB2.0期のバッジ。上に光沢、下に影を落とす3段の青 */
+  --badge-1:#4b83c4; --badge-2:#1b4b86; --badge-3:#123a6a; --badge-ink:#fff;
+  --badge-glow:rgba(255,255,255,.45); --badge-drop:rgba(18,40,72,.30);
+  /* 題字の文字面も同じ流儀で。47%で色が切り替わる二段のツヤは当時の定番 */
+  --logo-pk:linear-gradient(180deg,#74a8df 0%,#2a5f9e 47%,#1b4b86 48%,#123361 100%);
+  --logo-tf:linear-gradient(180deg,#63b98d 0%,#237e53 47%,#1d6b46 48%,#0f462d 100%);
+  --logo-drop:rgba(18,40,72,.26); --logo-lift:rgba(255,255,255,.5);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --brand-blue:#7ab5e8; --brand-green:#5fbe8b;
+  --badge-1:#6ba8de; --badge-2:#3574b5; --badge-3:#25537f; --badge-ink:#fff;
+  --badge-glow:rgba(255,255,255,.32); --badge-drop:rgba(0,0,0,.45);
+  --logo-pk:linear-gradient(180deg,#c3e0fa 0%,#93c3ee 47%,#7ab5e8 48%,#4e8ec9 100%);
+  --logo-tf:linear-gradient(180deg,#bfebd4 0%,#7bcca4 47%,#5fbe8b 48%,#3d9a6d 100%);
+  --logo-drop:rgba(0,0,0,.5); --logo-lift:rgba(255,255,255,.16);
+  --paper:#131315; --sheet:#1b1b1e; --sunk:#242428;
+  --sumi:#eaeae4; --sumi-2:#c0c0ba; --muted:#8b8b91;
+  --rule:#33333a; --hair:#3f3f47;
+  --shu:#ff6f63; --shu-soft:#2b1d1c;
+  --w1:#eaeae4;--w1i:#17171a;--w2:#0b0b0c;--w2i:#eaeae4;--w3:#d6403a;--w3i:#fff;
+  --w4:#3a72b0;--w4i:#fff;--w5:#cfa722;--w5i:#17171a;--w6:#358a4f;--w6i:#fff;
+  --w7:#cf6c26;--w7i:#fff;--w8:#cf869d;--w8i:#17171a;
+}}
+:root[data-theme="dark"]{
+  --brand-blue:#7ab5e8; --brand-green:#5fbe8b;
+  --badge-1:#6ba8de; --badge-2:#3574b5; --badge-3:#25537f; --badge-ink:#fff;
+  --badge-glow:rgba(255,255,255,.32); --badge-drop:rgba(0,0,0,.45);
+  --logo-pk:linear-gradient(180deg,#c3e0fa 0%,#93c3ee 47%,#7ab5e8 48%,#4e8ec9 100%);
+  --logo-tf:linear-gradient(180deg,#bfebd4 0%,#7bcca4 47%,#5fbe8b 48%,#3d9a6d 100%);
+  --logo-drop:rgba(0,0,0,.5); --logo-lift:rgba(255,255,255,.16);
+  --paper:#131315; --sheet:#1b1b1e; --sunk:#242428;
+  --sumi:#eaeae4; --sumi-2:#c0c0ba; --muted:#8b8b91;
+  --rule:#33333a; --hair:#3f3f47;
+  --shu:#ff6f63; --shu-soft:#2b1d1c;
+  --w1:#eaeae4;--w1i:#17171a;--w2:#0b0b0c;--w2i:#eaeae4;--w3:#d6403a;--w3i:#fff;
+  --w4:#3a72b0;--w4i:#fff;--w5:#cfa722;--w5i:#17171a;--w6:#358a4f;--w6i:#fff;
+  --w7:#cf6c26;--w7i:#fff;--w8:#cf869d;--w8i:#17171a;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--sumi);font-family:var(--got);
+  font-weight:400;line-height:1.75;-webkit-text-size-adjust:100%;font-feature-settings:"palt" 1}
+.sheet{max-width:560px;margin:0 auto;padding:0 16px 52px}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ── 題字 ── */
+.masthead{padding:26px 0 0;text-align:left}
+.brand{font-family:var(--logo);font-weight:400;font-style:italic;font-size:33px;
+  line-height:1;letter-spacing:.09em;max-width:100%;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:.24em}
+/* 単色でも成立させたうえで、対応する環境だけ文字面をグラデーションに差し替える */
+.brand .pk{color:var(--brand-blue)}
+.brand .tf{color:var(--brand-green)}
+.brand{filter:drop-shadow(0 -1px 0 var(--logo-lift))
+              drop-shadow(0 2px 3px var(--logo-drop))}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .brand .pk,.brand .tf{-webkit-background-clip:text;background-clip:text;
+    color:transparent;-webkit-text-fill-color:transparent}
+  .brand .pk{background-image:var(--logo-pk)}
+  .brand .tf{background-image:var(--logo-tf)}
+}
+/* WEB2.0期のバッジ。角丸四角に塗りを入れ、上端に光沢、下に影。
+   斜体の字組みに対してバッジは立てる。当時のロゴがそうだったため */
+.brand .web{font-size:.66em;font-style:normal;letter-spacing:.05em;
+  color:var(--badge-ink);
+  background:linear-gradient(180deg,var(--badge-1) 0%,var(--badge-2) 54%,
+                             var(--badge-3) 100%);
+  border-radius:9px;padding:.2em .42em .13em;line-height:1.08;margin-left:.24em;
+  display:inline-block;
+  box-shadow:inset 0 1px 0 var(--badge-glow),0 2px 5px var(--badge-drop);
+  transform:translateY(-.03em)}
+.dblrule{border-top:1px solid var(--sumi);border-bottom:1px solid var(--sumi);
+  height:3px;margin:14px 0 0}
+.headline{margin-top:14px}
+h1.date{font-family:var(--min);font-weight:500;font-size:31px;line-height:1.2;
+  letter-spacing:.05em;margin:0}
+h1.date small{display:block;font-family:var(--got);font-weight:400;font-size:12.5px;
+  letter-spacing:.1em;color:var(--muted);margin-top:4px}
+
+
+/* 節見出し。罫は下のブロックが持つので、ここは小さな標題だけにする */
+h3.sec{font-size:11px;letter-spacing:.24em;color:var(--muted);font-weight:400;
+  margin:24px 0 9px;line-height:1.4}
+
+/* ── 予想／結果タブ ── */
+.tabs{display:flex;margin-top:16px;border-bottom:1px solid var(--sumi)}
+.tabs button{flex:1 1 0;font:inherit;font-size:14px;letter-spacing:.2em;
+  font-weight:400;color:var(--muted);background:none;border:0;
+  border-bottom:2px solid transparent;padding:9px 0 8px;cursor:pointer;
+  margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--sumi);border-bottom-color:var(--shu)}
+.tabs button:focus-visible{outline:2px solid var(--shu);outline-offset:-2px}
+.tabs button[disabled]{opacity:.4;cursor:default}
+
+/* ── 結果 ── */
+.chaku{border-top:1px solid var(--sumi);
+  border-bottom:1px solid var(--sumi)}
+.chaku .row{display:flex;align-items:center;gap:9px;padding:10px 2px;
+  border-top:1px dotted var(--hair)}
+.chaku .row:first-child{border-top:0}
+.chaku .ord{flex:0 0 auto;font-family:var(--num);font-size:22px;line-height:1;
+  letter-spacing:.03em;color:var(--muted);width:1.5em}
+.chaku .row:first-child .ord{color:var(--shu)}
+.chaku .nm{flex:1 1 auto;font-size:15.5px;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.chaku .sub{flex:0 0 auto;font-size:11px;color:var(--muted);text-align:right;
+  line-height:1.5;font-variant-numeric:tabular-nums}
+.chaku .mk{flex:0 0 1.2em;font-size:14px;color:var(--shu);text-align:center}
+
+.judge{border:1px solid var(--hair);background:var(--sheet)}
+.judge .r{display:flex;align-items:baseline;gap:10px;padding:11px 13px;
+  border-top:1px dotted var(--hair);font-size:13px}
+.judge .r:first-child{border-top:0}
+.judge .lbl{flex:0 0 8.8em;color:var(--muted);font-size:11.5px;
+  letter-spacing:.08em;white-space:nowrap}
+.judge .val{flex:1 1 auto}
+.judge .ok{color:var(--shu)}
+.judge .ng{color:var(--muted)}
+.judge .pay{font-family:var(--num);font-size:22px;letter-spacing:.04em;
+  color:var(--shu);margin-left:.2em}
+.judge .cmb{font-family:var(--num);font-size:17px;letter-spacing:.06em}
+.pending{margin-top:18px;padding:22px 14px;border:1px dashed var(--hair);
+  text-align:center;color:var(--muted);font-size:13px;background:var(--sheet)}
+
+/* ── レース切替 ── */
+nav.picker{position:sticky;top:0;z-index:9;background:var(--paper);margin-top:16px;
+  padding:9px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--sumi);
+  display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+nav.picker::-webkit-scrollbar{display:none}
+nav.picker button{flex:0 0 auto;font-family:var(--num);font-weight:400;font-size:17px;
+  letter-spacing:.09em;color:var(--muted);background:var(--sheet);
+  border:1px solid var(--hair);border-radius:2px;padding:4px 11px;cursor:pointer;
+  white-space:nowrap;line-height:1.4}
+nav.picker button[aria-current="true"]{background:var(--sumi);color:var(--paper);
+  border-color:var(--sumi)}
+nav.picker button:focus-visible{outline:2px solid var(--shu);outline-offset:2px}
+
+/* ── レース見出し ── */
+.eyebrow{display:flex;align-items:baseline;gap:9px;margin-top:20px;font-size:12px;
+  letter-spacing:.09em;color:var(--muted)}
+.eyebrow .v{font-weight:500;color:var(--sumi);font-size:13.5px;letter-spacing:.16em}
+.eyebrow .r{font-family:var(--num);font-weight:400;font-size:23px;color:var(--shu);
+  letter-spacing:.06em}
+h2.rname{font-family:var(--min);font-weight:500;font-size:26px;line-height:1.3;
+  letter-spacing:.03em;margin:2px 0 0;text-wrap:balance}
+.cond{font-size:12px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
+
+/* ── 予想欄（一目で読む中心） ── */
+/* 印は8つ。横スクロールにすると端が見切れて「まだ何かある」と読めてしまうので、
+   4列2段の格子に収めて一目で全部見えるようにする */
+.yosou{display:grid;grid-template-columns:repeat(4,1fr);margin-top:16px;
+  border-top:1px solid var(--sumi);border-bottom:1px solid var(--sumi);
+  background:var(--sheet)}
+.yosou b{display:grid;justify-items:center;gap:3px;padding:9px 2px;font-weight:400;
+  min-width:0;border-left:1px dotted var(--hair);border-top:1px dotted var(--hair)}
+.yosou b:nth-child(4n+1){border-left:0}
+.yosou b:nth-child(-n+4){border-top:0}
+.yosou .mk{font-size:17px;color:var(--shu);font-weight:500;line-height:1}
+.yosou .nb{display:grid;place-items:center;width:27px;height:27px;
+  font-family:var(--num);font-weight:400;font-size:20px;line-height:1.25;
+  letter-spacing:.03em;border:1px solid var(--hair)}
+.yosou .nn{font-size:10px;color:var(--muted);letter-spacing:0;line-height:1.3;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── 気になるワイド ── */
+.wide{margin-top:16px;border:1px solid var(--sumi);background:var(--sheet)}
+.wide .cap{background:var(--sumi);color:var(--paper);font-size:11.5px;
+  letter-spacing:.26em;padding:5px 14px;font-weight:400}
+.wide .body{padding:12px 14px 14px;display:flex;align-items:baseline;gap:14px;
+  flex-wrap:wrap}
+.wide .combo{font-family:var(--num);font-weight:400;font-size:54px;line-height:1;
+  letter-spacing:.05em;color:var(--shu)}
+.wide.skip .combo{font-family:var(--min);font-size:22px;color:var(--sumi-2);
+  letter-spacing:.08em;line-height:1.3}
+.wide .why{font-size:12px;color:var(--muted);line-height:1.7;flex:1 1 8em}
+
+/* ── 買い目 ── */
+.buy{margin-top:16px;border:1px solid var(--shu);background:var(--shu-soft);
+  padding:11px 13px}
+.buy .hd{font-size:12px;letter-spacing:.2em;color:var(--shu);font-weight:500}
+.buy .cb{display:flex;flex-wrap:wrap;gap:2px 18px;font-family:var(--num);
+  font-weight:400;font-size:23px;margin-top:7px;letter-spacing:.08em;line-height:1.35}
+.buy .cb span{white-space:nowrap}
+.buy .alt{margin-top:9px;padding-top:8px;border-top:1px dotted var(--hair);
+  font-size:11.5px;color:var(--muted);line-height:1.9}
+.buy .alt span{white-space:nowrap;margin-right:14px}
+.buy .alt b{font-family:var(--num);font-weight:400;font-size:16px;letter-spacing:.05em;
+  color:var(--sumi-2)}
+
+/* ── 全馬スコア（畳んでおく） ── */
+.disclose{width:100%;margin-top:18px;background:var(--sheet);color:var(--sumi);
+  border:1px solid var(--hair);padding:11px 14px;font:inherit;font-size:13px;
+  font-weight:400;letter-spacing:.14em;cursor:pointer;display:flex;align-items:center;
+  justify-content:space-between;gap:10px}
+.disclose:focus-visible{outline:2px solid var(--shu);outline-offset:2px}
+.disclose .chev{font-family:var(--num);font-weight:400;color:var(--shu);font-size:20px}
+.list{margin-top:2px}
+.horse{width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;
+  border-bottom:1px solid var(--rule);padding:7px 0 6px;cursor:pointer;display:block}
+.horse:focus-visible{outline:2px solid var(--shu);outline-offset:-2px}
+.hrow{display:flex;align-items:center;gap:8px}
+.rk{flex:0 0 1.5em;font-family:var(--num);font-weight:400;font-size:14px;
+  letter-spacing:.04em;color:var(--muted);text-align:right}
+.mk{flex:0 0 1.2em;font-size:14px;font-weight:500;color:var(--shu);text-align:center;
+  line-height:1}
+.waku{flex:0 0 auto;width:23px;height:23px;display:grid;place-items:center;
+  font-family:var(--num);font-weight:400;font-size:17px;line-height:1.25;
+  letter-spacing:.03em;border:1px solid var(--hair)}
+.nm{flex:1 1 auto;font-size:15px;font-weight:400;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.sc{flex:0 0 auto;font-family:var(--num);font-weight:400;font-size:20px;
+  letter-spacing:.04em;color:var(--sumi-2)}
+.hsub{margin:1px 0 0 calc(1.5em + 1.2em + 39px);font-size:11px;color:var(--muted);
+  letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.gauge{margin:4px 0 0 calc(1.5em + 1.2em + 39px);height:2px;background:var(--sunk)}
+.gauge i{display:block;height:2px;background:var(--shu)}
+.detail{margin:0 0 9px calc(1.5em + 1.2em + 39px);padding:10px 12px;
+  background:var(--sunk);border-left:2px solid var(--shu)}
+.mrow{display:flex;align-items:center;gap:9px;font-size:11.5px;padding:2px 0}
+.mrow>span:first-child{flex:0 0 5.6em;color:var(--muted);letter-spacing:.04em}
+.mbar{flex:1 1 auto;height:4px;background:var(--sheet)}
+.mbar i{display:block;height:4px;background:var(--sumi-2)}
+.mval{flex:0 0 3.8em;text-align:right;font-family:var(--num);font-weight:400;
+  font-size:14px;letter-spacing:.04em}
+.dnote{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.75}
+.dnote b{color:var(--sumi-2);font-weight:500}
+
+.archive{margin-top:30px;border-top:1px solid var(--hair);padding-top:12px}
+.archive .lbl{font-size:11px;letter-spacing:.24em;color:var(--muted);
+  display:block;margin-bottom:7px}
+.archive a{display:inline-block;font-family:var(--num);font-size:16px;
+  letter-spacing:.06em;color:var(--brand-blue);text-decoration:none;
+  border:1px solid var(--hair);border-radius:4px;padding:2px 9px;
+  margin:0 6px 6px 0;background:var(--sheet)}
+.archive a:hover,.archive a:focus-visible{border-color:var(--brand-blue)}
+.archive:empty{display:none}
+footer{margin-top:30px;border-top:1px solid var(--sumi);padding-top:11px;
+  font-size:11px;color:var(--muted);line-height:1.9;letter-spacing:.02em}
+footer b{color:var(--sumi-2);font-weight:500}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:380px){
+  .brand{font-size:27px;letter-spacing:.06em}
+  h1.date{font-size:26px}
+  h2.rname{font-size:22px}
+  .wide .combo{font-size:44px}
+}
+</style>
+
+<div class="sheet">
+  <header class="masthead">
+    <div class="brand"><span class="pk">POCKET</span><span class="tf">TURF</span><span class="web">WEB</span></div>
+  </header>
+  <div class="dblrule"></div>
+  <div class="headline">
+    <h1 class="date" id="date">—<small id="sub">—</small></h1>
+  </div>
+  <div class="tabs" role="tablist" aria-label="予想と結果">
+    <button type="button" id="tabY" role="tab" aria-selected="true">予想</button>
+    <button type="button" id="tabK" role="tab" aria-selected="false">結果</button>
+  </div>
+  <nav class="picker" id="picker" aria-label="レースを選ぶ"></nav>
+  <main id="stage"></main>
+  <div class="archive" id="archive"><span class="lbl">過去の開催</span></div>
+  <footer>
+    印は<b>◎本命／○対抗／▲単穴／△押さえ／注警戒</b>。スコアは出走全馬に付けています。<br>
+    枠の色は実際の枠番の色です。馬券はご自身の判断でお願いします。
+  </footer>
+</div>
+
+<script type="application/json" id="data">{"heading": "大井 8月31日 10R–12R", "date": "2026-08-31", "races": [{"venue": "大井", "no": "10R", "name": "晩夏賞", "surface": "ダ1200m（右）", "post": "19:40", "single": {"combo": "5-3", "label": "ワイド 3位-4位", "rec": true}, "horses": [{"rank": 1, "mark": "◎", "umaban": 9, "waku": 5, "name": "ゴールドタリスマン", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 64.0, "ratio": 1.0, "win": "28%", "place": "58%", "measure": [{"label": "馬単体能力", "pts": 45, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.2秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走1着（C3三四・大井ダ1200・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 2, "mark": "○", "umaban": 13, "waku": 7, "name": "コイゴロモ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 62.6, "ratio": 0.979, "win": "18%", "place": "47%", "measure": [{"label": "馬単体能力", "pts": 44.6, "max": 45}, {"label": "好走傾向", "pts": 18.5, "max": 30}, {"label": "騎手", "pts": 3.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.3秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走1着（C2九十・大井ダ1200・不良）"}, {"label": "コース適性", "note": "当地10走・平均着順5.9着（1勝・複勝率40%）"}, {"label": "距離・展開・脚質", "note": "当該距離9走・平均着順5.3着（1勝・複勝率44%）／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 3, "mark": "▲", "umaban": 5, "waku": 3, "name": "キルコネクション", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 52.6, "ratio": 0.822, "win": "17%", "place": "45%", "measure": [{"label": "馬単体能力", "pts": 33.6, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=40.6秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走2着（C2九十・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 4, "mark": "△", "umaban": 3, "waku": 2, "name": "ファビエンヌ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 50.3, "ratio": 0.786, "win": "8%", "place": "28%", "measure": [{"label": "馬単体能力", "pts": 31.3, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=40.4秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走3着（C2八九・大井ダ1200・良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 5, "mark": "△", "umaban": 12, "waku": 7, "name": "ポンペルモ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 48.5, "ratio": 0.758, "win": "7%", "place": "27%", "measure": [{"label": "馬単体能力", "pts": 30.0, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 3.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=42.5秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走1着（C2六七・大井ダ1600・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 6, "mark": "△", "umaban": 2, "waku": 2, "name": "リュウノワールド", "ninki": null, "odds": null, "kyaku": "追込", "score": 48.3, "ratio": 0.755, "win": "5%", "place": "20%", "measure": [{"label": "馬単体能力", "pts": 32.2, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 5.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.3秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走4着（C2九十・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 7, "mark": "注", "umaban": 4, "waku": 3, "name": "プレインコート", "ninki": null, "odds": null, "kyaku": "差し", "score": 48.1, "ratio": 0.752, "win": "3%", "place": "17%", "measure": [{"label": "馬単体能力", "pts": 31.8, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 3.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.4秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走4着（C2九十・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 8, "mark": "注", "umaban": 1, "waku": 1, "name": "クライスラー", "ninki": null, "odds": null, "kyaku": "先行", "score": 46.0, "ratio": 0.719, "win": "3%", "place": "14%", "measure": [{"label": "馬単体能力", "pts": 26.1, "max": 45}, {"label": "好走傾向", "pts": 19.9, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.6秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走8着（C2五六・川崎ダ1400・良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「先行」 実測複勝率36.8%(n=1530)"}]}, {"rank": 9, "mark": "", "umaban": 7, "waku": 4, "name": "パレルモフレイバー", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 43.9, "ratio": 0.687, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 26.0, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 3.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.0秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走7着（美里ブル(C2)・浦和ダ1400・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 10, "mark": "", "umaban": 11, "waku": 6, "name": "ミュークエンペラー", "ninki": null, "odds": null, "kyaku": "追込", "score": 42.8, "ratio": 0.669, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 27.6, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.3秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走13着（C2六七・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 11, "mark": "", "umaban": 6, "waku": 4, "name": "デルタウェーブ", "ninki": null, "odds": null, "kyaku": "追込", "score": 42.6, "ratio": 0.667, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 27.5, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.2秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走9着（C2六七・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 12, "mark": "", "umaban": 15, "waku": 8, "name": "イオリ", "ninki": null, "odds": null, "kyaku": "追込", "score": 39.4, "ratio": 0.615, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 24.7, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=40.0秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走7着（C2九十・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 13, "mark": "", "umaban": 10, "waku": 6, "name": "アスフォデロース", "ninki": null, "odds": null, "kyaku": "差し", "score": 38.0, "ratio": 0.594, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 20.2, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 5.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=41.3秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走7着（C2六七・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 14, "mark": "", "umaban": 8, "waku": 5, "name": "エムオーナイナー", "ninki": null, "odds": null, "kyaku": "差し", "score": 37.6, "ratio": 0.588, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 21.3, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 3.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.9秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走7着（C2六七・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 15, "mark": "", "umaban": 14, "waku": 8, "name": "トーセンアマンダ", "ninki": null, "odds": null, "kyaku": "追込", "score": 34.7, "ratio": 0.543, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 21.1, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 3.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.1秒（出走馬中 最速38.2〜最遅42.5）の相対評価"}, {"label": "前走内容", "note": "前走11着（C2六七・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}], "boxes": [{"kind": "ワイド", "width": 3, "points": 3, "rec": false, "combos": ["9-13", "9-5", "13-5"]}, {"kind": "ワイド", "width": 4, "points": 6, "rec": false, "combos": ["9-13", "9-5", "9-3", "13-5", "13-3", "5-3"]}, {"kind": "ワイド", "width": 5, "points": 10, "rec": false, "combos": ["9-13", "9-5", "9-3", "9-12", "13-5", "13-3", "13-12", "5-3", "5-12", "3-12"]}, {"kind": "ワイド", "width": 6, "points": 15, "rec": false, "combos": ["9-13", "9-5", "9-3", "9-12", "9-2", "13-5", "13-3", "13-12", "13-2", "5-3", "5-12", "5-2", "3-12", "3-2", "12-2"]}, {"kind": "馬連", "width": 3, "points": 3, "rec": false, "combos": ["9-13", "9-5", "13-5"]}, {"kind": "馬連", "width": 4, "points": 6, "rec": true, "combos": ["9-13", "9-5", "9-3", "13-5", "13-3", "5-3"]}, {"kind": "馬連", "width": 5, "points": 10, "rec": false, "combos": ["9-13", "9-5", "9-3", "9-12", "13-5", "13-3", "13-12", "5-3", "5-12", "3-12"]}, {"kind": "馬連", "width": 6, "points": 15, "rec": false, "combos": ["9-13", "9-5", "9-3", "9-12", "9-2", "13-5", "13-3", "13-12", "13-2", "5-3", "5-12", "5-2", "3-12", "3-2", "12-2"]}], "result": {"top": [{"chaku": 1, "umaban": 9, "waku": 5, "name": "ゴールドタリスマン", "ninki": 1, "odds": 2.6, "mark": "◎", "rank": 1}, {"chaku": 2, "umaban": 2, "waku": 2, "name": "リュウノワールド", "ninki": 3, "odds": 5.3, "mark": "△", "rank": 6}, {"chaku": 3, "umaban": 13, "waku": 7, "name": "コイゴロモ", "ninki": 2, "odds": 3.0, "mark": "○", "rank": 2}], "buy": {"kind": "馬連", "width": 4, "points": 6, "hits": []}, "wide": {"combo": "5-3", "hit": false, "pay": null}}}, {"venue": "大井", "no": "11R", "name": "サファイア賞競走", "surface": "ダ1400m（右）", "post": "20:15", "single": {"combo": "11-5", "label": "ワイド 3位-4位", "rec": true}, "horses": [{"rank": 1, "mark": "◎", "umaban": 3, "waku": 3, "name": "クレールジャック", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 65.8, "ratio": 1.0, "win": "28%", "place": "58%", "measure": [{"label": "馬単体能力", "pts": 40.4, "max": 45}, {"label": "好走傾向", "pts": 24.9, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.5秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走2着（サマート(B2B3)・大井ダ1200・不良）"}, {"label": "コース適性", "note": "当地23走・平均着順2.7着（10勝・複勝率74%）"}, {"label": "距離・展開・脚質", "note": "当該距離7走・平均着順3.3着（1勝・複勝率57%）／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 2, "mark": "○", "umaban": 13, "waku": 8, "name": "オリージネアリア", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 62.6, "ratio": 0.95, "win": "18%", "place": "47%", "measure": [{"label": "馬単体能力", "pts": 36.2, "max": 45}, {"label": "好走傾向", "pts": 24.8, "max": 30}, {"label": "騎手", "pts": 5.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.8秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走1着（葉月特別(B1B2)・浦和ダ1400・良）"}, {"label": "コース適性", "note": "当地4走・平均着順2.0着（2勝・複勝率75%）"}, {"label": "距離・展開・脚質", "note": "当該距離10走・平均着順4.7着（3勝・複勝率40%）／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 3, "mark": "▲", "umaban": 11, "waku": 7, "name": "プレストステラ", "ninki": null, "odds": null, "kyaku": "差し", "score": 58.0, "ratio": 0.882, "win": "17%", "place": "45%", "measure": [{"label": "馬単体能力", "pts": 40.8, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.4秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走2着（葉月賞競(B1)・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 4, "mark": "△", "umaban": 5, "waku": 4, "name": "タケシ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 56.4, "ratio": 0.857, "win": "8%", "place": "28%", "measure": [{"label": "馬単体能力", "pts": 37.4, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.5秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走3着（春風賞競(B1B2)・大井ダ1400・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 5, "mark": "△", "umaban": 4, "waku": 3, "name": "ウインドフレイバー", "ninki": null, "odds": null, "kyaku": "差し", "score": 52.7, "ratio": 0.8, "win": "7%", "place": "27%", "measure": [{"label": "馬単体能力", "pts": 36.4, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 3.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.8秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走2着（葉月特別(B1B2)・浦和ダ1400・良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 6, "mark": "△", "umaban": 6, "waku": 4, "name": "サッキーミツグ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 51.4, "ratio": 0.781, "win": "5%", "place": "20%", "measure": [{"label": "馬単体能力", "pts": 32.4, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.5秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走5着（葉月賞競(B1)・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 7, "mark": "注", "umaban": 12, "waku": 7, "name": "トゥースパークル", "ninki": null, "odds": null, "kyaku": "追込", "score": 51.0, "ratio": 0.775, "win": "3%", "place": "17%", "measure": [{"label": "馬単体能力", "pts": 36.4, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.6秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走2着（ロマンテ(B1)・大井ダ1400・稍重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 8, "mark": "注", "umaban": 7, "waku": 5, "name": "ゴールドジャッジ", "ninki": null, "odds": null, "kyaku": "差し", "score": 49.8, "ratio": 0.756, "win": "3%", "place": "14%", "measure": [{"label": "馬単体能力", "pts": 33.0, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.2秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走3着（葉月賞競(B1)・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 9, "mark": "", "umaban": 8, "waku": 5, "name": "オーシンハーフ", "ninki": null, "odds": null, "kyaku": "追込", "score": 48.8, "ratio": 0.742, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 33.2, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 5.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.9秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走4着（葉月特別(B1B2)・浦和ダ1400・良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 10, "mark": "", "umaban": 10, "waku": 6, "name": "コスモソンジュ", "ninki": null, "odds": null, "kyaku": "差し", "score": 47.8, "ratio": 0.726, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 31.0, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.0秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走7着（サマート(B2B3)・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 11, "mark": "", "umaban": 1, "waku": 1, "name": "リトルビッグホーン", "ninki": null, "odds": null, "kyaku": "先行", "score": 46.1, "ratio": 0.7, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 25.2, "max": 45}, {"label": "好走傾向", "pts": 19.9, "max": 30}, {"label": "騎手", "pts": 5.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.9秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走12着（オフト後(B2)・大井ダ1400・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「先行」 実測複勝率36.8%(n=1530)"}]}, {"rank": 12, "mark": "", "umaban": 2, "waku": 2, "name": "ダヴァンティ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 44.0, "ratio": 0.669, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 25.1, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.9秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走6着（'26ヴ(3上)OP・浦和ダ1400・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 13, "mark": "", "umaban": 9, "waku": 6, "name": "サブノハクタカ", "ninki": null, "odds": null, "kyaku": "追込", "score": 37.5, "ratio": 0.57, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 22.9, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.4秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走8着（葉月賞競(B1)・大井ダ1200・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 14, "mark": "", "umaban": 14, "waku": 8, "name": "マイネルボンバー", "ninki": null, "odds": null, "kyaku": "先行", "score": 36.4, "ratio": 0.552, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 16.0, "max": 45}, {"label": "好走傾向", "pts": 19.9, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=41.8秒（出走馬中 最速37.0〜最遅41.8）の相対評価"}, {"label": "前走内容", "note": "前走6着（サードニ(B1B2)・大井ダ1800・稍重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「先行」 実測複勝率36.8%(n=1530)"}]}], "boxes": [{"kind": "ワイド", "width": 3, "points": 3, "rec": false, "combos": ["3-13", "3-11", "13-11"]}, {"kind": "ワイド", "width": 4, "points": 6, "rec": false, "combos": ["3-13", "3-11", "3-5", "13-11", "13-5", "11-5"]}, {"kind": "ワイド", "width": 5, "points": 10, "rec": false, "combos": ["3-13", "3-11", "3-5", "3-4", "13-11", "13-5", "13-4", "11-5", "11-4", "5-4"]}, {"kind": "ワイド", "width": 6, "points": 15, "rec": false, "combos": ["3-13", "3-11", "3-5", "3-4", "3-6", "13-11", "13-5", "13-4", "13-6", "11-5", "11-4", "11-6", "5-4", "5-6", "4-6"]}, {"kind": "馬連", "width": 3, "points": 3, "rec": false, "combos": ["3-13", "3-11", "13-11"]}, {"kind": "馬連", "width": 4, "points": 6, "rec": true, "combos": ["3-13", "3-11", "3-5", "13-11", "13-5", "11-5"]}, {"kind": "馬連", "width": 5, "points": 10, "rec": false, "combos": ["3-13", "3-11", "3-5", "3-4", "13-11", "13-5", "13-4", "11-5", "11-4", "5-4"]}, {"kind": "馬連", "width": 6, "points": 15, "rec": false, "combos": ["3-13", "3-11", "3-5", "3-4", "3-6", "13-11", "13-5", "13-4", "13-6", "11-5", "11-4", "11-6", "5-4", "5-6", "4-6"]}], "result": {"top": [{"chaku": 1, "umaban": 1, "waku": 1, "name": "リトルビッグホーン", "ninki": 2, "odds": 4.4, "mark": "", "rank": 11}, {"chaku": 2, "umaban": 8, "waku": 5, "name": "オーシンハーフ", "ninki": 5, "odds": 11.0, "mark": "", "rank": 9}, {"chaku": 3, "umaban": 2, "waku": 2, "name": "ダヴァンティ", "ninki": 10, "odds": 28.0, "mark": "", "rank": 12}], "buy": {"kind": "馬連", "width": 4, "points": 6, "hits": []}, "wide": {"combo": "11-5", "hit": false, "pay": null}}}, {"venue": "大井", "no": "12R", "name": "宮益坂賞競走", "surface": "ダ1800m（右）", "post": "20:50", "single": {"combo": "3-14", "label": "ワイド 3位-4位", "rec": true}, "horses": [{"rank": 1, "mark": "◎", "umaban": 2, "waku": 1, "name": "アレグランサ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 55.0, "ratio": 1.0, "win": "28%", "place": "58%", "measure": [{"label": "馬単体能力", "pts": 35.5, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.0秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走3着（ペルセウ(C1)・ダ1800・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 2, "mark": "○", "umaban": 13, "waku": 7, "name": "ベイビーゲート", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 52.4, "ratio": 0.953, "win": "18%", "place": "47%", "measure": [{"label": "馬単体能力", "pts": 33.5, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=41.8秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走1着（トゥイン(B3)・ダ1600・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 3, "mark": "▲", "umaban": 3, "waku": 2, "name": "リュミエール", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 51.6, "ratio": 0.937, "win": "17%", "place": "45%", "measure": [{"label": "馬単体能力", "pts": 32.1, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.5秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走2着（清水坂賞(B3)・ダ2000・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 4, "mark": "△", "umaban": 14, "waku": 7, "name": "ケイアイエルナト", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 49.0, "ratio": 0.89, "win": "8%", "place": "28%", "measure": [{"label": "馬単体能力", "pts": 30.0, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=43.0秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走1着（トゥイン(B3)・ダ1600・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 5, "mark": "△", "umaban": 5, "waku": 3, "name": "アーススピリット", "ninki": null, "odds": null, "kyaku": "差し", "score": 48.8, "ratio": 0.887, "win": "7%", "place": "27%", "measure": [{"label": "馬単体能力", "pts": 32.0, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.2秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走4着（清水坂賞(B3)・ダ2000・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 6, "mark": "△", "umaban": 6, "waku": 3, "name": "ファーストメイト", "ninki": null, "odds": null, "kyaku": "差し", "score": 47.4, "ratio": 0.862, "win": "5%", "place": "20%", "measure": [{"label": "馬単体能力", "pts": 30.1, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.1秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走7着（清水坂賞(B3)・ダ2000・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 7, "mark": "注", "umaban": 7, "waku": 4, "name": "アスコットミヤギ", "ninki": null, "odds": null, "kyaku": "逃げ", "score": 46.2, "ratio": 0.84, "win": "3%", "place": "17%", "measure": [{"label": "馬単体能力", "pts": 25.7, "max": 45}, {"label": "好走傾向", "pts": 19.0, "max": 30}, {"label": "騎手", "pts": 5.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=42.4秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走3着（黒潮盃重賞・ダ1800・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「逃げ」 実測複勝率32.7%(n=425)"}]}, {"rank": 8, "mark": "注", "umaban": 16, "waku": 8, "name": "ニシノシークレット", "ninki": null, "odds": null, "kyaku": "差し", "score": 44.3, "ratio": 0.806, "win": "3%", "place": "14%", "measure": [{"label": "馬単体能力", "pts": 27.5, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.0秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走7着（サンパラ(B3)・ダ1400・稍重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 9, "mark": "", "umaban": 1, "waku": 1, "name": "ウィンターサン", "ninki": null, "odds": null, "kyaku": "差し", "score": 44.3, "ratio": 0.805, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 28.0, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 3.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=37.8秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走11着（フェアリー重賞・ダ1800・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 10, "mark": "", "umaban": 12, "waku": 6, "name": "マイネルオデーサ", "ninki": null, "odds": null, "kyaku": "追込", "score": 43.9, "ratio": 0.797, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 30.2, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 3.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.8秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走4着（清水坂賞(B3)・ダ2000・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 11, "mark": "", "umaban": 4, "waku": 2, "name": "ロンギングタイム", "ninki": null, "odds": null, "kyaku": "差し", "score": 42.2, "ratio": 0.768, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 24.9, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 4.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=39.9秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走6着（三宅坂賞(B3)・ダ1800・良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}, {"rank": 12, "mark": "", "umaban": 9, "waku": 5, "name": "チャダルクン", "ninki": null, "odds": null, "kyaku": "追込", "score": 41.0, "ratio": 0.745, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 26.9, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 3.5, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=38.2秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走13着（サマーバ(B3)・ダ1400・稍重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 13, "mark": "", "umaban": 11, "waku": 6, "name": "エースアビリティ", "ninki": null, "odds": null, "kyaku": "追込", "score": 33.4, "ratio": 0.607, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 18.8, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=41.0秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走14着（トゥイン(B3)・ダ1600・不良）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 14, "mark": "", "umaban": 10, "waku": 5, "name": "ジェイケイファイン", "ninki": null, "odds": null, "kyaku": "追込", "score": 33.2, "ratio": 0.604, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 18.6, "max": 45}, {"label": "好走傾向", "pts": 14.6, "max": 30}, {"label": "騎手", "pts": 4.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=42.1秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走9着（清水坂賞(B3)・ダ2000・重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「追込」 実測複勝率13.3%(n=1126)"}]}, {"rank": 15, "mark": "", "umaban": 8, "waku": 4, "name": "ヒルノデプラーツ", "ninki": null, "odds": null, "kyaku": "差し", "score": 31.8, "ratio": 0.579, "win": "2%", "place": "10%", "measure": [{"label": "馬単体能力", "pts": 14.0, "max": 45}, {"label": "好走傾向", "pts": 16.8, "max": 30}, {"label": "騎手", "pts": 5.0, "max": 8}, {"label": "血統", "pts": 3.5, "max": 7}], "items": [{"label": "基礎能力", "note": "上がり3F=41.6秒（出走馬中 最速37.8〜最遅43.0）の相対評価"}, {"label": "前走内容", "note": "前走12着（狸穴坂賞(B3)・ダ1800・稍重）"}, {"label": "コース適性", "note": "過去10年データ未提供→中立値"}, {"label": "距離・展開・脚質", "note": "距離別の戦績なし→中立／脚質「差し」 実測複勝率23.0%(n=5596)"}]}], "boxes": [{"kind": "ワイド", "width": 3, "points": 3, "rec": false, "combos": ["2-13", "2-3", "13-3"]}, {"kind": "ワイド", "width": 4, "points": 6, "rec": false, "combos": ["2-13", "2-3", "2-14", "13-3", "13-14", "3-14"]}, {"kind": "ワイド", "width": 5, "points": 10, "rec": false, "combos": ["2-13", "2-3", "2-14", "2-5", "13-3", "13-14", "13-5", "3-14", "3-5", "14-5"]}, {"kind": "ワイド", "width": 6, "points": 15, "rec": false, "combos": ["2-13", "2-3", "2-14", "2-5", "2-6", "13-3", "13-14", "13-5", "13-6", "3-14", "3-5", "3-6", "14-5", "14-6", "5-6"]}, {"kind": "馬連", "width": 3, "points": 3, "rec": false, "combos": ["2-13", "2-3", "13-3"]}, {"kind": "馬連", "width": 4, "points": 6, "rec": true, "combos": ["2-13", "2-3", "2-14", "13-3", "13-14", "3-14"]}, {"kind": "馬連", "width": 5, "points": 10, "rec": false, "combos": ["2-13", "2-3", "2-14", "2-5", "13-3", "13-14", "13-5", "3-14", "3-5", "14-5"]}, {"kind": "馬連", "width": 6, "points": 15, "rec": false, "combos": ["2-13", "2-3", "2-14", "2-5", "2-6", "13-3", "13-14", "13-5", "13-6", "3-14", "3-5", "3-6", "14-5", "14-6", "5-6"]}], "result": {"top": [{"chaku": 1, "umaban": 6, "waku": 3, "name": "ファーストメイト", "ninki": 5, "odds": 15.3, "mark": "△", "rank": 6}, {"chaku": 2, "umaban": 2, "waku": 1, "name": "アレグランサ", "ninki": 8, "odds": 38.3, "mark": "◎", "rank": 1}, {"chaku": 3, "umaban": 7, "waku": 4, "name": "アスコットミヤギ", "ninki": 1, "odds": 1.4, "mark": "注", "rank": 7}], "buy": {"kind": "馬連", "width": 4, "points": 6, "hits": []}, "wide": {"combo": "3-14", "hit": false, "pay": null}}}]}</script>
+<script>
+(function(){
+  var D=JSON.parse(document.getElementById('data').textContent);
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+
+  var subText='';
+  var m=/(\d{4})-(\d{2})-(\d{2})/.exec(D.heading||'');
+  if(m){
+    var d=new Date(+m[1],+m[2]-1,+m[3]);
+    document.getElementById('date').firstChild.nodeValue=
+      (+m[2])+'月'+(+m[3])+'日（'+'日月火水木金土'[d.getDay()]+'）';
+    subText=m[1]+'年';
+  }else{
+    document.getElementById('date').firstChild.nodeValue=D.heading||'';
+  }
+  var venues=[];
+  D.races.forEach(function(r){if(venues.indexOf(r.venue)<0)venues.push(r.venue);});
+  document.getElementById('sub').textContent=
+    subText+'　'+venues.join('・')+'　全'+D.races.length+'鞍';
+
+  var picker=document.getElementById('picker'), stage=document.getElementById('stage');
+  var view='yosou', current=0;
+
+  function head(r){
+    return '<div class="eyebrow"><span class="v">'+esc(r.venue)+'</span>'+
+      '<span class="r tnum">'+esc(r.no)+'</span></div>'+
+      '<h2 class="rname">'+esc(r.name)+'</h2>'+
+      '<div class="cond tnum">'+esc(r.surface)+
+      (r.post?'　発走 '+esc(r.post):'')+'</div>';
+  }
+
+  function yen(n){return n==null?'—':n.toLocaleString('ja-JP')+'円';}
+
+  function renderResult(r){
+    var h=[head(r)];
+    if(!r.result){
+      h.push('<div class="pending">確定後に掲載します</div>');
+      stage.innerHTML=h.join(''); return;
+    }
+    var R=r.result;
+    h.push('<h3 class="sec">確定着順</h3><div class="chaku">');
+    R.top.forEach(function(t){
+      var w=(t.waku>=1&&t.waku<=8)?t.waku:1;
+      h.push('<div class="row">'+
+        '<span class="ord">'+t.chaku+'</span>'+
+        '<span class="mk">'+esc(t.mark||'')+'</span>'+
+        '<span class="waku tnum" style="background:var(--w'+w+');color:var(--w'+w+'i)">'+
+          esc(t.umaban)+'</span>'+
+        '<span class="nm">'+esc(t.name)+'</span>'+
+        '<span class="sub">'+(t.ninki?t.ninki+'番人気':'')+
+          (t.rank?'<br>スコア'+t.rank+'位':'')+'</span></div>');
+    });
+    h.push('</div>');
+
+    h.push('<h3 class="sec">買い目の結果</h3><div class="judge">');
+    var b=R.buy;
+    if(b){
+      var hit=b.hits&&b.hits.length;
+      h.push('<div class="r"><span class="lbl">'+esc(b.kind)+' '+b.width+'頭BOX</span>'+
+        '<span class="val">'+(hit
+          ? '<span class="ok">的中</span>　<span class="cmb">'+esc(b.hits[0].combo)+
+            '</span><span class="pay">'+yen(b.hits[0].pay)+'</span>'
+          : '<span class="ng">不的中</span>')+'</span></div>');
+    }
+    var wd=R.wide;
+    h.push('<div class="r"><span class="lbl">気になるワイド</span><span class="val">'+
+      (!wd ? '<span class="ng">見送り</span>'
+           : (wd.hit ? '<span class="ok">的中</span>　<span class="cmb">'+esc(wd.combo)+
+                       '</span><span class="pay">'+yen(wd.pay)+'</span>'
+                     : '<span class="ng">不的中</span>　<span class="cmb">'+
+                       esc(wd.combo)+'</span>'))+'</span></div>');
+    h.push('</div>');
+    stage.innerHTML=h.join('');
+  }
+
+  function render(r){
+    var h=[];
+    h.push(head(r));
+
+    // 予想欄。ここだけ見れば印が分かる
+    h.push('<div class="yosou">'+r.horses.filter(function(x){return x.mark;})
+      .map(function(x){
+        var w=(x.waku>=1&&x.waku<=8)?x.waku:1;
+        return '<b><span class="mk">'+esc(x.mark)+'</span>'+
+          '<span class="nb tnum" style="background:var(--w'+w+');color:var(--w'+w+'i)">'+
+          esc(x.umaban)+'</span>'+
+          '<span class="nn">'+esc(x.name)+'</span></b>';}).join('')+'</div>');
+
+    if(r.single){
+      var s=r.single;
+      h.push('<div class="wide'+(s.rec?'':' skip')+'">'+
+        '<div class="cap">気になるワイド</div><div class="body">'+
+        '<div class="combo tnum">'+(s.rec?esc(s.combo):'今回は見送り')+'</div>'+
+        '<div class="why">'+esc(s.label)+
+          (s.rec?'':'　参考 '+esc(s.combo))+'</div></div></div>');
+    }
+
+    var rec=r.boxes.filter(function(b){return b.rec;})[0];
+    if(rec){
+      var alt=r.boxes.filter(function(b){return !b.rec;}).map(function(b){
+        return '<span>'+esc(b.kind)+' '+b.width+'頭 <b>'+b.points+'点</b></span>';}).join('');
+      h.push('<div class="buy"><div class="hd">買い目　'+esc(rec.kind)+' '+
+        rec.width+'頭BOX '+rec.points+'点</div>'+
+        '<div class="cb">'+rec.combos.map(function(c){
+          return '<span>'+esc(c)+'</span>';}).join('')+'</div>'+
+        (alt?'<div class="alt">広げる場合　'+alt+'</div>':'')+'</div>');
+    }
+
+    h.push('<button class="disclose" type="button" id="disc" aria-expanded="false" '+
+      'aria-controls="list">出走全'+r.horses.length+'頭のスコア'+
+      '<span class="chev">＋</span></button>');
+    h.push('<div class="list" id="list" hidden>');
+    r.horses.forEach(function(x,j){
+      var w=(x.waku>=1&&x.waku<=8)?x.waku:1;
+      var sub=[x.ninki?x.ninki+'番人気':'人気—',
+               x.odds?x.odds.toFixed(1)+'倍':'オッズ—',
+               x.kyaku||'脚質—'];
+      var det=x.measure.map(function(c){
+        return '<div class="mrow"><span>'+esc(c.label)+'</span>'+
+          '<span class="mbar"><i style="width:'+
+            Math.round((c.max?c.pts/c.max:0)*100)+'%"></i></span>'+
+          '<span class="mval tnum">'+c.pts.toFixed(1)+'/'+c.max+'</span></div>';}).join('');
+      var notes=x.items.filter(function(it){return it.note&&it.pts;}).slice(0,4)
+        .map(function(it){return '<b>'+esc(it.label)+'</b>　'+esc(it.note);}).join('<br>');
+      h.push('<button class="horse" type="button" aria-expanded="false" data-t="d'+j+'">'+
+        '<span class="hrow">'+
+          '<span class="rk tnum">'+x.rank+'</span>'+
+          '<span class="mk">'+esc(x.mark)+'</span>'+
+          '<span class="waku tnum" style="background:var(--w'+w+');color:var(--w'+w+'i)">'+
+            esc(x.umaban)+'</span>'+
+          '<span class="nm">'+esc(x.name)+'</span>'+
+          '<span class="sc tnum">'+x.score.toFixed(1)+'</span></span>'+
+        '<span class="hsub">'+sub.map(esc).join('　')+'</span>'+
+        '<span class="gauge"><i style="width:'+Math.round(x.ratio*100)+'%"></i></span>'+
+      '</button>'+
+      '<div class="detail" id="d'+j+'" hidden>'+det+
+        '<div class="dnote">'+notes+'</div></div>');
+    });
+    h.push('</div>');
+    stage.innerHTML=h.join('');
+  }
+
+  function show(){
+    (view==='yosou'?render:renderResult)(D.races[current]);
+  }
+
+  D.races.forEach(function(r,i){
+    var b=document.createElement('button');
+    b.type='button'; b.textContent=r.venue+r.no;
+    b.addEventListener('click',function(){
+      Array.prototype.forEach.call(picker.children,function(c){
+        c.setAttribute('aria-current','false');});
+      b.setAttribute('aria-current','true');
+      current=i; show();
+      window.scrollTo({top:0,behavior:'instant'});
+    });
+    picker.appendChild(b);
+  });
+  picker.firstChild.setAttribute('aria-current','true');
+
+  var tabY=document.getElementById('tabY'), tabK=document.getElementById('tabK');
+  // 1レースも確定していなければ、結果タブは押せないようにする
+  var anyResult=D.races.some(function(r){return !!r.result;});
+  if(!anyResult){tabK.disabled=true;}
+  function setView(v){
+    view=v;
+    tabY.setAttribute('aria-selected',String(v==='yosou'));
+    tabK.setAttribute('aria-selected',String(v==='kekka'));
+    show();
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  tabY.addEventListener('click',function(){setView('yosou');});
+  tabK.addEventListener('click',function(){if(!tabK.disabled)setView('kekka');});
+  show();
+
+  stage.addEventListener('click',function(e){
+    var disc=e.target.closest('#disc');
+    if(disc){
+      var list=document.getElementById('list');
+      var open=list.hidden; list.hidden=!open;
+      disc.setAttribute('aria-expanded',String(open));
+      disc.querySelector('.chev').textContent=open?'−':'＋';
+      return;
+    }
+    var btn=e.target.closest('.horse'); if(!btn)return;
+    var d=document.getElementById(btn.dataset.t); if(!d)return;
+    var o=d.hidden; d.hidden=!o; btn.setAttribute('aria-expanded',String(o));
+  });
+})();
+</script>

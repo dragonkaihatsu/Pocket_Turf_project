@@ -238,6 +238,30 @@ def cmd_blog(args) -> None:
           "すべてインラインで組んである")
 
 
+def cmd_site(args) -> None:
+    """GitHub Pages に出す静的サイトを docs/ に書き出す。
+
+    アメブロには外部投稿APIが無く、他社アフィリエイトも禁止されている。
+    予想の元データと結果が両方このリポジトリにある以上、同じ場所から
+    サイトを出すのがいちばん素直で、費用もかからない。
+    """
+    from .site import build_payload, write_site
+
+    records = _load_horse_records(args.records)
+    payload = build_payload(Path(args.config), records=records,
+                            race_date=args.race_date)
+    out = write_site(payload, Path(args.outdir))
+    for k, p in out.items():
+        print(f"{k}: {p}  {len(p.read_text(encoding='utf-8')):,}文字")
+    done = sum(1 for r in payload["races"] if r.get("result"))
+    print(f"{len(payload['races'])}レース（うち確定 {done}レース）")
+    print("\nGitHub Pages で公開する手順:")
+    print("  1. docs/ をコミットしてプッシュ")
+    print("  2. GitHub のリポジトリ → Settings → Pages")
+    print("  3. Source を「Deploy from a branch」、Branch を「main / docs」に設定")
+    print("  → https://<ユーザー名>.github.io/<リポジトリ名>/ で公開されます")
+
+
 def cmd_daily(args) -> None:
     html_out = build_from_config(args.config)
     out_path = Path(args.output)
@@ -406,6 +430,13 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=["utf-8-sig", "utf-8", "cp932"],
                         help="出力の文字コード。既定はBOM付きUTF-8")
     p_blog.set_defaults(func=cmd_blog)
+
+    p_site = sub.add_parser("site", help="GitHub Pages 用の静的サイトを docs/ に出力")
+    p_site.add_argument("config", help="開催日設定JSON")
+    p_site.add_argument("--outdir", default="docs", help="出力先（既定 docs）")
+    p_site.add_argument("--records", help="馬別戦績CSV")
+    p_site.add_argument("--race-date", help="レース日 (YYYY-MM-DD)。省略時は設定から拾う")
+    p_site.set_defaults(func=cmd_site)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
     p_daily.add_argument("config", help="開催日設定JSON")
