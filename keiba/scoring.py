@@ -70,6 +70,10 @@ class ScoreItem:
     label: str
     points: float
     note: str
+    # 採点対象外の項目（データ源が無く、点を付けると情報が無いのに配点だけ
+    # 埋まってしまうもの）は scored=False にし、満点からも外す
+    scored: bool = True
+    max_points: float = 0.0
 
 
 @dataclass
@@ -82,6 +86,20 @@ class HorseScore:
     @property
     def base_subtotal(self) -> float:
         return sum(i.points for i in self.base_items)
+
+    @property
+    def max_base(self) -> float:
+        """実際に採点した項目の満点合計。採点対象外の項目は含めない。
+
+        調教のように専門紙が要る項目を一律の中立値で埋めると、情報が無いのに
+        配点だけ埋まった状態になる。採点しないと決めた項目は満点からも外す。
+        """
+        skipped = sum(i.max_points for i in self.base_items if not i.scored)
+        return MAX_BASE - skipped
+
+    @property
+    def skipped_items(self) -> list[str]:
+        return [i.label for i in self.base_items if not i.scored]
 
     @property
     def correction_subtotal(self) -> float:
@@ -264,17 +282,43 @@ def score_kyori_tekisei(
 CHOKYO_TABLE = {"S": 10, "A": 8, "B": 6, "C": 4, "D": 2}
 
 
-def score_chokyo(horse: Horse) -> ScoreItem:
-    """調教（10点）: 調教評価（S/A/B/C/D、または数値1-5）を素点化。"""
+def _has_chokyo(horse: Horse) -> bool:
     raw = horse.chokyo_hyoka.strip().upper()
     if raw in CHOKYO_TABLE:
-        return ScoreItem("調教", CHOKYO_TABLE[raw], f"調教評価: {horse.chokyo_hyoka}")
+        return True
+    try:
+        float(raw)
+        return True
+    except ValueError:
+        return False
+
+
+def score_chokyo(horse: Horse, field_horses: list[Horse] | None = None) -> ScoreItem:
+    """調教（10点）: 調教評価（S/A/B/C/D、または数値1-5）を素点化。
+
+    調教評価は専門紙からしか取れず、収集した馬柱には入っていない。
+    **そのレースの誰も評価を持たない場合は採点対象外**とし、満点からも外す。
+    一律の中立値で埋めると、情報が無いのに配点だけ埋まった状態になるため。
+
+    一部の馬だけ評価がある場合は、持たない馬を中立値にして採点を続ける
+    （評価を入力した馬だけが不利/有利にならないようにする）。
+    """
+    raw = horse.chokyo_hyoka.strip().upper()
+    if raw in CHOKYO_TABLE:
+        return ScoreItem("調教", CHOKYO_TABLE[raw], f"調教評価: {horse.chokyo_hyoka}",
+                         max_points=MAX_CHOKYO)
     try:
         n = float(raw)
         pts = _scale(n, 1, 5, 2, 10)
-        return ScoreItem("調教", round(pts, 2), f"調教評価(数値): {raw}")
+        return ScoreItem("調教", round(pts, 2), f"調教評価(数値): {raw}",
+                         max_points=MAX_CHOKYO)
     except ValueError:
-        return ScoreItem("調教", 5, "調教評価データなし→中立値")
+        pass
+
+    if field_horses is not None and not any(_has_chokyo(h) for h in field_horses):
+        return ScoreItem("調教", 0.0, "採点対象外（調教評価は専門紙が必要）",
+                         scored=False, max_points=MAX_CHOKYO)
+    return ScoreItem("調教", 5, "調教評価データなし→中立値", max_points=MAX_CHOKYO)
 
 
 # ---------------------------------------------------------------------------
@@ -492,7 +536,7 @@ def score_horse(
         score_zenso_naiyou(horse),
         course_item,
         score_kyori_tekisei(horse, None, ratings, self_kyori),
-        score_chokyo(horse),
+        score_chokyo(horse, field_horses),
     ]
     corrections = [
         correction_kishu(horse, jockey_tiers, ratings),

@@ -80,6 +80,8 @@ def cmd_predict(args) -> None:
     out_path.write_text(html_out, encoding="utf-8")
     print(f"書き出し完了: {out_path}")
 
+    if skipped := (marked[0].score.skipped_items if marked else []):
+        print(f"\n※ {'・'.join(skipped)}は採点対象外（満点{marked[0].score.max_base:.0f}点で採点）")
     print("\n--- 印 ---")
     exp = Expectation()
     for rank, m in enumerate(marked, start=1):

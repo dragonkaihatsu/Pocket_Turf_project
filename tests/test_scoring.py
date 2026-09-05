@@ -132,3 +132,54 @@ class TestExpectation(unittest.TestCase):
         self.assertLess(lo, 0.5)
         self.assertGreater(hi, 0.5)
         self.assertEqual(wilson(0, 0), (0.0, 0.0))
+
+
+class TestChokyoOptOut(unittest.TestCase):
+    """調教は専門紙からしか取れないため、データが無いレースでは採点しない。
+
+    一律の中立値で埋めると、情報が無いのに配点だけ埋まった状態になる。
+    採点しないと決めた項目は満点からも外す。
+    """
+
+    def _horse(self, umaban: int, chokyo: str = ""):
+        return Horse.from_row({
+            "馬番": str(umaban), "枠番": "1", "馬名": f"馬{umaban}", "性齢": "牡4",
+            "斤量": "56", "騎手": "テスト", "前走着順": "3", "前走レース名": "X",
+            "上がり3F": "35.0", "調教評価": chokyo, "脚質": "差し",
+        })
+
+    def test_no_one_has_data_so_the_item_is_skipped(self):
+        from keiba.scoring import MAX_BASE, MAX_CHOKYO, score_race
+        field = [self._horse(1), self._horse(2)]
+        s = score_race(field, None)[0]
+        item = next(i for i in s.base_items if i.label == "調教")
+        self.assertFalse(item.scored)
+        self.assertEqual(item.points, 0.0)
+        self.assertIn("採点対象外", item.note)
+        self.assertEqual(s.max_base, MAX_BASE - MAX_CHOKYO)
+        self.assertEqual(s.skipped_items, ["調教"])
+
+    def test_scoring_resumes_when_someone_has_data(self):
+        """一部の馬だけ評価がある場合は採点を続ける。
+
+        入力した馬だけが有利/不利にならないよう、持たない馬は中立値にする。
+        """
+        from keiba.scoring import MAX_BASE, score_race
+        field = [self._horse(1, "A"), self._horse(2)]
+        scores = {s.horse.umaban: s for s in score_race(field, None)}
+        graded = next(i for i in scores[1].base_items if i.label == "調教")
+        blank = next(i for i in scores[2].base_items if i.label == "調教")
+        self.assertTrue(graded.scored)
+        self.assertTrue(blank.scored)
+        self.assertGreater(graded.points, blank.points)
+        self.assertEqual(scores[1].max_base, MAX_BASE)
+        self.assertEqual(scores[1].skipped_items, [])
+
+    def test_skipping_does_not_change_the_order(self):
+        """全馬から同じ定数を引くだけなので、順位は変わらない。"""
+        from keiba.scoring import score_race
+        field = [self._horse(1), self._horse(2), self._horse(3)]
+        order = [s.horse.umaban for s in
+                 sorted(score_race(field, None), key=lambda s: s.total_yoi, reverse=True)]
+        self.assertEqual(len(order), 3)
+        self.assertEqual(sorted(order), [1, 2, 3])

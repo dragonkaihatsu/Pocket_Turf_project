@@ -75,7 +75,10 @@ def _breakdown_table(score: HorseScore) -> str:
     for item in score.base_items:
         rows.append(f"<tr><td>{html.escape(item.label)}</td><td class='pt'>{item.points:.1f}</td>"
                      f"<td>{html.escape(item.note)}</td></tr>")
-    rows.append(f"<tr><td><b>小計(85点満点)</b></td><td class='pt'><b>{score.base_subtotal:.1f}</b></td><td></td></tr>")
+    skipped = score.skipped_items
+    note = f"（{'・'.join(skipped)}は採点対象外）" if skipped else ""
+    rows.append(f"<tr><td><b>小計({score.max_base:.0f}点満点)</b>{html.escape(note)}</td>"
+                f"<td class='pt'><b>{score.base_subtotal:.1f}</b></td><td></td></tr>")
     for item in score.corrections:
         rows.append(f"<tr><td>{html.escape(item.label)}</td>"
                      f"<td class='pt {_cls(item.points)}'>{_fmt(item.points)}</td>"
@@ -110,12 +113,13 @@ def _card(score: HorseScore, marked: list[MarkedHorse]) -> str:
 def _score_table(scores: list[HorseScore], marked: list[MarkedHorse],
                  exp: Expectation) -> str:
     header = ("<tr><th>順位</th><th>印</th><th>馬番</th><th>馬名</th><th>基礎能力</th><th>前走内容</th>"
-              "<th>コース適性</th><th>距離適性</th><th>調教</th><th>小計85</th>"
+              "<th>コース適性</th><th>距離適性</th><th>調教</th><th>小計</th>"
               "<th>補正計</th><th>良馬場</th><th>重馬場</th>"
               "<th>1着期待度</th><th>着内期待度</th></tr>")
     rows = []
     for rank, s in enumerate(sorted(scores, key=lambda s: s.total_yoi, reverse=True), start=1):
-        cells = [f"<td>{i.points:.1f}</td>" for i in s.base_items]
+        cells = [f"<td>{'—' if not i.scored else f'{i.points:.1f}'}</td>"
+                 for i in s.base_items]
         win_pct, place_pct = exp.format(rank)
         rows.append(
             f"<tr><td>{rank}</td><td>{_mark_of(s.horse.umaban, marked) or '—'}</td>"
