@@ -73,3 +73,37 @@ class TestCorpus(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestJraPassingOrder(unittest.TestCase):
+    """中央の通過順表記には `*`（内ラチ沿いの印）や `-` `=`（馬群の間隔）が混ざる。
+
+    括弧の中身を数字だけに限定していたため、中央では `(*5,8)` の括弧が
+    認識されず、横並びの2頭が別々の順位に割れていた。
+    """
+
+    def test_asterisk_inside_a_bracket_keeps_the_pair_together(self):
+        from keiba.course import parse_passing_order
+        p = parse_passing_order("(*5,8)-(2,9)10")
+        self.assertEqual(p[5], 1)
+        self.assertEqual(p[8], 1)   # 以前は 2 になっていた
+        self.assertEqual(p[2], 2)
+        self.assertEqual(p[9], 2)
+        self.assertEqual(p[10], 3)
+
+    def test_asterisk_on_the_second_horse(self):
+        from keiba.course import parse_passing_order
+        p = parse_passing_order("(5,*3)(2,9,10)8")
+        self.assertEqual(p[5], 1)
+        self.assertEqual(p[3], 1)
+        self.assertEqual(p[2], 2)
+        self.assertEqual(p[8], 3)
+
+    def test_gap_markers_do_not_create_ranks(self):
+        from keiba.course import parse_passing_order
+        self.assertEqual(parse_passing_order("1,2=3-4"), {1: 1, 2: 2, 3: 3, 4: 4})
+
+    def test_nar_notation_is_unchanged(self):
+        from keiba.course import parse_passing_order
+        p = parse_passing_order("13,6,(1,9),4")
+        self.assertEqual(p, {13: 1, 6: 2, 1: 3, 9: 3, 4: 4})

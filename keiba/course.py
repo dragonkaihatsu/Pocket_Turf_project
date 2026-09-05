@@ -28,12 +28,21 @@ def parse_passing_order(text: str) -> dict[int, int]:
 
     '2,6,(5,12),(3,8),1' のように、括弧でくくられた馬は同じ位置（横並び）を
     表すため、同一順位として扱う。
+
+    中央の表記には `(*5,8)` のように **アスタリスク付きの馬番** が混ざる
+    （内ラチ沿いを示す印）。括弧の中身を数字だけに限定していたため中央では
+    括弧が認識されず、横並びの2頭が別々の順位に割れていた。中央9-12Rの
+    通過順CSVのうち890行がこの形なので、影響は小さくない。
+    `-` `=` は馬群の間隔を表す区切りで、順位そのものには影響しない。
     """
     positions: dict[int, int] = {}
     rank = 0
-    for token in re.findall(r"\((?:\d+,?)+\)|\d+", text):
+    for token in re.findall(r"\([^)]*\)|\d+", text):
+        nums = re.findall(r"\d+", token)
+        if not nums:
+            continue
         rank += 1
-        for n in re.findall(r"\d+", token):
+        for n in nums:
             positions[int(n)] = rank
     return positions
 
