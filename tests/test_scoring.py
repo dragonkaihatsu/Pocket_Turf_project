@@ -234,3 +234,38 @@ class TestKosouKeiko(unittest.TestCase):
         item = score_kosou_keiko([], field_coverage=1.0)
         self.assertTrue(item.scored)
         self.assertEqual(item.points, MAX_KOSOU * 0.5)
+
+
+class TestRecordWindow(unittest.TestCase):
+    """戦績は「レース日より前」かつ「直近3年」に絞る。
+
+    上限は後知恵の排除。下限は、馬の競走寿命のピークが2〜3年で、
+    古い実績を今の能力とみなすと実態からずれるため。
+    """
+
+    def _rows(self, *dates):
+        return [{"日付": d, "着順": "1", "場": "東京", "距離": "1600"} for d in dates]
+
+    def test_future_runs_are_cut(self):
+        from keiba.horsedb import records_before
+        rows = self._rows("2026-08-01", "2026-09-05", "2026-09-06", "2026-09-20")
+        got = [r["日付"] for r in records_before(rows, "2026-09-06")]
+        self.assertEqual(got, ["2026-08-01", "2026-09-05"])
+
+    def test_runs_older_than_three_years_are_cut(self):
+        from keiba.horsedb import records_before
+        rows = self._rows("2022-09-05", "2023-09-05", "2023-09-07", "2025-01-01")
+        got = [r["日付"] for r in records_before(rows, "2026-09-06")]
+        # 2023-09-06 が下限。同日以降だけ残る
+        self.assertEqual(got, ["2023-09-07", "2025-01-01"])
+
+    def test_window_can_be_disabled(self):
+        from keiba.horsedb import records_before
+        rows = self._rows("2019-01-01", "2025-01-01")
+        got = [r["日付"] for r in records_before(rows, "2026-09-06", years=None)]
+        self.assertEqual(len(got), 2)
+
+    def test_no_as_of_means_no_filtering(self):
+        from keiba.horsedb import records_before
+        rows = self._rows("2019-01-01", "2030-01-01")
+        self.assertEqual(len(records_before(rows, None)), 2)

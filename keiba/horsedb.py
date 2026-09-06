@@ -117,15 +117,32 @@ def load_records(path: Path | str | None = None) -> dict[str, list[dict]]:
     return by_horse
 
 
-def records_before(rows: list[dict], as_of: date | str | None) -> list[dict]:
-    """as_of より前の行だけ返す。後知恵を排除するための関門。
+# 戦績をさかのぼる年数。馬の競走寿命のピークは2〜3年で、故障などで
+# 能力を出し切れずピークアウトしていく馬も多い。5年前の実績を今の能力の
+# 根拠にすると、実態からずれる（新潟記念2026でG1馬4頭が揃って馬券外に
+# なった例が近い）。馬場造成も年々変わり、同じ時計・同じバイアスが
+# 続く保証がない。だから**古い戦績は切る**。
+RECORD_YEARS = 3
 
-    as_of が None（当日の予想）なら全行を返す。
+
+def records_before(rows: list[dict], as_of: date | str | None,
+                   years: int | None = RECORD_YEARS) -> list[dict]:
+    """as_of より前・直近 years 年ぶんの行を返す。
+
+    上限（as_of より前）は後知恵を排除するための関門。
+    下限（years 年前まで）は、古すぎる実績を今の能力とみなさないため。
+    years に None を渡すと下限なし（従来どおり全期間）。
     """
     if as_of is None:
         return rows
     key = as_of.isoformat() if isinstance(as_of, date) else str(as_of)
-    return [r for r in rows if r["日付"] < key]
+    if years is None:
+        return [r for r in rows if r["日付"] < key]
+    try:
+        floor = f"{int(key[:4]) - years}{key[4:]}"
+    except ValueError:
+        return [r for r in rows if r["日付"] < key]
+    return [r for r in rows if floor <= r["日付"] < key]
 
 
 def summarize(rows: list[dict], ba: str | None = None,
