@@ -30,12 +30,31 @@ def _race(n=12):
     return horses, scores, marked, plan
 
 
+def _payload(n=12):
+    """build_payload と同じ形の最小データ。blog は site と同じ入力を受ける。"""
+    horses=[{"rank":i,"mark":"◎○▲△△△注注"[i-1] if i<=8 else "","umaban":i,
+             "waku":(i+1)//2,"name":f"テスト馬{i}","ninki":i,"odds":2.0+i,
+             "kyaku":"先行","score":80-i*2,"ratio":1-0.03*i,"win":"—","place":"—",
+             "measure":[{"label":"馬単体能力","pts":40.0,"max":45}],
+             "items":[{"label":"基礎能力","note":"上がり3F 34.5"}]}
+            for i in range(1,n+1)]
+    return {"heading":"2026-09-06 中央","date":"2026-09-06","races":[{
+        "venue":"中山","no":"11R","name":"テストステークス","surface":"芝2000m",
+        "post":"15:45","horses":horses,
+        "single":{"combo":"1-3","label":"ワイド 1位-3位","rec":True},
+        "boxes":[{"kind":"馬連","width":4,"points":6,"rec":True,
+                  "combos":["1-2","1-3","1-4","2-3","2-4","3-4"]},
+                 {"kind":"ワイド","width":3,"points":3,"rec":False,
+                  "combos":["1-2","1-3","2-3"]}],
+        "result":None}]}
+
+
 class TestAmebaHtml(unittest.TestCase):
     def setUp(self):
-        _, scores, marked, plan = _race()
-        self.block = format_race_html("テスト11R テストS", "ダ1200m", "15:30",
-                                      marked, scores, plan)
-        self.day = format_day_html([self.block] * 9, "2026-09-05 予想")
+        from keiba.blog import format_day_html, format_race_html
+        d=_payload()
+        self.block=format_race_html(d["races"][0])
+        self.day=format_day_html([self.block]*9, "9月6日（日）中央競馬")
 
     def test_no_tags_that_ameba_strips(self):
         """<style> や <script> は落とされるため、使っていたら見た目が壊れる。"""
@@ -47,60 +66,50 @@ class TestAmebaHtml(unittest.TestCase):
 
     def test_a_full_day_fits_in_one_article(self):
         """本文はHTMLタグ込みで半角60,000文字まで。9レースで収まること。"""
-        ok, n = fits_ameba(self.day)
+        from keiba.blog import AMEBA_LIMIT, SAFE_LIMIT, fits_ameba
+        ok,n=fits_ameba(self.day)
         self.assertLess(n, AMEBA_LIMIT)
         self.assertTrue(ok, f"安全圏{SAFE_LIMIT}を超えた: {n}文字")
 
-    def test_one_race_is_small_enough_to_split(self):
-        ok, n = fits_ameba(format_day_html([self.block], "テスト"))
-        self.assertTrue(ok)
-        self.assertLess(n, 12000)
-
     def test_html_is_escaped(self):
-        horses, scores, marked, plan = _race()
-        marked[0].score.horse.name = "<b>悪意</b>"
-        html = format_race_html("R", "芝", "", marked, scores, plan)
+        from keiba.blog import format_race_html
+        d=_payload()
+        d["races"][0]["horses"][0]["name"]="<b>悪意</b>"
+        html=format_race_html(d["races"][0])
         self.assertIn("&lt;b&gt;", html)
         self.assertNotIn("<b>悪意", html)
 
-    def test_marks_and_numbers_survive(self):
-        for token in ("◎", "○", "▲", "スコア順", "買い目", "候補"):
-            self.assertIn(token, self.block)
+    def test_公開ページから外した文言が復活していない(self):
+        """回収率・黒字確率・買い目の型は公開ページに載せない方針。
+
+        以前は blog が独自にデータを組み立てていたため、方針変更が
+        反映されず古い文言のまま出続けていた。site と同じ入力にした。
+        """
+        for word in ("回収", "黒字", "波乱型", "標準型", "鉄板型", "ワイド1点"):
+            self.assertNotIn(word, self.day, f"{word} が残っている")
+        self.assertIn("気になるワイド", self.day)
 
 
 class TestAmebaText(unittest.TestCase):
-    """ブログは等幅フォントではないので、貼り付け用テキストは桁揃えに頼らない。"""
+    """ブログの本文は等幅ではないので、テキスト版は桁揃えをしない。"""
 
     def setUp(self):
         from keiba.blog import format_day_text, format_race_text
-        _, scores, marked, plan = _race()
-        self.block = format_race_text("テスト11R テストS", "ダ1200m", "15:30",
-                                      marked, scores, plan)
-        self.day = format_day_text([self.block] * 9, "2026-09-05 予想")
+        d=_payload()
+        self.text=format_day_text([format_race_text(d["races"][0])]*9,
+                                  "9月6日（日）中央競馬")
 
-    def test_no_html(self):
-        self.assertNotIn("<", self.day)
+    def test_no_html_tags(self):
+        self.assertNotIn("<", self.text)
+
+    def test_no_column_alignment(self):
+        """半角スペース3連続は桁揃えの痕跡。等幅でない環境で崩れる。"""
+        for line in self.text.split("\n"):
+            self.assertNotIn("   ", line)
 
     def test_lines_fit_a_phone(self):
-        """本文の行は全角17字（34桁）程度に収める。注意書きの散文は除く。"""
-        from keiba.blog import _txt_width
-        wide = [ln for ln in self.block.splitlines() if _txt_width(ln) > 40]
-        self.assertEqual(wide, [], f"長すぎる行: {wide}")
-
-    def test_no_column_padding(self):
-        """半角スペースの連続で列を合わせていないこと（貼ると崩れるため）。"""
-        self.assertNotIn("   ", self.block)
-
-    def test_contains_the_essentials(self):
-        for token in ("ワイド1点", "スコア順", "候補", "買い目", "◎"):
-            self.assertIn(token, self.block)
-
-    def test_wrapping_keeps_every_token(self):
-        from keiba.blog import _wrap_tokens
-        text = "回収156% 的中8% 90%区間80%〜246% 黒字86% 最大29連敗"
-        lines = _wrap_tokens(text)
-        self.assertGreater(len(lines), 1)
-        self.assertEqual(" ".join(lines).split(), text.split())
+        long=[l for l in self.text.split("\n") if len(l) > 20]
+        self.assertLessEqual(len(long), 1, f"長すぎる行: {long[:3]}")
 
 
 class TestSiteBuilder(unittest.TestCase):

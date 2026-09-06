@@ -162,80 +162,63 @@ def cmd_text(args) -> None:
 
 
 def cmd_blog(args) -> None:
-    """アメーバブログのHTML編集にそのまま貼れるHTMLを書き出す。
+    """アメブロのHTML編集にそのまま貼れるHTMLを書き出す。
 
-    アメブロには外部投稿APIが無いため、自動投稿はできない。生成した
-    ファイルを開いて中身をコピーし、記事作成画面の「HTML表示」に貼る。
+    アメブロには外部投稿APIが無いため自動投稿はできない。生成したファイルを
+    開いて中身をコピーし、記事作成画面の「HTML表示」に貼る。
+    描画データはサイト版と同じ build_payload を使うので、方針変更が
+    片方だけに反映されて食い違うことがない。
     """
-    cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    records = _load_horse_records(args.records)
-    corners = None
-    if args.corner_records:
-        from .tenkai import load_corner_records
-        corners = load_corner_records(args.corner_records)
-    exp = Expectation()
-    blocks: list[str] = []
-    texts: list[str] = []
-    titles: list[str] = []
-    for r in cfg["races"]:
-        horses = load_horses(r["entries"])
-        scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
-                            as_of=args.race_date, venue=r.get("venue"),
-                            corner_records=corners)
-        marked = assign_marks(scores, baba=r.get("baba", "良"))
-        fav = min((h for h in horses if h.ninki), key=lambda h: h.ninki, default=None)
-        plan = make_betting_plan(marked, baba=r.get("baba", "良"),
-                                 favorite_odds=fav.tansho_odds if fav else None)
-        title = f"{r.get('venue', '')}{r['race_no']} {r['name']}"
-        titles.append(title)
-        args_ = (title, r.get("surface", ""), r.get("post_time", ""),
-                 marked, scores, plan, exp)
-        blocks.append(format_race_html(*args_))
-        texts.append(format_race_text(*args_))
-    from .blog import AMEBA_LIMIT, SAFE_LIMIT, fits_ameba
+    from .blog import (AMEBA_LIMIT, SAFE_LIMIT, fits_ameba, format_day_html,
+                       format_day_text, format_race_html, format_race_text)
+    from .site import build_payload
 
-    heading = cfg.get("heading", "予想")
+    records = _load_horse_records(args.records)
+    payload = build_payload(Path(args.config), records=records,
+                            race_date=args.race_date)
+    date = payload.get("date") or ""
+    label = date
+    if date:
+        from datetime import date as _d
+        y, m, dd = (int(x) for x in date.split("-"))
+        label = f"{m}月{dd}日（{'月火水木金土日'[_d(y, m, dd).weekday()]}）中央競馬"
+
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-
-    # 出力する形式。text はブログの通常エディタに貼る用（等幅前提の
-    # 桁揃えを使わないレイアウト）。html はHTML編集モードに貼る用
-    kinds: list[tuple[str, str, list[str], object, object]] = []
-    if args.format in ("html", "both"):
-        kinds.append(("html", ".html", blocks, format_day_html, format_day_html))
-    if args.format in ("text", "both"):
-        kinds.append(("text", ".txt", texts, format_day_text, format_day_text))
-
     written: list[tuple[Path, int]] = []
-    for kind, ext, items, joiner, _ in kinds:
-        base = out.with_suffix(ext) if args.format == "both" else out
+
+    # ブログの本文は等幅ではないので、テキスト版は桁揃えをしない別レイアウト
+    forms = (["html", "text"] if args.format == "both" else [args.format])
+    for form in forms:
+        render_race = format_race_html if form == "html" else format_race_text
+        render_day = format_day_html if form == "html" else format_day_text
+        blocks = [render_race(r) for r in payload["races"]]
+        ext = ".html" if form == "html" else ".txt"
+        base = out if (len(forms) == 1 and out.suffix) else out.with_suffix(ext)
         if args.split:
             # 1記事1レース。レース数が多い日でも確実に上限に収まる
-            for i, (item, title) in enumerate(zip(items, titles), start=1):
-                body = joiner([item], f"{heading}　{title}", args.note)
-                p = base.with_name(f"{base.stem}_{i:02d}{base.suffix}")
-                p.write_text(body, encoding=args.encoding)
-                written.append((p, len(body)))
+            for i, (block, r) in enumerate(zip(blocks, payload["races"]), start=1):
+                body = render_day([block], f"{label}　{r['venue']}{r['no']}", args.note)
+                q = base.with_name(f"{base.stem}_{i:02d}{base.suffix}")
+                q.write_text(body, encoding="utf-8")
+                written.append((q, len(body)))
         else:
-            body = joiner(items, heading, args.note)
-            base.write_text(body, encoding=args.encoding)
+            body = render_day(blocks, label, args.note)
+            base.write_text(body, encoding="utf-8")
             written.append((base, len(body)))
 
-    for p, n in written:
-        ok, _ = fits_ameba(p.read_text(encoding="utf-8"))
+    for q, n in written:
+        ok, _ = fits_ameba(q.read_text(encoding="utf-8"))
         mark = "" if ok else ("  ← 上限超過" if n > AMEBA_LIMIT else "  ← 上限に近い")
-        print(f"書き出し: {p}  {n:,}文字{mark}")
-    over = [p for p, n in written if n > SAFE_LIMIT]
-    if over:
+        print(f"書き出し: {q}  {n:,}文字{mark}")
+    if any(n > SAFE_LIMIT for _, n in written):
         print(f"\nアメブロの本文はHTMLタグ込みで半角{AMEBA_LIMIT:,}文字までです"
-              f"（投稿時の自動整形で増えることがあるため{SAFE_LIMIT:,}文字を目安に）。")
-        print("--split を付けると1レース1記事に分けて書き出します。")
-    print("\nアメブロへの貼り方:")
-    print("  1. ファイルをテキストエディタで開き、中身を全部コピー")
-    print("  2. 記事作成画面で「HTML表示」に切り替える")
-    print("  3. 貼り付けて保存（プレビューはスマホ幅で確認）")
-    print("  ※ style属性は残るが <style> ブロックは落とされるため、"
-          "すべてインラインで組んである")
+              f"（自動整形で増えるため{SAFE_LIMIT:,}文字を目安に）。"
+              "--split で1レース1記事に分けられます。")
+    done = sum(1 for r in payload["races"] if r.get("result"))
+    print(f"\n{len(payload['races'])}レース（うち確定 {done}レース）")
+    print("貼り方: ファイルの中身を全部コピー → 記事作成画面で「HTML表示」に"
+          "切り替えて貼り付け")
 
 
 def cmd_site(args) -> None:
