@@ -37,7 +37,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import keiba.scoring as sc
-from backtest import load_race, load_race_info, parse_races, race_date, race_number
+from backtest import (load_race, load_race_info, parse_races, race_date,
+                      race_number, race_venue)
 from keiba.cli import _load_horse_records
 from keiba.marks import assign_marks
 from keiba.oddsmodel import estimate_umaren, estimate_wide
@@ -128,10 +129,13 @@ def bootstrap(pairs, b=10000):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--profile", choices=["nar", "jra"], default="nar")
+    ap.add_argument("--dir", default=None,
+                    help="既定は地方 data/collected / 中央 data/collected_jra")
     ap.add_argument("--races", default="9-12")
     ap.add_argument("--ratings")
-    ap.add_argument("--race-info", default="data/race_info.csv")
+    ap.add_argument("--race-info", default=None)
+    ap.add_argument("--year", help="この年のレースだけ（年またぎの検証用）")
     ap.add_argument("--budget", type=int, default=5000)
     ap.add_argument("--pool", type=int, default=6, help="買い目を作るスコア上位の頭数")
     ap.add_argument("--kinds", default="馬連,ワイド")
@@ -139,22 +143,28 @@ def main() -> None:
     ap.add_argument("--by-tier", action="store_true")
     args = ap.parse_args()
 
+    import keiba.profile as profile
+    prof = profile.use(args.profile)
     if args.ratings:
         table = json.loads(Path(args.ratings).read_text(encoding="utf-8"))
         sc.load_ratings = lambda *a, **k: table
 
     wanted = parse_races(args.races)
-    kyori_by = load_race_info(args.race_info)
-    records = _load_horse_records()
+    kyori_by = load_race_info(args.race_info or str(prof.path("race_info.csv")))
+    # 戦績を渡さないとコース適性・距離適性が全馬中立に倒れる
+    records = _load_horse_records(str(prof.path("horse_records.csv")))
     targets = [float(x) for x in args.targets.split(",")]
     kinds = args.kinds.split(",")
-    d = Path(args.dir)
+    d = Path(args.dir or ("data/collected" if args.profile == "nar"
+                          else "data/collected_jra"))
 
     res: dict = {}
     n_races = 0
     for stem in sorted({p.name.replace("_結果.csv", "") for p in d.glob("*_結果.csv")}):
         rn = race_number(stem)
         if rn is None or rn not in wanted:
+            continue
+        if args.year and not stem.startswith(args.year):
             continue
         race = load_race(d, stem)
         if race is None:
@@ -168,7 +178,8 @@ def main() -> None:
         tier = ("1倍台" if fav.tansho_odds < 2.0
                 else "2倍台" if fav.tansho_odds < 3.0 else "3倍以上")
         scores = sc.score_race(race["horses"], None, kyori=kyori_by.get(stem),
-                               records=records, as_of=race_date(stem))
+                               records=records, as_of=race_date(stem),
+                               venue=race_venue(stem))
         marked = assign_marks(scores, baba="良")
         if len(marked) < args.pool:
             continue
@@ -194,7 +205,8 @@ def main() -> None:
                         r["gosei"].append(gosei)
 
     scopes = ["全体"] + (["1倍台", "2倍台", "3倍以上"] if args.by_tier else [])
-    print(f"大井{args.races}R {n_races}レース・1レース{args.budget:,}円・"
+    label = "中央" if args.profile == "jra" else "地方"
+    print(f"{label}{args.races}R {n_races}レース・1レース{args.budget:,}円・"
           f"スコア上位{args.pool}頭から選択")
     print("均等払戻し配分（人気薄ほど薄く、人気馬ほど厚く）。"
           "配分は推定オッズ、精算は実配当\n")
