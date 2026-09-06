@@ -52,9 +52,17 @@ def _chip(umaban, waku) -> str:
             f'font-weight:bold">{_esc(umaban)}</span>')
 
 
-def format_race_html(race: dict) -> str:
+def anchor_id(index: int) -> str:
+    """記事内リンクのID。アメブロが id を落とすことがあるため、
+    飛び先には id と <a name> の両方を置く。"""
+    return f"pt-r{index}"
+
+
+def format_race_html(race: dict, index: int = 0) -> str:
     """1レース分。`build_payload` の races 要素をそのまま受け取る。"""
-    p = [f'<div style="margin:0 0 26px">']
+    aid = anchor_id(index)
+    p = [f'<div id="{aid}" style="margin:0 0 26px">'
+         f'<a name="{aid}"></a>']
     p.append(f'<div style="border-left:3px solid {SHU};padding-left:9px;margin-bottom:9px">'
              f'<div style="font-size:12px;color:{MUTED};letter-spacing:.08em">'
              f'{_esc(race["venue"])} {_esc(race["no"])}</div>'
@@ -104,10 +112,11 @@ def format_race_html(race: dict) -> str:
 
     rest = [h for h in race["horses"] if not h.get("mark")]
     if rest:
+        # 印なしは馬番とスコアだけ。馬名まで並べると9レースで数千字になる
         p.append(f'<div style="font-size:11px;color:{MUTED};line-height:1.9">'
-                 f'印なし　'
-                 + "　".join(f'{h["umaban"]} {_esc(h["name"])} {h["score"]:.0f}'
-                             for h in rest) + '</div>')
+                 f'印なし（馬番・点）　'
+                 + "　".join(f'{h["umaban"]}:{h["score"]:.0f}' for h in rest)
+                 + '</div>')
 
     res = race.get("result")
     if res:
@@ -133,12 +142,52 @@ def format_race_html(race: dict) -> str:
                  + (f'<div style="font-size:13px;margin-top:6px">{judge}</div>'
                     if judge else "") + '</div>')
 
+    # どこまで読んでも1タップで戻れるよう、レースごとに置く
+    # レースごとに繰り返されるので、装飾は最小限にする
+    p.append(f'<div style="text-align:right;margin-top:9px;font-size:12px">'
+             f'<a href="#pt-top" style="color:{BLUE}">▲ トップに戻る</a></div>')
     p.append("</div>")
     return "".join(p)
 
 
-def format_day_html(blocks: list[str], date_label: str, note: str = "") -> str:
-    """1日ぶんをまとめる。題字と日付、末尾に注意書き。"""
+def _nav_html(nav: list[dict]) -> str:
+    """丸ボタンの目次。開催場ごとに1行、押すとそのレースへ飛ぶ。
+
+    アメブロはスクリプトが通らないので、切り替えではなく**記事内リンク**で作る。
+    """
+    if not nav or len(nav) < 2:
+        return ""
+    order, by_venue = [], {}
+    for n in nav:
+        if n["venue"] not in by_venue:
+            by_venue[n["venue"]] = []
+            order.append(n["venue"])
+        by_venue[n["venue"]].append(n)
+    rows = []
+    for venue in order:
+        btns = "".join(
+            f'<a href="#{anchor_id(n["index"])}" style="display:inline-block;'
+            f'width:34px;height:34px;line-height:34px;text-align:center;'
+            f'border-radius:50%;background:{PANEL};border:1px solid {LINE};'
+            f'color:{BLUE};font-weight:bold;text-decoration:none;'
+            f'margin:0 6px 6px 0">{_esc(str(n["no"]).replace("R", ""))}</a>'
+            for n in by_venue[venue])
+        rows.append(f'<div style="margin-bottom:2px">'
+                    f'<span style="display:inline-block;min-width:3.4em;'
+                    f'font-size:12px;color:{MUTED};vertical-align:middle">'
+                    f'{_esc(venue)}</span>{btns}</div>')
+    return (f'<div style="border:1px solid {LINE};background:#fff;'
+            f'padding:11px 12px 6px;margin-bottom:18px">'
+            f'<div style="font-size:11px;letter-spacing:.16em;color:{MUTED};'
+            f'margin-bottom:8px">レースを選ぶ</div>' + "".join(rows) + '</div>')
+
+
+def format_day_html(blocks: list[str], date_label: str, note: str = "",
+                    nav: list[dict] | None = None) -> str:
+    """1日ぶんをまとめる。題字と日付、丸ボタンの目次、末尾に注意書き。
+
+    nav は [{"venue": "札幌", "no": "9R", "index": 0}, ...] の形。
+    """
     logo = (f'<div style="font-size:20px;font-weight:bold;font-style:italic;'
             f'letter-spacing:.06em;margin-bottom:2px">'
             f'<span style="color:{BLUE}">POCKET</span> '
@@ -146,12 +195,14 @@ def format_day_html(blocks: list[str], date_label: str, note: str = "") -> str:
             f'<span style="font-size:.62em;font-style:normal;color:#fff;'
             f'background:{BLUE};border-radius:5px;padding:2px 6px;'
             f'letter-spacing:.06em">WEB</span></div>')
-    head = (f'<div style="{BASE}max-width:640px;margin:0 auto">'
+    head = (f'<div id="pt-top" style="{BASE}max-width:640px;margin:0 auto">'
+            f'<a name="pt-top"></a>'
             f'{logo}'
             f'<div style="border-top:1px solid {INK};border-bottom:1px solid {INK};'
             f'height:3px;margin:8px 0 12px"></div>'
-            f'<div style="font-size:23px;font-weight:bold;margin-bottom:18px">'
-            f'{_esc(date_label)}</div>')
+            f'<div style="font-size:23px;font-weight:bold;margin-bottom:16px">'
+            f'{_esc(date_label)}</div>'
+            + _nav_html(nav or []))
     tail = (f'<div style="margin-top:20px;border-top:1px solid {LINE};padding-top:9px;'
             f'font-size:11px;color:{MUTED};line-height:1.8">'
             f'{_esc(note or DEFAULT_NOTE)}</div></div>')

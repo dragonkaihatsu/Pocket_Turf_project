@@ -192,7 +192,10 @@ def cmd_blog(args) -> None:
     for form in forms:
         render_race = format_race_html if form == "html" else format_race_text
         render_day = format_day_html if form == "html" else format_day_text
-        blocks = [render_race(r) for r in payload["races"]]
+        blocks = [render_race(r, i) if form == "html" else render_race(r)
+                  for i, r in enumerate(payload["races"])]
+        nav = [{"venue": r["venue"], "no": r["no"], "index": i}
+               for i, r in enumerate(payload["races"])]
         ext = ".html" if form == "html" else ".txt"
         base = out if (len(forms) == 1 and out.suffix) else out.with_suffix(ext)
         if args.split:
@@ -203,7 +206,8 @@ def cmd_blog(args) -> None:
                 q.write_text(body, encoding="utf-8")
                 written.append((q, len(body)))
         else:
-            body = render_day(blocks, label, args.note)
+            body = (render_day(blocks, label, args.note, nav) if form == "html"
+                    else render_day(blocks, label, args.note))
             base.write_text(body, encoding="utf-8")
             written.append((base, len(body)))
 
@@ -219,6 +223,48 @@ def cmd_blog(args) -> None:
     print(f"\n{len(payload['races'])}レース（うち確定 {done}レース）")
     print("貼り方: ファイルの中身を全部コピー → 記事作成画面で「HTML表示」に"
           "切り替えて貼り付け")
+
+
+def cmd_results(args) -> None:
+    """確定した結果を、読む用のTXTと表計算用のブックに書き出す。
+
+    複数の設定JSONをまとめて渡せる。日をまたいで1冊にしたい場合に使う。
+    """
+    from .resultout import (RACE_COLUMNS, CHAKU_COLUMNS, chaku_rows,
+                            format_text, race_rows, summarize, write_book)
+    from .site import build_payload
+
+    records = _load_horse_records(args.records)
+    payloads = [build_payload(Path(c), records=records, race_date=args.race_date)
+                for c in args.configs]
+
+    # 複数日を1つにまとめる。日付は最初の日を代表にする
+    merged = {"date": payloads[0].get("date"),
+              "races": [r for pl in payloads for r in pl["races"]]}
+    for pl in payloads[1:]:
+        for r in pl["races"]:
+            r.setdefault("_date", pl.get("date"))
+
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    txt = out.with_suffix(".txt")
+    # BOM付きUTF-8。Windowsのメモ帳が文字コードを取り違えないようにする
+    txt.write_text(format_text(merged), encoding="utf-8-sig")
+    print(f"書き出し: {txt}")
+
+    book, is_xlsx = write_book(out.with_suffix(".xlsx"), merged)
+    print(f"書き出し: {book}" + ("" if is_xlsx else "  ← openpyxl が無いためCSV"))
+    if not is_xlsx:
+        print("  pip install openpyxl を入れると .xlsx で出せます")
+
+    rows = race_rows(merged)
+    t = summarize(rows)
+    if rows:
+        print(f"\n{t['レース数']}レース中 {t['的中']}レース的中（{t['的中率']:.0%}）")
+        print(f"投資 {t['投資']:,}円 / 払戻 {t['払戻']:,}円 / 収支 {t['収支']:+,}円")
+        print("※ 1点100円で計算")
+    else:
+        print("\n確定したレースがありません")
 
 
 def cmd_site(args) -> None:
@@ -420,6 +466,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_site.add_argument("--records", help="馬別戦績CSV")
     p_site.add_argument("--race-date", help="レース日 (YYYY-MM-DD)。省略時は設定から拾う")
     p_site.set_defaults(func=cmd_site)
+
+    p_res = sub.add_parser("results", help="確定結果をTXTと表計算ブックに出力")
+    p_res.add_argument("configs", nargs="+", help="開催日設定JSON（複数可）")
+    p_res.add_argument("--output", required=True,
+                       help="出力パス（拡張子なしで指定。.txt と .xlsx を作る）")
+    p_res.add_argument("--records", help="馬別戦績CSV")
+    p_res.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_res.set_defaults(func=cmd_results)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
     p_daily.add_argument("config", help="開催日設定JSON")

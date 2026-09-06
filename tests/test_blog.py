@@ -159,3 +159,98 @@ class TestSiteLookups(unittest.TestCase):
         self.assertEqual(find_venue(None, None, None, "20260904_大井"), "大井")
         self.assertEqual(find_venue(None, "2026-09-05 中央", None, "20260905_中央"), "")
         self.assertEqual(find_venue("札幌", "x"), "札幌")
+
+
+class TestAmebaAnchors(unittest.TestCase):
+    """アメブロはスクリプトが通らないので、移動は記事内リンクで作る。
+
+    飛び先には id と <a name> の両方を置く。古いサニタイザが id を落とす
+    ことがあるため、どちらか残れば動くようにしている。
+    """
+
+    def setUp(self):
+        from keiba.blog import format_day_html, format_race_html
+        d = _payload()
+        races = [dict(d["races"][0], venue=v, no=f"{n}R")
+                 for v in ("札幌", "中山") for n in (9, 10, 11)]
+        self.nav = [{"venue": r["venue"], "no": r["no"], "index": i}
+                    for i, r in enumerate(races)]
+        blocks = [format_race_html(r, i) for i, r in enumerate(races)]
+        self.day = format_day_html(blocks, "9月6日（日）中央競馬", nav=self.nav)
+
+    def test_every_race_has_both_anchor_forms(self):
+        for i in range(len(self.nav)):
+            self.assertIn(f'id="pt-r{i}"', self.day)
+            self.assertIn(f'name="pt-r{i}"', self.day)
+
+    def test_nav_links_to_every_race(self):
+        for i in range(len(self.nav)):
+            self.assertIn(f'href="#pt-r{i}"', self.day)
+
+    def test_back_to_top_on_every_race(self):
+        self.assertEqual(self.day.count('href="#pt-top"'), len(self.nav))
+        self.assertIn('id="pt-top"', self.day)
+        self.assertIn('name="pt-top"', self.day)
+
+    def test_no_script_needed(self):
+        self.assertIsNone(FORBIDDEN.search(self.day))
+        self.assertNotIn("onclick", self.day)
+
+    def test_single_race_gets_no_index(self):
+        """1レースだけの記事（--split）では目次を出さない。"""
+        from keiba.blog import format_day_html, format_race_html
+        d = _payload()
+        one = format_day_html([format_race_html(d["races"][0], 0)], "テスト",
+                              nav=[{"venue": "中山", "no": "11R", "index": 0}])
+        self.assertNotIn("レースを選ぶ", one)
+
+
+class TestResultExport(unittest.TestCase):
+    """確定結果のTXT／表計算出力。判定はやり直さず payload をそのまま使う。"""
+
+    def _payload_with_result(self):
+        d = _payload()
+        r = d["races"][0]
+        r["result"] = {
+            "top": [{"chaku": 1, "umaban": 1, "waku": 1, "name": "テスト馬1",
+                     "ninki": 1, "mark": "◎", "rank": 1},
+                    {"chaku": 2, "umaban": 3, "waku": 2, "name": "テスト馬3",
+                     "ninki": 3, "mark": "▲", "rank": 3},
+                    {"chaku": 3, "umaban": 9, "waku": 5, "name": "テスト馬9",
+                     "ninki": 9, "mark": "", "rank": 9}],
+            "buy": {"kind": "馬連", "width": 4, "points": 6,
+                    "hits": [{"combo": "1-3", "pay": 1230}]},
+            "wide": None}
+        return d
+
+    def test_race_row_carries_the_verdict_and_payout(self):
+        from keiba.resultout import race_rows
+        rows = race_rows(self._payload_with_result())
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual(r["判定"], "的中")
+        self.assertEqual(r["的中組"], "1-3")
+        self.assertEqual(r["配当"], 1230)
+        self.assertEqual(r["投資"], 600)      # 6点 × 100円
+        self.assertEqual(r["払戻"], 1230)
+        self.assertEqual(r["1着印"], "◎")
+
+    def test_unfinished_races_are_skipped(self):
+        from keiba.resultout import race_rows
+        self.assertEqual(race_rows(_payload()), [])
+
+    def test_summary_totals(self):
+        from keiba.resultout import race_rows, summarize
+        t = summarize(race_rows(self._payload_with_result()))
+        self.assertEqual(t["レース数"], 1)
+        self.assertEqual(t["的中"], 1)
+        self.assertEqual(t["収支"], 630)
+
+    def test_text_says_so_when_nothing_is_settled(self):
+        from keiba.resultout import format_text
+        self.assertIn("確定したレースがありません", format_text(_payload()))
+
+    def test_chaku_rows_are_one_per_placing(self):
+        from keiba.resultout import chaku_rows
+        rows = chaku_rows(self._payload_with_result())
+        self.assertEqual([r["着順"] for r in rows], [1, 2, 3])
