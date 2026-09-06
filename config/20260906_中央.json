@@ -1,0 +1,105 @@
+{
+ "title": "2026-09-06 中央",
+ "heading": "2026-09-06 中央",
+ "races": [
+  {
+   "race_no": "9R",
+   "venue": "札幌",
+   "name": "旭川特別",
+   "grade": "",
+   "post_time": "14:10",
+   "surface": "ダ1700m(右)",
+   "kyori": 1700,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_札幌09R_旭川特別_出走馬.csv"
+  },
+  {
+   "race_no": "10R",
+   "venue": "札幌",
+   "name": "HTB賞",
+   "grade": "",
+   "post_time": "14:45",
+   "surface": "芝1800m(右 C)",
+   "kyori": 1800,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_札幌10R_HTB賞_出走馬.csv"
+  },
+  {
+   "race_no": "11R",
+   "venue": "札幌",
+   "name": "丹頂S",
+   "grade": "OP",
+   "post_time": "15:20",
+   "surface": "芝2600m(右 C)",
+   "kyori": 2600,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_札幌11R_丹頂S_出走馬.csv"
+  },
+  {
+   "race_no": "9R",
+   "venue": "中山",
+   "name": "浦安特別",
+   "grade": "",
+   "post_time": "14:30",
+   "surface": "ダ1200m(右)",
+   "kyori": 1200,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_中山09R_浦安特別_出走馬.csv"
+  },
+  {
+   "race_no": "10R",
+   "venue": "中山",
+   "name": "セプテンバーS",
+   "grade": "",
+   "post_time": "15:05",
+   "surface": "芝1200m(右 外 B)",
+   "kyori": 1200,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_中山10R_セプテンバーS_出走馬.csv"
+  },
+  {
+   "race_no": "11R",
+   "venue": "中山",
+   "name": "紫苑S",
+   "grade": "G2",
+   "post_time": "15:45",
+   "surface": "芝2000m(右 B)",
+   "kyori": 2000,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_中山11R_紫苑S_出走馬.csv"
+  },
+  {
+   "race_no": "9R",
+   "venue": "阪神",
+   "name": "3歳以上1勝クラス",
+   "grade": "",
+   "post_time": "14:20",
+   "surface": "ダ1800m(右)",
+   "kyori": 1800,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_阪神09R_3歳以上1勝クラス_出走馬.csv"
+  },
+  {
+   "race_no": "10R",
+   "venue": "阪神",
+   "name": "オークランドTRT",
+   "grade": "",
+   "post_time": "14:55",
+   "surface": "ダ1200m(右)",
+   "kyori": 1200,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_阪神10R_オークランドTRT_出走馬.csv"
+  },
+  {
+   "race_no": "11R",
+   "venue": "阪神",
+   "name": "セントウルS",
+   "grade": "G2",
+   "post_time": "15:30",
+   "surface": "芝1200m(右 A)",
+   "kyori": 1200,
+   "baba": "良",
+   "entries": "data/collected_jra/2026-09-06_阪神11R_セントウルS_出走馬.csv"
+  }
+ ]
+}

@@ -37,8 +37,12 @@ def parse(html: str) -> dict:
     if t := re.search(r"<title>([^<|]+)", html):
         if g := GRADE_RE.search(t.group(1)):
             out["格"] = g.group(1)
-    if not out["格"] and re.search(r'class="[^"]*Icon_GradeType(1|2|3)\b', html):
-        out["格"] = "重賞"
+    # アイコンからの判定は**レース名の枠内に限る**。馬柱ページには他レースの
+    # 一覧が入っており、ページ全体を見ると1勝クラスまで重賞と判定してしまう
+    if not out["格"]:
+        if rn := re.search(r'<(div|h1)[^>]*class="RaceName"[^>]*>.*?</\1>', html, re.S):
+            if re.search(r'class="[^"]*Icon_GradeType(1|2|3)\b', rn.group()):
+                out["格"] = "重賞"
     return out
 
 
