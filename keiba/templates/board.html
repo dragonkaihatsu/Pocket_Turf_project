@@ -103,8 +103,10 @@ h1.date small{display:block;font-family:var(--got);font-weight:400;font-size:12.
 
 
 /* 節見出し。罫は下のブロックが持つので、ここは小さな標題だけにする */
-h3.sec{font-size:11px;letter-spacing:.24em;color:var(--muted);font-weight:400;
-  margin:24px 0 9px;line-height:1.4}
+/* 節見出しは netkeiba のスマホ版に倣い、薄い地に左の色帯を付けた帯 */
+h3.sec{font-size:11.5px;letter-spacing:.16em;color:var(--sumi-2);font-weight:500;
+  margin:22px 0 0;padding:6px 10px;line-height:1.4;background:var(--sunk);
+  border-left:3px solid var(--shu)}
 
 /* ── 予想／結果タブ ── */
 .tabs{display:flex;margin-top:16px;border-bottom:1px solid var(--sumi)}
@@ -147,17 +149,20 @@ h3.sec{font-size:11px;letter-spacing:.24em;color:var(--muted);font-weight:400;
   text-align:center;color:var(--muted);font-size:13px;background:var(--sheet)}
 
 /* ── レース切替 ── */
-nav.picker{position:sticky;top:0;z-index:9;background:var(--paper);margin-top:16px;
-  padding:9px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--sumi);
-  display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
-nav.picker::-webkit-scrollbar{display:none}
-nav.picker button{flex:0 0 auto;font-family:var(--num);font-weight:400;font-size:17px;
-  letter-spacing:.09em;color:var(--muted);background:var(--sheet);
-  border:1px solid var(--hair);border-radius:2px;padding:4px 11px;cursor:pointer;
-  white-space:nowrap;line-height:1.4}
-nav.picker button[aria-current="true"]{background:var(--sumi);color:var(--paper);
-  border-color:var(--sumi)}
-nav.picker button:focus-visible{outline:2px solid var(--shu);outline-offset:2px}
+/* レース選択はプルダウン。9鞍を横に並べると端が見切れるうえ、
+   netkeibaのスマホ版と同じく「今どのレースか」が1行で読める */
+.picker{position:sticky;top:0;z-index:9;background:var(--paper);margin-top:14px;
+  padding:8px 0 9px;border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--sumi)}
+.picker select{width:100%;font:inherit;font-size:16px;font-weight:500;
+  color:var(--sumi);background:var(--sheet);border:1px solid var(--hair);
+  border-radius:3px;padding:9px 32px 9px 11px;line-height:1.4;
+  -webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--shu) 50%),
+                   linear-gradient(135deg,var(--shu) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.picker select:focus-visible{outline:2px solid var(--shu);outline-offset:2px}
 
 /* ── レース見出し ── */
 .eyebrow{display:flex;align-items:baseline;gap:9px;margin-top:20px;font-size:12px;
@@ -219,26 +224,32 @@ h2.rname{font-family:var(--min);font-weight:500;font-size:26px;line-height:1.3;
 .disclose:focus-visible{outline:2px solid var(--shu);outline-offset:2px}
 .disclose .chev{font-family:var(--num);font-weight:400;color:var(--shu);font-size:20px}
 .list{margin-top:2px}
+/* 1頭=1行。netkeibaのスマホ版に倣い、左に枠・馬番、中央に馬名、
+   右にオッズと人気を寄せる。行は詰めて、罫は細く */
 .horse{width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;
   border-bottom:1px solid var(--rule);padding:7px 0 6px;cursor:pointer;display:block}
 .horse:focus-visible{outline:2px solid var(--shu);outline-offset:-2px}
-.hrow{display:flex;align-items:center;gap:8px}
-.rk{flex:0 0 1.5em;font-family:var(--num);font-weight:400;font-size:14px;
-  letter-spacing:.04em;color:var(--muted);text-align:right}
-.mk{flex:0 0 1.2em;font-size:14px;font-weight:500;color:var(--shu);text-align:center;
+.hrow{display:flex;align-items:center;gap:7px}
+.mk{flex:0 0 1.15em;font-size:14px;font-weight:500;color:var(--shu);text-align:center;
   line-height:1}
-.waku{flex:0 0 auto;width:23px;height:23px;display:grid;place-items:center;
-  font-family:var(--num);font-weight:400;font-size:17px;line-height:1.25;
+.waku{flex:0 0 auto;width:22px;height:22px;display:grid;place-items:center;
+  font-family:var(--num);font-weight:400;font-size:16px;line-height:1.25;
   letter-spacing:.03em;border:1px solid var(--hair)}
-.nm{flex:1 1 auto;font-size:15px;font-weight:400;min-width:0;overflow:hidden;
+.uma{flex:0 0 auto;width:22px;height:22px;display:grid;place-items:center;
+  font-family:var(--num);font-weight:400;font-size:16px;line-height:1.25;
+  letter-spacing:.03em;border:1px solid var(--hair);background:var(--sheet);
+  color:var(--sumi)}
+.nmwrap{flex:1 1 auto;min-width:0}
+.nm{font-size:14.5px;font-weight:500;line-height:1.3;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
-.sc{flex:0 0 auto;font-family:var(--num);font-weight:400;font-size:20px;
-  letter-spacing:.04em;color:var(--sumi-2)}
-.hsub{margin:1px 0 0 calc(1.5em + 1.2em + 39px);font-size:11px;color:var(--muted);
-  letter-spacing:.02em;font-variant-numeric:tabular-nums}
-.gauge{margin:4px 0 0 calc(1.5em + 1.2em + 39px);height:2px;background:var(--sunk)}
-.gauge i{display:block;height:2px;background:var(--shu)}
-.detail{margin:0 0 9px calc(1.5em + 1.2em + 39px);padding:10px 12px;
+.nmsub{font-size:10.5px;color:var(--muted);line-height:1.35;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.odds{flex:0 0 auto;text-align:right;line-height:1.25;font-variant-numeric:tabular-nums}
+.odds .o{font-family:var(--num);font-size:17px;letter-spacing:.03em;color:var(--shu)}
+.odds .n{font-size:10.5px;color:var(--muted)}
+.sc{flex:0 0 auto;font-family:var(--num);font-weight:400;font-size:18px;
+  letter-spacing:.04em;color:var(--sumi-2);min-width:2.1em;text-align:right}
+.detail{margin:0 0 9px calc(1.15em + 58px);padding:10px 12px;
   background:var(--sunk);border-left:2px solid var(--shu)}
 .mrow{display:flex;align-items:center;gap:9px;font-size:11.5px;padding:2px 0}
 .mrow>span:first-child{flex:0 0 5.6em;color:var(--muted);letter-spacing:.04em}
@@ -282,7 +293,9 @@ footer b{color:var(--sumi-2);font-weight:500}
     <button type="button" id="tabY" role="tab" aria-selected="true">予想</button>
     <button type="button" id="tabK" role="tab" aria-selected="false">結果</button>
   </div>
-  <nav class="picker" id="picker" aria-label="レースを選ぶ"></nav>
+  <div class="picker">
+    <select id="picker" aria-label="レースを選ぶ"></select>
+  </div>
   <main id="stage"></main>
   <div class="archive" id="archive"><span class="lbl">過去の開催</span>__ARCHIVE__</div>
   <footer>
@@ -407,9 +420,11 @@ footer b{color:var(--sumi-2);font-weight:500}
     h.push('<div class="list" id="list" hidden>');
     r.horses.forEach(function(x,j){
       var w=(x.waku>=1&&x.waku<=8)?x.waku:1;
-      var sub=[x.ninki?x.ninki+'番人気':'人気—',
-               x.odds?x.odds.toFixed(1)+'倍':'オッズ—',
-               x.kyaku||'脚質—'];
+      var odds=x.odds?('<span class="o">'+x.odds.toFixed(1)+'</span>'+
+                       '<div class="n">'+(x.ninki?x.ninki+'人気':'—')+'</div>')
+                     :'<span class="n">オッズ—</span>';
+      var sub=[x.kyaku||'脚質—'];
+      if(!(x.win==='—'&&x.place==='—'))sub.push('1着'+x.win+'・着内'+x.place);
       var det=x.measure.map(function(c){
         return '<div class="mrow"><span>'+esc(c.label)+'</span>'+
           '<span class="mbar"><i style="width:'+
@@ -419,14 +434,14 @@ footer b{color:var(--sumi-2);font-weight:500}
         .map(function(it){return '<b>'+esc(it.label)+'</b>　'+esc(it.note);}).join('<br>');
       h.push('<button class="horse" type="button" aria-expanded="false" data-t="d'+j+'">'+
         '<span class="hrow">'+
-          '<span class="rk tnum">'+x.rank+'</span>'+
           '<span class="mk">'+esc(x.mark)+'</span>'+
           '<span class="waku tnum" style="background:var(--w'+w+');color:var(--w'+w+'i)">'+
-            esc(x.umaban)+'</span>'+
-          '<span class="nm">'+esc(x.name)+'</span>'+
-          '<span class="sc tnum">'+x.score.toFixed(1)+'</span></span>'+
-        '<span class="hsub">'+sub.map(esc).join('　')+'</span>'+
-        '<span class="gauge"><i style="width:'+Math.round(x.ratio*100)+'%"></i></span>'+
+            esc(x.waku||'')+'</span>'+
+          '<span class="uma tnum">'+esc(x.umaban)+'</span>'+
+          '<span class="nmwrap"><span class="nm">'+esc(x.name)+'</span>'+
+            '<span class="nmsub">'+sub.map(esc).join('　')+'</span></span>'+
+          '<span class="odds">'+odds+'</span>'+
+          '<span class="sc tnum">'+x.score.toFixed(0)+'</span></span>'+
       '</button>'+
       '<div class="detail" id="d'+j+'" hidden>'+det+
         '<div class="dnote">'+notes+'</div></div>');
@@ -440,18 +455,15 @@ footer b{color:var(--sumi-2);font-weight:500}
   }
 
   D.races.forEach(function(r,i){
-    var b=document.createElement('button');
-    b.type='button'; b.textContent=r.venue+r.no;
-    b.addEventListener('click',function(){
-      Array.prototype.forEach.call(picker.children,function(c){
-        c.setAttribute('aria-current','false');});
-      b.setAttribute('aria-current','true');
-      current=i; show();
-      window.scrollTo({top:0,behavior:'instant'});
-    });
-    picker.appendChild(b);
+    var o=document.createElement('option');
+    o.value=String(i);
+    o.textContent='【'+r.venue+'】'+r.no+'　'+r.name;
+    picker.appendChild(o);
   });
-  picker.firstChild.setAttribute('aria-current','true');
+  picker.addEventListener('change',function(){
+    current=parseInt(picker.value,10)||0; show();
+    window.scrollTo({top:0,behavior:'instant'});
+  });
 
   var tabY=document.getElementById('tabY'), tabK=document.getElementById('tabK');
   // 1レースも確定していなければ、結果タブは押せないようにする
