@@ -207,6 +207,62 @@ def build_payload(config: Path, records=None, race_date: str | None = None) -> d
     return out
 
 
+def attach_results(payload: dict) -> dict:
+    """保存済みの予想に、確定結果だけを後から差し込む。
+
+    結果を収集すると出走馬CSVが上書きされ、**朝のオッズが確定オッズに
+    置き換わる**。オッズは買い目の型（ワイド/馬連）を決めるので、収集後に
+    予想を作り直すと**朝と違う買い目で答え合わせしてしまう**。実際に
+    2026-09-06 で2レース分ずれた。
+
+    そこで判定は「発走前に保存した payload」を土台にし、結果だけを足す。
+    """
+    date = payload.get("date")
+    if not date:
+        return payload
+    for r in payload["races"]:
+        venue = r.get("venue", "")
+        res = load_result(_result_dir(venue), venue, r["no"], date)
+        if not res:
+            r["result"] = None
+            continue
+        rank_by = {h["umaban"]: h["rank"] for h in r["horses"]}
+        mark_by = {h["umaban"]: h["mark"] for h in r["horses"]}
+        for t in res["top"]:
+            t["mark"] = mark_by.get(t["umaban"], "")
+            t["rank"] = rank_by.get(t["umaban"])
+        verdict = None
+        rec = next((b for b in r.get("boxes", []) if b.get("rec")), None)
+        if rec:
+            table = res["payouts"].get(rec["kind"], {})
+            got = []
+            for c in rec["combos"]:
+                a, b = (int(x) for x in c.split("-"))
+                t = frozenset((a, b))
+                hit = (t <= res["top3"]) if rec["kind"] == "ワイド" else (t == res["top2"])
+                if hit:
+                    got.append({"combo": c, "pay": table.get(t)})
+            verdict = {"kind": rec["kind"], "width": rec["width"],
+                       "points": rec["points"], "hits": got}
+        wide = None
+        s = r.get("single")
+        if s and s.get("rec"):
+            a, b = (int(x) for x in s["combo"].split("-"))
+            t = frozenset((a, b))
+            wide = {"combo": s["combo"], "hit": bool(t <= res["top3"]),
+                    "pay": res["payouts"].get("ワイド", {}).get(t)}
+        r["result"] = {"top": res["top"], "buy": verdict, "wide": wide}
+    return payload
+
+
+def load_stored(date: str, outdir: Path = Path("docs")) -> dict | None:
+    """発走前に保存した payload を読む。無ければ None。"""
+    p = outdir / "_data" / f"{date}.json"
+    if not p.exists():
+        return None
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
 def render(payload: dict, archive: list[str] | None = None) -> str:
     """テンプレートにデータを流し込む。"""
     tpl = TEMPLATE.read_text(encoding="utf-8")

@@ -234,9 +234,25 @@ def cmd_results(args) -> None:
                             format_text, race_rows, summarize, write_book)
     from .site import build_payload
 
+    from .site import attach_results, load_stored
+
     records = _load_horse_records(args.records)
-    payloads = [build_payload(Path(c), records=records, race_date=args.race_date)
-                for c in args.configs]
+    payloads = []
+    for c in args.configs:
+        cfg_path = Path(c)
+        pl = None
+        if not args.rebuild:
+            # 収集で出走馬CSVが上書きされ朝のオッズが失われるため、
+            # 発走前に保存した予想があればそれを土台にする
+            probe = build_payload(cfg_path, records=None, race_date=args.race_date)
+            if probe.get("date"):
+                pl = load_stored(probe["date"], Path(args.store))
+                if pl is not None:
+                    pl = attach_results(pl)
+                    print(f"保存済みの予想を使用: {args.store}/_data/{probe['date']}.json")
+        if pl is None:
+            pl = build_payload(cfg_path, records=records, race_date=args.race_date)
+        payloads.append(pl)
 
     # 複数日を1つにまとめる。日付は最初の日を代表にする
     merged = {"date": payloads[0].get("date"),
@@ -473,6 +489,11 @@ def build_parser() -> argparse.ArgumentParser:
                        help="出力パス（拡張子なしで指定。.txt と .xlsx を作る）")
     p_res.add_argument("--records", help="馬別戦績CSV")
     p_res.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_res.add_argument("--store", default="docs",
+                       help="発走前に保存した予想の置き場（既定 docs）")
+    p_res.add_argument("--rebuild", action="store_true",
+                       help="保存済みを使わず作り直す。収集後は朝のオッズが"
+                            "失われているため、買い目の型がずれることがある")
     p_res.set_defaults(func=cmd_results)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
