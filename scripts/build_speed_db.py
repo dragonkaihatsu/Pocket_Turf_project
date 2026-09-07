@@ -26,8 +26,11 @@
 出力 data/profiles/<prof>/
     base_time.csv     場,馬場種別,距離,基準タイム,標準偏差,頭数
     track_variant.csv 日付,場,馬場種別,馬場差,レース数
-    speed_index.csv   馬名,日付,場,馬場種別,距離,着順,人気,頭数,
+    speed_index.csv   stem,R,馬名,日付,場,馬場種別,距離,着順,人気,頭数,
                       タイム,補正タイム,時計指数,上がり3F
+                      ※ stem が無いと、同じ日・同じ場・同じ距離の別レース
+                         （例: 2025-04-20 中山芝2000 の 9R と 11R皐月賞）を
+                         区別できず、集計側でレースを取り違える
 """
 from __future__ import annotations
 
@@ -67,6 +70,11 @@ def race_venue(stem):
     return m.group(1) if m else ""
 
 
+def race_number(stem):
+    m = re.search(r"_\D+?(\d{2})R_", stem)
+    return int(m.group(1)) if m else None
+
+
 def load(directory: Path, info: dict):
     """1行1頭。障害と、条件が分からないレースは除く。"""
     out = []
@@ -92,6 +100,7 @@ def load(directory: Path, info: dict):
                 continue
             out.append({
                 "馬名": nm, "日付": stem[:10], "stem": stem, "場": venue,
+                "R": race_number(stem) or "",
                 "馬場種別": m["馬場種別"], "距離": int(m["距離"]),
                 "着順": int(r["着順"]), "人気": _num(r.get("人気")),
                 "頭数": n, "タイム": t,
@@ -161,8 +170,9 @@ def main() -> None:
     with open(prof.path("speed_index.csv"), "w", newline="",
               encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        w.writerow(["馬名", "日付", "場", "馬場種別", "距離", "着順", "人気",
-                    "頭数", "タイム", "補正タイム", "時計指数", "上がり3F"])
+        w.writerow(["stem", "R", "馬名", "日付", "場", "馬場種別", "距離",
+                    "着順", "人気", "頭数", "タイム", "補正タイム",
+                    "時計指数", "上がり3F"])
         for r in sorted(rows, key=lambda r: (r["日付"], r["stem"], r["着順"])):
             b = base.get((r["場"], r["馬場種別"], r["距離"]))
             if not b:
@@ -173,7 +183,8 @@ def main() -> None:
             adj = r["タイム"] - mv
             idx = 50 + 10 * (med - adj) / sd
             made += 1
-            w.writerow([r["馬名"], r["日付"], r["場"], r["馬場種別"], r["距離"],
+            w.writerow([r["stem"], r["R"], r["馬名"], r["日付"], r["場"],
+                        r["馬場種別"], r["距離"],
                         r["着順"], int(r["人気"]) if r["人気"] else "",
                         r["頭数"], f"{r['タイム']:.1f}", f"{adj:.2f}",
                         f"{idx:.1f}", r["上がり3F"] or ""])
