@@ -113,12 +113,19 @@ def report(title, rows, pwin, pplc, min_n=30):
     ret = sum(r["単勝オッズ"] * 100 for r in rows
               if r["着順"] == 1 and r["単勝オッズ"])
     lo, hi = wilson(w, n)
-    print(f"  {title:<16}{n:>6}{w/n:>8.1%}{f'{lo:.0%}〜{hi:.0%}':>14}"
+    # 「もらえる馬が悪くなった」のか「もらった馬で勝てないのか」を分ける。
+    # 平均人気と上位人気での騎乗割合が、乗り馬の質を表す
+    avg_ninki = sum(r["人気"] for r in rows) / n
+    top3ninki = sum(1 for r in rows if r["人気"] <= 3) / n
+    ci = f"{lo:.0%}〜{hi:.0%}"
+    print(f"  {title:<16}{n:>6}{avg_ninki:>7.1f}{top3ninki:>8.0%}"
+          f"{w/n:>8.1%}{ci:>14}"
           f"{p3/n:>8.1%}{w/ew if ew else 0:>8.2f}{p3/ep if ep else 0:>8.2f}"
           f"{ret/(n*100):>8.0%}")
 
 
-HEAD = (f"  {'区分':<16}{'騎乗':>6}{'勝率':>8}{'95%区間':>14}"
+HEAD = (f"  {'区分':<16}{'騎乗':>6}{'平均人気':>7}{'3人気内':>8}"
+        f"{'勝率':>8}{'95%区間':>14}"
         f"{'複勝率':>8}{'勝/期待':>8}{'複/期待':>8}{'単回収':>8}")
 
 
