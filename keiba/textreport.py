@@ -14,6 +14,7 @@ from .expectation import Expectation
 from .marks import MarkedHorse
 from .scoring import HorseScore
 from .single import best_single
+from .tanpuku import best_tanpuku
 
 RULE = "━" * 46
 
@@ -81,6 +82,18 @@ def format_race(
         out.append(f"【ワイド1点】見送り推奨  参考: {pick.combo}（{pick.label}）")
         out.append(f"    {pick.reason}")
         out.append(f"    {pick.stat_text()}")
+
+    # 単複1点。単勝・複勝だけを見て1頭を指名する
+    tp = best_tanpuku(order, favorite_odds=fav)
+    if tp is None:
+        out.append("【単複1点】実測データなし → 判断材料なし")
+    elif tp.recommended:
+        out.append(f"【単複1点】★ {tp.umaban}番  （{tp.label}）")
+        out.append(f"    {tp.stat_text()}")
+    else:
+        out.append(f"【単複1点】見送り推奨  参考: {tp.umaban}番（{tp.label}）")
+        out.append(f"    {tp.reason}")
+        out.append(f"    {tp.stat_text()}")
 
     out.append("")
     out.append("【スコア順】")
