@@ -144,7 +144,8 @@ def cmd_text(args) -> None:
                                  favorite_odds=fav.tansho_odds if fav else None)
         title = f"{r.get('venue', '')}{r['race_no']} {r['name']}"
         blocks.append(format_race(title, r.get("surface", ""), r.get("post_time", ""),
-                                  marked, scores, plan, exp))
+                                  marked, scores, plan, exp,
+                                  baba=r.get("baba", "良")))
     text = format_day(blocks, cfg.get("heading", "予想"))
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

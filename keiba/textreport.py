@@ -11,6 +11,7 @@ from __future__ import annotations
 from .betting import BettingPlan
 from .boxes import build_options
 from .expectation import Expectation
+from .hensachi import by_umaban, spread_note
 from .marks import MarkedHorse
 from .scoring import HorseScore
 from .single import best_single
@@ -32,19 +33,26 @@ def to_encoding(text: str, encoding: str) -> str:
     return text
 
 
-def _horse_line(rank: int, m: MarkedHorse, exp: Expectation) -> str:
+def _horse_line(rank: int, m: MarkedHorse, exp: Expectation,
+                devs: dict[int, float] | None = None) -> str:
     """CLAUDE.mdの「良馬場スコア・重馬場スコアを2軸で併記する」に合わせ、
     どちらか一方（レース当日の baba による並び順の軸）だけを大きく出さず
     両方の数字を出す。良馬場scoreだけを表示すると、稍重・重・不良の
     レースでは印の並び（total_omoiでソート済み）と表示スコアの大小が
-    食い違って見える（例: 1位の良65.1 < 2位の良68.2、実際は重で逆転）"""
+    食い違って見える（例: 1位の良65.1 < 2位の良68.2、実際は重で逆転）
+
+    偏差値を併記する理由: 絶対点数だけでは「その点差が大きいのか小さいのか」
+    が読めない。1位と2位の差は実測で中央値2.6点しかなく、混戦なのか
+    抜けているのかは点差の散らばり次第で変わる（keiba/hensachi.py）。"""
     h = m.score.horse
     ninki = f"{h.ninki}人気" if h.ninki else "—"
     odds = f"{h.tansho_odds:.1f}倍" if h.tansho_odds else "—"
     win, place = exp.format(rank)
     score = f"良{m.score.total_yoi:.1f}/重{m.score.total_omoi:.1f}"
+    dev = (devs or {}).get(h.umaban)
+    dev_txt = f"偏差{dev:>4.1f}" if dev is not None else "偏差   —"
     return (f"{rank:>2} {m.mark} {h.umaban:>2} {h.name:<14}"
-            f"{ninki:>6}{odds:>8}  {score:>12}  "
+            f"{ninki:>6}{odds:>8}  {score:>12} {dev_txt}  "
             f"{h.kyakushitsu or '—':<3} 1着{win}/着内{place}")
 
 
@@ -57,9 +65,16 @@ def format_race(
     plan: BettingPlan,
     exp: Expectation | None = None,
     n_show: int = 8,
+    baba: str = "良",
 ) -> str:
-    """1レース分をテキストにする。"""
+    """1レース分をテキストにする。
+
+    baba は偏差値をどちらのスコア軸で出すかに使う（印の並びを決める
+    assign_marks と同じ軸に揃える。良馬場なら良スコア、それ以外は重スコア）。
+    """
     exp = exp if exp is not None else Expectation()
+    # 偏差値は印が付かなかった馬も含めた全頭で計算する（母集団を変えないため）
+    devs = by_umaban(scores, baba=baba)
     out: list[str] = [RULE, f"{title}  {surface}  発走{post_time}"]
 
     fav = plan.favorite_odds
@@ -72,6 +87,7 @@ def format_race(
     fav_txt = f"1番人気 {fav:.1f}倍" if fav else "1番人気 オッズ不明"
     out.append(f"{fav_txt} → 【{plan.strategy}型】"
                f"  ◎と1番人気: {'一致' if agree else '不一致'}")
+    out.append(f"レース内{spread_note(devs)}")
 
     if marked and (skipped := marked[0].score.skipped_items):
         out.append(f"※ {'・'.join(skipped)}は採点対象外（満点{marked[0].score.max_base:.0f}点）")
@@ -104,14 +120,15 @@ def format_race(
     out.append("")
     out.append("【スコア順】")
     for i, m in enumerate(marked[:n_show], start=1):
-        out.append(_horse_line(i, m, exp))
+        out.append(_horse_line(i, m, exp, devs))
 
     marked_umaban = {m.score.horse.umaban for m in marked}
     rest = [s for s in sorted(scores, key=lambda s: s.total_yoi, reverse=True)
             if s.horse.umaban not in marked_umaban]
     if rest:
         out.append("  参考(印なし): " + " ".join(
-            f"{s.horse.umaban}{s.horse.name}" for s in rest[:5]))
+            f"{s.horse.umaban}{s.horse.name}(偏差{devs.get(s.horse.umaban, 50):.0f})"
+            for s in rest[:5]))
 
     out.append("")
     out.append("【候補】スコア順に並べた馬番")
