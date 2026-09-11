@@ -96,7 +96,11 @@ def main() -> None:
                     series.setdefault((kind, w, scope), []).append(
                         settle(kind, tickets, race))
 
-    payload = {"生成日": date.today().isoformat(), "対象": f"大井{args.races}R",
+    # 対象の呼び名は収集ディレクトリから決める（大井決め打ちにしない。
+    # CLAUDE.mdの「集計スクリプトの競馬場決め打ちに注意」と同じ事故で、
+    # 中央のデータから作ったファイルに「大井」と書かれていた）
+    where = "中央" if "jra" in args.dir else "大井"
+    payload = {"生成日": date.today().isoformat(), "対象": f"{where}{args.races}R",
                "レース数": used, "点数別": {}}
     for (kind, w, scope), pairs in sorted(series.items()):
         inv = sum(i for i, _ in pairs)
