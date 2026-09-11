@@ -33,12 +33,18 @@ def to_encoding(text: str, encoding: str) -> str:
 
 
 def _horse_line(rank: int, m: MarkedHorse, exp: Expectation) -> str:
+    """CLAUDE.mdの「良馬場スコア・重馬場スコアを2軸で併記する」に合わせ、
+    どちらか一方（レース当日の baba による並び順の軸）だけを大きく出さず
+    両方の数字を出す。良馬場scoreだけを表示すると、稍重・重・不良の
+    レースでは印の並び（total_omoiでソート済み）と表示スコアの大小が
+    食い違って見える（例: 1位の良65.1 < 2位の良68.2、実際は重で逆転）"""
     h = m.score.horse
     ninki = f"{h.ninki}人気" if h.ninki else "—"
     odds = f"{h.tansho_odds:.1f}倍" if h.tansho_odds else "—"
     win, place = exp.format(rank)
+    score = f"良{m.score.total_yoi:.1f}/重{m.score.total_omoi:.1f}"
     return (f"{rank:>2} {m.mark} {h.umaban:>2} {h.name:<14}"
-            f"{ninki:>6}{odds:>8}  {m.score.total_yoi:>5.1f}  "
+            f"{ninki:>6}{odds:>8}  {score:>12}  "
             f"{h.kyakushitsu or '—':<3} 1着{win}/着内{place}")
 
 

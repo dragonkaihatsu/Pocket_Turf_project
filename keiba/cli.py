@@ -21,7 +21,8 @@ from pathlib import Path
 from .betting import make_betting_plan
 from .boxes import build_options
 from .collect import (JRA_VENUE_CODES, VENUE_CODES, collect_day,
-                      collect_jra_day, collect_jra_month, collect_month)
+                      collect_jra_day, collect_jra_month, collect_jra_shutuba,
+                      collect_month)
 from .course import analyze, load_corpus
 from .course import format_report as format_course_report
 from . import profile
@@ -229,6 +230,25 @@ def cmd_collect(args) -> None:
     print(f"\n取得完了: {len(collected)}レース → {args.outdir}")
 
 
+def cmd_shutuba(args) -> None:
+    numbers = None
+    if args.races:
+        if "-" in args.races:
+            lo, hi = args.races.split("-")
+            numbers = list(range(int(lo), int(hi) + 1))
+        else:
+            numbers = [int(x) for x in args.races.split(",")]
+    venue = None if args.venue == "中央" else args.venue
+    print(f"{args.date} 中央（{args.venue}）の馬柱・発走前オッズを取得します"
+          "（結果はまだ無いレース向け。予想専用）")
+    saved = collect_jra_shutuba(
+        date=args.date, venue=venue, race_numbers=numbers,
+        outdir=Path(args.outdir), cache_dir=Path(args.cache_dir),
+        interval=args.interval, force=args.force,
+    )
+    print(f"\n取得完了: {len(saved)}レース → {args.outdir}")
+
+
 def cmd_horses(args) -> None:
     if args.rebuild:
         out = Path(args.out) if args.out else profile.active().path("horse_records.csv")
@@ -320,6 +340,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_collect.add_argument("--force", action="store_true",
                            help="取得済みのレースも再取得する（既定はスキップ）")
     p_collect.set_defaults(func=cmd_collect)
+
+    p_shutuba = sub.add_parser(
+        "shutuba", help="まだ結果の無い中央レースの馬柱・発走前オッズだけを取得（予想専用）")
+    p_shutuba.add_argument("--date", required=True, help="開催日 (YYYY-MM-DD)")
+    p_shutuba.add_argument("--venue", required=True,
+                           choices=list(JRA_VENUE_CODES) + ["中央"], help="競馬場名")
+    p_shutuba.add_argument("--races", help="レース番号 (例: 9-12)。省略時は全レース")
+    p_shutuba.add_argument("--outdir", default="data", help="CSV出力先")
+    p_shutuba.add_argument("--cache-dir", default="data/raw", help="取得HTMLのキャッシュ先")
+    p_shutuba.add_argument("--interval", type=float, default=1.5, help="リクエスト間隔(秒)")
+    p_shutuba.add_argument("--force", action="store_true",
+                           help="馬柱キャッシュがあっても再取得する（オッズは常に最新を取る）")
+    p_shutuba.set_defaults(func=cmd_shutuba)
 
     p_horses = sub.add_parser("horses", help="馬ごとの全戦績をnetkeibaから取得")
     p_horses.add_argument("--cache-dir", default="data/raw",

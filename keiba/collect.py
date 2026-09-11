@@ -692,6 +692,73 @@ def collect_jra_day(
     return collected
 
 
+def collect_jra_shutuba(
+    date: str,
+    outdir: Path,
+    cache_dir: Path,
+    venue: str | None = None,
+    race_numbers: list[int] | None = None,
+    interval: float = REQUEST_INTERVAL,
+    fetcher: "Fetcher | None" = None,
+    force: bool = False,
+) -> list[dict]:
+    """まだ結果が出ていないレースの、馬柱・発走前オッズだけを保存する。
+
+    collect_jra_day / collect_jra_month は結果ページ(result.html)が確定して
+    いるレースしか保存できない（`data is None or not data.horses` で弾く）。
+    予想を作る段階ではまだ結果が無いので、その手前の一歩として馬柱
+    （parse_shutuba_past）とAPIの発走前オッズ（fetch_jra_odds）だけを
+    出走馬CSVに保存する。レース名・距離・馬場は結果ページからしか取れない
+    ため、呼び出し側（予想の設定JSON）で別途指定すること。
+    """
+    fetcher = fetcher or Fetcher(cache_dir, interval)
+    outdir = Path(outdir)
+    saved: list[dict] = []
+
+    for race_id in find_jra_race_ids(date, fetcher, venue):
+        no = int(race_id[-2:])
+        if race_numbers and no not in race_numbers:
+            continue
+        v = jra_venue_of(race_id)
+        print(f"  {v}{no:>2}R (race_id={race_id})", end=" ")
+
+        past_html = fetcher.get(JRA_SHUTUBA_PAST_URL.format(race_id=race_id),
+                                f"{race_id}_past", refresh=force)
+        if not past_html:
+            print("→ 馬柱を取得できず")
+            continue
+        y, mo, d = (int(x) for x in date.split("-"))
+        entries = parse_shutuba_past(past_html, _Date(y, mo, d))
+        if not entries:
+            print("→ 馬柱0頭（レースなし、または枠順未確定）")
+            continue
+
+        odds = fetch_jra_odds(race_id, fetcher, refresh=force)
+        n = 0
+        for h in entries:
+            o = odds.get(h.get("馬番"))
+            if o and (not h.get("単勝オッズ") or not h.get("人気")):
+                h["単勝オッズ"], h["人気"] = o
+                n += 1
+
+        if m := re.search(r"<title>(.*?)</title>", past_html):
+            name = re.split(r"[|｜]", _text(m.group(1)))[0]
+            name = re.sub(r"\d{4}年.*", "", name)
+            name = re.sub(r"\s*\d+走表示\s*$", "", name).strip()
+        else:
+            name = ""
+        safe_name = re.sub(r'[\\/:*?"<>|\s]+', "", name) or f"{no:02d}R"
+        prefix = f"{date}_{v}{no:02d}R_{safe_name}"
+        p = outdir / f"{prefix}_出走馬.csv"
+        _write_csv(p, ENTRY_COLUMNS, entries)
+        print(f"→ {name} ({len(entries)}頭{f', オッズ{n}頭' if n else ''}) "
+              f"保存: {p.name}")
+        saved.append({"race_id": race_id, "venue": v, "race_no": no,
+                      "name": name, "path": p, "entries": entries})
+
+    return saved
+
+
 def collect_jra_month(
     year: int,
     month: int,
