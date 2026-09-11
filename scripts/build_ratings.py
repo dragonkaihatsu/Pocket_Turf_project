@@ -37,10 +37,29 @@ def parse_races(spec: str) -> set[int]:
     return {int(x) for x in spec.split(",")}
 
 
+STAKE = 100
+
+
+def load_tansho_payouts(path: Path) -> dict[int, int]:
+    """単勝配当を 馬番 → 配当円 で返す（勝ち馬以外は0扱いなのでキーに無い）。"""
+    if not path.exists():
+        return {}
+    out = {}
+    with open(path, encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            if row.get("券種") == "単勝":
+                try:
+                    out[int(row["組み合わせ"])] = int(row["配当"])
+                except ValueError:
+                    continue
+    return out
+
+
 def build(directory: Path, wanted: set[int] | None = None) -> dict:
-    jockey: dict[str, list[int]] = defaultdict(list)
-    sire: dict[str, list[int]] = defaultdict(list)
-    kyakushitsu: dict[str, list[int]] = defaultdict(list)
+    # 値は (着順, 単勝払戻円) のタプル。払戻は勝ち馬以外は0
+    jockey: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    sire: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    kyakushitsu: dict[str, list[tuple[int, int]]] = defaultdict(list)
     races = 0
 
     for res in sorted(directory.glob("*_結果.csv")):
@@ -62,23 +81,26 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
                 if (e.get("馬番") or "").isdigit():
                     sires[int(e["馬番"])] = (e.get("血統父") or "").strip()
                     kyaku[int(e["馬番"])] = (e.get("脚質") or "").strip()
+        payouts = load_tansho_payouts(directory / res.name.replace("_結果.csv", "_配当.csv"))
 
         for r in rows:
             chaku = int(r["着順"])
-            if j := (r.get("騎手") or "").strip():
-                jockey[j].append(chaku)
             umaban = int(r["馬番"]) if (r.get("馬番") or "").isdigit() else -1
+            ret = payouts.get(umaban, 0)
+            if j := (r.get("騎手") or "").strip():
+                jockey[j].append((chaku, ret))
             if s := sires.get(umaban, ""):
-                sire[s].append(chaku)
+                sire[s].append((chaku, ret))
             if k := kyaku.get(umaban, ""):
-                kyakushitsu[k].append(chaku)
+                kyakushitsu[k].append((chaku, ret))
 
-    def summarize(d: dict[str, list[int]]) -> dict:
+    def summarize(d: dict[str, list[tuple[int, int]]]) -> dict:
         return {
             k: {
                 "n": len(v),
-                "勝率": round(sum(1 for c in v if c == 1) / len(v), 4),
-                "複勝率": round(sum(1 for c in v if c <= 3) / len(v), 4),
+                "勝率": round(sum(1 for c, _ in v if c == 1) / len(v), 4),
+                "複勝率": round(sum(1 for c, _ in v if c <= 3) / len(v), 4),
+                "単勝回収率": round(sum(ret for _, ret in v) / (len(v) * STAKE), 4),
             }
             for k, v in sorted(d.items()) if v
         }
@@ -102,7 +124,8 @@ def main() -> None:
     print(f"{ratings['レース数']}レースから作成: 騎手{len(ratings['騎手'])}人 / "
           f"種牡馬{len(ratings['種牡馬'])}頭 / 脚質{len(ratings['脚質'])}種 → {out}")
     for k, v in sorted(ratings["脚質"].items(), key=lambda x: -x[1]["複勝率"]):
-        print(f"    {k:<6} n={v['n']:>5}  勝率{v['勝率']:.1%}  複勝率{v['複勝率']:.1%}")
+        print(f"    {k:<6} n={v['n']:>5}  勝率{v['勝率']:.1%}  複勝率{v['複勝率']:.1%}"
+              f"  単勝回収率{v['単勝回収率']:.0%}")
 
 
 if __name__ == "__main__":
