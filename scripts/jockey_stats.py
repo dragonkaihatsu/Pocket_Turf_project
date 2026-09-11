@@ -2,9 +2,14 @@
 """騎手別の「得意条件」を実測する。
 
 「騎手Aは実績上位だから加点」という一律のやり方ではなく、**騎手×競馬場×
-距離帯×馬場種別**の組み合わせで単勝回収率を集計し、100%を超える組み合わせを
-拾う。ネームバリューの無い騎手でも特定条件だけ回収率が高いことがあり、
-そこに市場が気づいていなければ期待値が生まれる、という発想（本人の言葉）。
+距離帯×馬場種別×脚質**の組み合わせで単勝回収率を集計し、100%を超える
+組み合わせを拾う。ネームバリューの無い騎手でも特定条件だけ回収率が高い
+ことがあり、そこに市場が気づいていなければ期待値が生まれる、という発想
+（本人の言葉）。
+
+脚質（逃げ/先行/差し/追込）は騎手の腕が直接出やすい部分。「この騎手は
+先行取り切りが上手い／差しが決まる」のような**騎乗スタイルの得意分野**を
+探すのが目的で、脚質全体の傾向（build_ratings.pyが出す）とは別軸。
 
 **母数の注意（CLAUDE.mdの一貫した方針）**: 組み合わせを細かくするほど
 母数が減り、「回収率100%超」の多くは偶然の産物になる。実際の的中数・
@@ -113,6 +118,15 @@ def main() -> None:
         if kyori is None or not surface:
             no_info += 1
 
+        # 脚質は結果CSVには無く出走馬CSV（馬柱）にしか無いので、馬番で突き合わせる
+        kyaku_by_umaban: dict[int, str] = {}
+        ent_path = res_path.with_name(f"{stem}_出走馬.csv")
+        if ent_path.exists():
+            with open(ent_path, encoding="utf-8-sig") as ef:
+                for e in csv.DictReader(ef):
+                    if (e.get("馬番") or "").isdigit():
+                        kyaku_by_umaban[int(e["馬番"])] = (e.get("脚質") or "").strip()
+
         with open(res_path, encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
                 jockey = (row.get("騎手") or "").strip()
@@ -121,7 +135,8 @@ def main() -> None:
                 if not jockey or not chaku or not chaku.isdigit() or not umaban:
                     continue
                 chaku_i = int(chaku)
-                ret = pay.get(int(umaban), 0) if umaban.isdigit() else 0
+                umaban_i = int(umaban) if umaban.isdigit() else None
+                ret = pay.get(umaban_i, 0) if umaban_i is not None else 0
                 used_rides += 1
 
                 rides[(jockey, "場", venue)].append((STAKE, ret, chaku_i))
@@ -130,6 +145,12 @@ def main() -> None:
                     rides[(jockey, "距離帯", band)].append((STAKE, ret, chaku_i))
                     if surface:
                         rides[(jockey, "場×距離帯×馬場", f"{venue}/{surface}/{band}")].append(
+                            (STAKE, ret, chaku_i))
+                kyaku = kyaku_by_umaban.get(umaban_i, "") if umaban_i is not None else ""
+                if kyaku:
+                    rides[(jockey, "脚質", kyaku)].append((STAKE, ret, chaku_i))
+                    if kyori is not None:
+                        rides[(jockey, "脚質×距離帯", f"{kyaku}/{distance_band(kyori)}")].append(
                             (STAKE, ret, chaku_i))
 
     print(f"{args.dir}: {used_races}レース・{used_rides}騎乗 を集計"
