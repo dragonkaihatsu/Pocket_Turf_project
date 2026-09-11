@@ -1,0 +1,366 @@
+<title>騎手の得意条件</title>
+<style>
+:root{
+  --bg:#EFF1E8; --surface:#FFFFFF; --surface-2:#F7F8F2;
+  --ink:#1A231D; --ink-soft:#3D453E; --muted:#6E7A70;
+  --line:#DBDFD2; --line-soft:#E7EAE0;
+  --accent:#1F6B45; --accent-ink:#0F3D28; --accent-soft:#DCEEE2;
+  --gold:#A9791E; --gold-soft:#F3E6C6; --gold-ink:#5C4210;
+  --retired:#8B8478; --retired-soft:#EDEAE0;
+  --shadow: 0 1px 2px rgba(26,35,29,.06), 0 6px 20px -10px rgba(26,35,29,.18);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12160F; --surface:#181D16; --surface-2:#1E241B;
+    --ink:#E9ECE3; --ink-soft:#C7CDBD; --muted:#8B9484;
+    --line:#2B3226; --line-soft:#242A20;
+    --accent:#57B383; --accent-ink:#BFEBD3; --accent-soft:#1E3428;
+    --gold:#D9A94C; --gold-soft:#3A2E11; --gold-ink:#F2D896;
+    --retired:#8B9484; --retired-soft:#232820;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12160F; --surface:#181D16; --surface-2:#1E241B;
+  --ink:#E9ECE3; --ink-soft:#C7CDBD; --muted:#8B9484;
+  --line:#2B3226; --line-soft:#242A20;
+  --accent:#57B383; --accent-ink:#BFEBD3; --accent-soft:#1E3428;
+  --gold:#D9A94C; --gold-soft:#3A2E11; --gold-ink:#F2D896;
+  --retired:#8B9484; --retired-soft:#232820;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px -14px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Noto Sans JP","Hiragino Sans",sans-serif;
+  padding-inline:20px; padding-block:28px 60px;
+  max-width:1180px; margin-inline:auto;
+}
+h1,h2,h3{ font-family:"Zen Kaku Gothic New","Noto Sans JP",sans-serif; text-wrap:balance; margin:0; }
+.num{ font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+
+/* ---------- header ---------- */
+header.page{
+  display:flex; flex-direction:column; gap:6px;
+  padding-block:4px 22px; border-bottom:1px solid var(--line);
+  margin-bottom:22px;
+}
+.eyebrow{
+  font-size:12.5px; letter-spacing:.14em; color:var(--accent);
+  font-weight:700; text-transform:uppercase;
+}
+h1{ font-size:clamp(28px,4.4vw,40px); font-weight:800; color:var(--ink); }
+.lede{ color:var(--ink-soft); font-size:15px; max-width:64ch; line-height:1.7; }
+.meta-row{
+  display:flex; flex-wrap:wrap; gap:10px 22px; margin-top:14px;
+  font-size:13px; color:var(--muted);
+}
+.meta-row b{ color:var(--ink); font-weight:700; }
+
+/* ---------- stat tiles ---------- */
+.stats{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:12px; margin-block:22px 30px;
+}
+.tile{
+  background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; box-shadow:var(--shadow);
+}
+.tile .n{ font-size:26px; font-weight:800; font-family:"JetBrains Mono",monospace; }
+.tile .l{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+
+/* ---------- section heads ---------- */
+.section-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+  margin-block:38px 14px; flex-wrap:wrap;
+}
+.section-head h2{ font-size:20px; font-weight:800; }
+.section-head .note{ font-size:12.5px; color:var(--muted); }
+
+/* ---------- badge showcase (top jockeys) ---------- */
+.showcase{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(272px,1fr));
+  gap:12px;
+}
+.jcard{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:16px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:10px;
+}
+.jcard .head{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.jcard .name{ font-size:18px; font-weight:800; font-family:"Zen Kaku Gothic New",sans-serif; }
+.rank-mark{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:50%; font-weight:800; font-size:14px;
+  background:var(--gold-soft); color:var(--gold-ink); flex:none;
+}
+.rank-mark.top{ background:var(--accent); color:#fff; }
+.jcard .sub{ font-size:12px; color:var(--muted); display:flex; gap:10px; flex-wrap:wrap;}
+.chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chip{
+  display:inline-flex; align-items:center; gap:5px;
+  border:1px solid var(--line); border-radius:999px; padding:4px 10px 4px 8px;
+  font-size:12px; background:var(--surface-2); color:var(--ink-soft);
+}
+.chip .mk{ font-weight:800; }
+.chip.best{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink); }
+.chip.best .mk{ color:var(--accent); }
+.chip .roi{ font-family:"JetBrains Mono",monospace; font-weight:700; }
+
+/* ---------- toolbar ---------- */
+.toolbar{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  margin-block:6px 14px;
+}
+.toolbar input[type="search"]{
+  flex:1 1 220px; min-width:160px; padding:9px 12px; border-radius:8px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  font-size:14px; font-family:inherit;
+}
+.toolbar label{
+  display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft);
+  border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:8px 12px;
+  cursor:pointer; user-select:none;
+}
+.toolbar input[type="checkbox"]{ accent-color:var(--accent); }
+
+/* ---------- roster table ---------- */
+.table-wrap{
+  border:1px solid var(--line); border-radius:12px; overflow-x:auto;
+  background:var(--surface); box-shadow:var(--shadow);
+}
+table{ width:100%; border-collapse:collapse; min-width:760px; }
+thead th{
+  position:sticky; top:0; background:var(--surface-2); text-align:left;
+  font-size:12px; letter-spacing:.04em; color:var(--muted); font-weight:700;
+  padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; white-space:nowrap;
+}
+thead th.num-col, tbody td.num-col{ text-align:right; }
+thead th:hover{ color:var(--ink); }
+thead th .arrow{ opacity:.4; margin-left:3px; }
+tbody td{
+  padding:9px 12px; border-bottom:1px solid var(--line-soft); font-size:13.5px;
+  vertical-align:top;
+}
+tbody tr:last-child td{ border-bottom:none; }
+tbody tr:hover{ background:var(--surface-2); }
+tbody tr.is-retired{ color:var(--retired); }
+tbody tr.is-retired td.name-cell b{ color:var(--retired); }
+.name-cell b{ font-weight:700; color:var(--ink); font-size:14px; }
+.status{
+  display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px;
+  margin-left:8px; vertical-align:middle;
+}
+.status.active{ background:var(--accent-soft); color:var(--accent-ink); }
+.status.retired{ background:var(--retired-soft); color:var(--retired); }
+.cell-chips{ display:flex; flex-wrap:wrap; gap:5px; max-width:360px; }
+.cell-chips .chip{ padding:2px 8px 2px 7px; font-size:11px; }
+.dash{ color:var(--muted); }
+
+/* ---------- retired section ---------- */
+.retired-list{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:10px;
+}
+.rcard{
+  border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+  background:var(--retired-soft); color:var(--retired);
+}
+.rcard b{ color:var(--ink-soft); font-size:14px; }
+.rcard .d{ font-size:12px; margin-top:3px; }
+
+/* ---------- footnotes ---------- */
+.footnotes{
+  margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
+  font-size:12.5px; color:var(--muted); line-height:1.8;
+}
+.footnotes h3{ font-size:13px; color:var(--ink-soft); margin-bottom:6px; }
+.footnotes ul{ margin:0; padding-left:1.1em; }
+.footnotes li{ margin-bottom:4px; }
+
+@media (max-width:520px){
+  .stats{ grid-template-columns:repeat(2,1fr); }
+  table{ min-width:620px; }
+}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
+
+<header class="page">
+  <span class="eyebrow">JOCKEY SCOUTING SHEET</span>
+  <h1>騎手の得意条件</h1>
+  <p class="lede">
+    「実績上位だから信頼する」のではなく、<b>騎手×競馬場／距離帯／脚質</b>の組み合わせで
+    単勝回収率を実測し、市場の評価より上振れている条件だけを拾った一覧です。
+    ◎は各騎手でいちばん回収率が高い条件、○はそれに次ぐ条件を表します。
+  </p>
+  <div class="meta-row" id="metaRow"></div>
+</header>
+
+<section class="stats" id="statsRow"></section>
+
+<div class="section-head">
+  <h2>得意条件が見つかった騎手</h2>
+  <span class="note">n≥10・勝利10本以上・単勝回収率100%超のみ／回収率が高い順</span>
+</div>
+<div class="showcase" id="showcase"></div>
+
+<div class="section-head">
+  <h2>騎手一覧</h2>
+  <span class="note">列見出しクリックで並び替え</span>
+</div>
+<div class="toolbar">
+  <input type="search" id="q" placeholder="騎手名で検索（例: 岩田望、ルメー）">
+  <label><input type="checkbox" id="showRetired"> 引退騎手も表示</label>
+</div>
+<div class="table-wrap">
+  <table id="rosterTable">
+    <thead>
+      <tr>
+        <th data-key="name">騎手<span class="arrow"></span></th>
+        <th data-key="rides" class="num-col">騎乗数<span class="arrow"></span></th>
+        <th data-key="winRate" class="num-col">勝率<span class="arrow"></span></th>
+        <th data-key="lastRide" class="num-col">直近騎乗<span class="arrow"></span></th>
+        <th>得意条件</th>
+        <th data-key="bestRoi" class="num-col">最高回収率<span class="arrow"></span></th>
+      </tr>
+    </thead>
+    <tbody id="rosterBody"></tbody>
+  </table>
+</div>
+
+<div class="section-head">
+  <h2>引退騎手（参考・除外扱い）</h2>
+  <span class="note">JRA公式「引退騎手プロフィール」と本データの最終騎乗日を突き合わせて確認できた分のみ</span>
+</div>
+<div class="retired-list" id="retiredList"></div>
+
+<div class="footnotes">
+  <h3>データについて（正直な注意点）</h3>
+  <ul>
+    <li>対象は中央9-12R中心の1,954レース・26,704騎乗（2025年1月〜2026年9月、大井など地方競馬は含まない）。JRA-VAN・データラボは使わず、netkeibaの公開ページのみから独自に集計した。</li>
+    <li>騎手名はnetkeiba結果表の表記のまま（例:「岩田望」は岩田望来、「ルメー」はC.ルメールとみられるが、いずれも本人確認は未了）。表記ゆれ（例:「三浦」と「三浦皇」）が同一人物の可能性があり、名寄せは行っていない。</li>
+    <li>「得意条件」は<b>n(騎乗数)≥10 かつ 勝利10本以上</b>の組み合わせだけを採用。単勝回収率は1回の高配当だけで跳ね上がるため、母数チェック無しでは大半がノイズになることを確認済み（全942組み合わせ中、この基準を満たしたのは63組み合わせのみ）。</li>
+    <li>引退の判定は、netkeiba上の表記が前方一致し、かつ本データ上の最終騎乗日がJRA公式の引退日以前であることを確認できたものだけに限定した（表記が短い姓は同姓の別人・過去の引退騎手と誤って一致することがあるため）。</li>
+    <li>これは in-sample の実測であり、将来のレースで同じ回収率が出る保証はない。参考情報として使うこと。</li>
+  </ul>
+</div>
+
+<script>
+const DATA = __DATA_JSON__;
+
+function fmtPct(x){ return (x*100).toFixed(0) + "%"; }
+function fmtRoi(x){ return (x*100).toFixed(0) + "%"; }
+function fmtDate(s){ if(!s) return "—"; const [y,m,d]=s.split("-"); return `${y}/${+m}/${+d}`; }
+
+function statusBadge(j){
+  if(j.retired){
+    return `<span class="status retired">引退 ${fmtDate(j.retired)}</span>`;
+  }
+  return `<span class="status active">現役</span>`;
+}
+
+function chipHtml(b, isBest){
+  return `<span class="chip ${isBest?'best':''}"><span class="mk">${isBest?'◎':'○'}</span>${b.粒度}: ${b.条件}<span class="roi">${fmtRoi(b.回収率)}</span></span>`;
+}
+
+function renderMeta(){
+  document.getElementById('metaRow').innerHTML = `
+    <span>対象: <b>${DATA.generated}</b></span>
+    <span>集計馬柱: <b>keiba/collect.py</b>（大井など地方は対象外）</span>
+  `;
+}
+
+function renderStats(){
+  const tiles = [
+    [DATA.totalJockeys, "集計対象の騎手数"],
+    [DATA.badgeHolders, "得意条件が見つかった騎手"],
+    [DATA.retiredCount, "引退確認済み"],
+    ["1,954", "対象レース数"],
+  ];
+  document.getElementById('statsRow').innerHTML = tiles.map(([n,l])=>
+    `<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`
+  ).join("");
+}
+
+function renderShowcase(){
+  const top = DATA.jockeys.filter(j=>j.badges.length && !j.retired).slice(0, 12);
+  document.getElementById('showcase').innerHTML = top.map((j,i)=>`
+    <div class="jcard">
+      <div class="head">
+        <span class="name">${j.name}</span>
+        <span class="rank-mark ${i<3?'top':''}">${i+1}</span>
+      </div>
+      <div class="sub">
+        <span>騎乗 <b class="num">${j.rides}</b></span>
+        <span>勝率 <b class="num">${fmtPct(j.winRate)}</b></span>
+        <span>直近 <b class="num">${fmtDate(j.lastRide)}</b></span>
+      </div>
+      <div class="chips">
+        ${j.badges.slice(0,3).map((b,bi)=>chipHtml(b, bi===0)).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+let sortKey = "bestRoi", sortDir = -1;
+
+function currentRows(){
+  const q = document.getElementById('q').value.trim();
+  const showRetired = document.getElementById('showRetired').checked;
+  let rows = DATA.jockeys.filter(j => showRetired || !j.retired);
+  if(q) rows = rows.filter(j => j.name.includes(q));
+  rows = rows.slice().sort((a,b)=>{
+    let av=a[sortKey], bv=b[sortKey];
+    if(typeof av === "string") { av = av||""; bv = bv||""; return sortDir*av.localeCompare(bv,'ja'); }
+    return sortDir*((av??-1)-(bv??-1));
+  });
+  return rows;
+}
+
+function renderRoster(){
+  const rows = currentRows();
+  document.getElementById('rosterBody').innerHTML = rows.map(j=>{
+    const chips = j.badges.length
+      ? `<div class="cell-chips">${j.badges.slice(0,4).map((b,bi)=>chipHtml(b, bi===0)).join("")}</div>`
+      : `<span class="dash">—</span>`;
+    return `<tr class="${j.retired?'is-retired':''}">
+      <td class="name-cell"><b>${j.name}</b>${statusBadge(j)}</td>
+      <td class="num-col num">${j.rides}</td>
+      <td class="num-col num">${fmtPct(j.winRate)}</td>
+      <td class="num-col num">${fmtDate(j.lastRide)}</td>
+      <td>${chips}</td>
+      <td class="num-col num">${j.bestRoi ? fmtRoi(j.bestRoi) : '<span class="dash">—</span>'}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderRetired(){
+  const rs = DATA.jockeys.filter(j=>j.retired).sort((a,b)=> b.retired.localeCompare(a.retired));
+  document.getElementById('retiredList').innerHTML = rs.map(j=>`
+    <div class="rcard">
+      <b>${j.name}</b>${j.retiredFullName && j.retiredFullName!==j.name ? ` <span style="opacity:.7">(${j.retiredFullName})</span>`:""}
+      <div class="d">${fmtDate(j.retired)} 引退　最終騎乗 ${fmtDate(j.lastRide)}　生涯騎乗 ${j.rides}</div>
+    </div>
+  `).join("") || `<p class="note">該当なし</p>`;
+}
+
+document.querySelectorAll('thead th[data-key]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.key;
+    if(sortKey===key){ sortDir *= -1; } else { sortKey = key; sortDir = key==="name" ? 1 : -1; }
+    document.querySelectorAll('thead .arrow').forEach(a=>a.textContent="");
+    th.querySelector('.arrow').textContent = sortDir>0 ? "▲" : "▼";
+    renderRoster();
+  });
+});
+document.getElementById('q').addEventListener('input', renderRoster);
+document.getElementById('showRetired').addEventListener('change', renderRoster);
+
+renderMeta();
+renderStats();
+renderShowcase();
+renderRoster();
+renderRetired();
+</script>
