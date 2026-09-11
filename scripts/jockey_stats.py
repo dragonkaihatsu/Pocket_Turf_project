@@ -2,25 +2,27 @@
 """騎手別の「得意条件」を実測する。
 
 「騎手Aは実績上位だから加点」という一律のやり方ではなく、**騎手×競馬場×
-距離帯×馬場種別×脚質×枠番**の組み合わせで単勝回収率を集計し、100%を超える
-組み合わせを拾う。ネームバリューの無い騎手でも特定条件だけ回収率が高い
-ことがあり、そこに市場が気づいていなければ期待値が生まれる、という発想
-（本人の言葉）。
+距離帯×馬場種別×脚質×枠番×芝ダート**の組み合わせで単勝回収率を集計し、
+100%を超える組み合わせを拾う。ネームバリューの無い騎手でも特定条件だけ
+回収率が高いことがあり、そこに市場が気づいていなければ期待値が生まれる、
+という発想（本人の言葉）。
 
-脚質（逃げ/先行/差し/追込）・枠番（内/中/外）は、どちらも騎手の腕が
-直接出やすい部分。「この騎手は差しが決まる」「大外は得意だが内枠は
-やや苦手」のような**騎乗スタイルの得意分野**を探すのが目的で、脚質・
-枠番それぞれ単体の傾向（build_ratings.py・過去10年枠別複勝率などが出す
-もの）とは別軸。枠番は頭数に関わらず1-8で固定なので、内枠(1-2)・
-中枠(3-6)・外枠(7-8)の3帯で区切る。
+脚質（逃げ/先行/差し/追込）・枠番（内/中/外）・芝ダートは、どれも騎手の
+腕が直接出やすい部分。「この騎手は差しが決まる」「大外は得意だが内枠は
+やや苦手」「ダートは強いが芝はいまひとつ」のような**騎乗スタイルの得意
+分野**を探すのが目的で、それぞれ単体の傾向（build_ratings.py・過去10年
+枠別複勝率などが出すもの）とは別軸。枠番は頭数に関わらず1-8で固定なので、
+内枠(1-2)・中枠(3-6)・外枠(7-8)の3帯で区切る。
 
 **母数の注意（CLAUDE.mdの一貫した方針）**: 組み合わせを細かくするほど
 母数が減り、「回収率100%超」の多くは偶然の産物になる。実際の的中数・
-レース数を必ず併記し、数字だけで判断しないこと。
+レース数を必ず併記し、数字だけで判断しないこと。ここでは出力段階で
+n少数の組み合わせを削らず（MIN_N_SHOW=1）広く出す一方、「信頼できる
+母数」（n≥10かつ勝利10本以上）を満たさないものは呼び出し側
+（scripts/build_jockey_page.py）で必ずその旨を明示する運用にしている。
+騎乗依頼が少ない騎手ほど、この母数不足の注記が付いたまま出ることになる。
 
-対象データは data/collected_jra の結果CSV（2026年1〜8月・803レース、
-中央のみ・大井は含まない）。3年分の蓄積はまだ無く、この期間だけの実測
-である点を明記して出す。
+対象データは data/collected_jra の結果CSV（大井など地方は含まない）。
 
     python3 scripts/jockey_stats.py --dir data/collected_jra \
         --race-info data/profiles/jra/race_info.csv \
@@ -36,7 +38,7 @@ from collections import defaultdict
 from pathlib import Path
 
 STAKE = 100
-MIN_N_SHOW = 5     # これ未満は集計自体を出さない（ノイズにしかならない）
+MIN_N_SHOW = 1     # 出力段階では削らない。「信頼できる母数」の判定は別途行う
 MIN_N_TRUST = 10   # これ未満は「回収率100%超」でも参考扱いにする
 # 単勝回収率は「n件中1勝が高配当だった」だけで簡単に跳ね上がる
 # （例: n=12・1勝でも当該馬が20倍なら回収率167%）。scripts/single.py /
@@ -155,17 +157,24 @@ def main() -> None:
                 used_rides += 1
 
                 rides[(jockey, "場", venue)].append((STAKE, ret, chaku_i))
+                if surface:
+                    rides[(jockey, "芝ダ", surface)].append((STAKE, ret, chaku_i))
                 if kyori is not None:
                     band = distance_band(kyori)
                     rides[(jockey, "距離帯", band)].append((STAKE, ret, chaku_i))
                     if surface:
                         rides[(jockey, "場×距離帯×馬場", f"{venue}/{surface}/{band}")].append(
                             (STAKE, ret, chaku_i))
+                        rides[(jockey, "距離帯×芝ダ", f"{band}/{surface}")].append(
+                            (STAKE, ret, chaku_i))
                 kyaku = kyaku_by_umaban.get(umaban_i, "") if umaban_i is not None else ""
                 if kyaku:
                     rides[(jockey, "脚質", kyaku)].append((STAKE, ret, chaku_i))
                     if kyori is not None:
                         rides[(jockey, "脚質×距離帯", f"{kyaku}/{distance_band(kyori)}")].append(
+                            (STAKE, ret, chaku_i))
+                    if surface:
+                        rides[(jockey, "脚質×芝ダ", f"{kyaku}/{surface}")].append(
                             (STAKE, ret, chaku_i))
 
                 # 枠番は結果CSVに直接入っている（脚質と違い出走馬CSVとの突き合わせ不要）

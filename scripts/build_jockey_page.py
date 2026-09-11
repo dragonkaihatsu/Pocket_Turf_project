@@ -36,7 +36,7 @@ RETIRED_PATTERN = re.compile(
     r'aria-hidden="true"></i>([^<]+)<span class="opt opt-xs">（([^）]+)）</span>')
 RETIRED_DATE_RE = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日引退")
 
-MIN_RIDES_SHOWN = 5  # これ未満は誤記・代打騎乗の可能性が高く一覧から外す
+MIN_RIDES_SHOWN = 1  # 騎乗依頼が少ない騎手も母数注記つきで一覧に含める
 
 
 def fetch_retired_list(cache_path: Path, refresh: bool = False) -> list[tuple[str, str]]:
