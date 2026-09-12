@@ -54,7 +54,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from keiba.power import HEADER, judge
+from keiba.power import HEADER, ROI_HEADER, judge, judge_roi
 from keiba.scoring import tier1_min_rides
 from keiba.racefiles import (DEFAULT_RACES, parse_races, race_number,
                              result_paths)
@@ -333,7 +333,7 @@ def evaluate(lab, f_test, f_ctrl, metric):
     test = [c for p, c in pairs if f_test(p, c)]
     ctrl = [c for p, c in pairs if f_ctrl(p, c)]
     if not test or not ctrl:
-        return None, None, test
+        return None, None, test, ctrl
     kt, nt = metric(test)
     kc, nc = metric(ctrl)
     v = judge(lab, kt, nt, kc, nc)
@@ -349,12 +349,13 @@ def evaluate(lab, f_test, f_ctrl, metric):
             signs.append(1 if kt2 / nt2 >= kc2 / nc2 else -1)
     rep = ("再現" if len(signs) == 2 and signs[0] == signs[1]
            else "反転" if len(signs) == 2 else "期間不足")
-    return v, rep, test
+    return v, rep, test, ctrl
 
 
 results = []
-for metric, mlabel, roi, roilab in ((place, "複勝率", fuku_roi, "複回収"),
-                                    (win, "勝率", tan_roi, "単回収")):
+for metric, mlabel, roi, roilab, paykey in (
+        (place, "複勝率", fuku_roi, "複回収", 'fuku'),
+        (win, "勝率", tan_roi, "単回収", 'tan')):
     print("#" * 96)
     print(f"### 主指標: {mlabel}")
     print("#" * 96)
@@ -362,12 +363,16 @@ for metric, mlabel, roi, roilab in ((place, "複勝率", fuku_roi, "複回収"),
         print(group)
         print(HEADER)
         for lab, f_test, f_ctrl in items:
-            v, rep, test = evaluate(lab, f_test, f_ctrl, metric)
+            v, rep, test, ctrl = evaluate(lab, f_test, f_ctrl, metric)
             if v is None:
                 print(f"{lab:<32}   該当なし")
                 continue
             print(v.line() + f"  [{rep}] {roilab}{roi(test):.0%}")
-            results.append((mlabel, group, v, rep))
+            # 回収率も**同じ枠組み**で判定する（差あり/差なし/判定不能）。
+            # 正解率だけ厳しく見て回収率を目分量で語るのを防ぐため
+            rv = judge_roi(lab, [c[paykey] for c in test],
+                           [c[paykey] for c in ctrl])
+            results.append((mlabel, group, v, rep, rv))
         print()
 
 
@@ -375,23 +380,129 @@ print("=" * 96)
 print("【まとめ1】母数が足りていて差が出て、しかも期間で再現した区分だけ")
 print("           → これだけが信用できる\n")
 print(f"{'指標':<7}" + HEADER)
-for m, group, v, rep in results:
+for m, group, v, rep, rv in results:
     if v.ok and rep == "再現":
         print(f"{m:<7}" + v.line())
 print()
 print("【まとめ2】差は出たが期間で符号が反転 → 信用しない")
-for m, group, v, rep in results:
+for m, group, v, rep, rv in results:
     if v.ok and rep == "反転":
         print(f"  {m:<5}{v.label:<34} n={v.n:>6,}  差{v.diff*100:+.1f}p")
 print()
 print("【まとめ3】母数が十分なのに差が無かった → 仮説を棄却できる")
-for m, group, v, rep in results:
+for m, group, v, rep, rv in results:
     if v.code == "差なし":
         print(f"  {m:<5}{v.label:<34} n={v.n:>6,}  差{v.diff*100:+.1f}p  "
               f"（{v.mdd*100:.1f}pt以上なら見えた）")
 print()
 print("【まとめ4】判定不能（母数不足）→ 追わない／母数を増やしてから")
-for m, group, v, rep in results:
+for m, group, v, rep, rv in results:
     if v.code == "判定不能":
         print(f"  {m:<5}{v.label:<34} n={v.n:>6,}  差{v.diff*100:+.1f}p  "
               f"要{v.mdd*100:.1f}pt / 主張には{v.need_n:,}頭")
+
+
+# ---------------------------------------------------------------------------
+# 3段階の分類（本人の要望・2026-09-12）
+#
+#   第1段階  意味がありそうで実はなかったもの
+#   第2段階  正解率は高めるが、回収率にはならなかったもの
+#   第3段階  正解率を高めて、回収率にもつながるもの
+#
+# **第2段階と第3段階の境目には落とし穴がある。** 回収率は分散が大きく、
+# 同じ優位を見るのに正解率の4〜9倍の母数が要る（`keiba/power.py` の
+# judge_roi の解説）。つまり「回収率の差が確認できない」区分の大半は
+# 「差が無い」のではなく「**まだ測れていない**」。両者を混ぜると、
+# 測っていないものを棄却したことにしてしまう。
+#
+# そこで第2段階を2つに割る:
+#
+#   第2段階a  回収率を測れる母数があって、差が無かった（棄却できる）
+#   第2段階b  回収率の母数が足りず、判定できない（保留）
+#
+# CLAUDE.mdが正解率でやってきた「判定不能を差なしと混ぜない」を、
+# 回収率にも同じ厳しさで当てるということ。
+print()
+print("=" * 96)
+print("【3段階の分類】正解率と回収率を同じ枠組みで判定して振り分ける")
+print("=" * 96)
+
+TIER1_LABEL = "第1段階  意味がありそうで実はなかった（棄却できる）"
+TIER2A_LABEL = "第2段階a 正解率は高めるが、回収率にはならない（測った上で）"
+TIER2B_LABEL = "第2段階b 正解率は高める。回収率は**母数不足で判定できない**（保留）"
+TIER3_LABEL = "第3段階  正解率を高めて、回収率にもつながる"
+AVOID_LABEL = "避ける条件  対照より悪いことが確定（買わない判断に使える）"
+HOLD_LABEL = "判定保留  正解率の段階で母数が足りていない"
+
+# 回収率が「つながった」と言える下限。控除率25%なので100%が損益分岐。
+# **対照より良いだけでは足りない**（対照が65%のとき74%でも赤字のまま）
+BREAK_EVEN = 1.00
+
+
+def tier_of(v, rep, rv) -> str:
+    """正解率の判定・期間再現・回収率の判定から段階を決める。
+
+    順序に意味がある:
+      1. 正解率が判定不能なら、回収率を見る前に保留
+      2. 正解率で差が無い／期間で反転するなら第1段階（棄却）
+      3. 差が**負の向き**（対照より悪い）なら「避ける条件」。買う条件の
+         3段階とは別に扱う。CLAUDE.mdでいちばん安定しているブリンカー解除が
+         これに当たり、「意味がなかった」と混ぜてはいけない
+      4. 正の向きなら、回収率の判定で第2/第3を分ける
+    """
+    if v.code == "判定不能" or rep == "期間不足":
+        return HOLD_LABEL
+    if v.code == "差なし":
+        return TIER1_LABEL          # 母数は十分なのに差が無い
+    if rep == "反転":
+        return TIER1_LABEL          # 差は出たが期間で符号が逆
+    if v.diff < 0:
+        return AVOID_LABEL          # 対照より悪い＝避ける条件
+    # ここから先は「正解率で差あり・正の向き・期間で再現」＝優位は本物
+    if rv is None:
+        return TIER2B_LABEL
+    if rv.code == "判定不能":
+        return TIER2B_LABEL
+    if rv.code == "差あり" and rv.roi >= BREAK_EVEN and rv.hits >= 10:
+        # 有意でも検出力が足りていないと効果量が過大に出る（勝者の呪い）。
+        # 「つながる」と言い切るのは検出力も満たしたときだけにする
+        return TIER3_LABEL if rv.n >= rv.need_n else TIER2B_LABEL
+    # 測れていて、損益分岐に届かない（対照より良くても赤字なら「ならない」）
+    return TIER2A_LABEL
+
+
+buckets: dict[str, list] = defaultdict(list)
+for m, group, v, rep, rv in results:
+    buckets[tier_of(v, rep, rv)].append((m, v, rep, rv))
+
+for label in (TIER3_LABEL, TIER2A_LABEL, TIER2B_LABEL, AVOID_LABEL,
+              TIER1_LABEL, HOLD_LABEL):
+    rows = buckets.get(label, [])
+    print(f"\n■ {label}  {len(rows)}件")
+    if not rows:
+        print("  （該当なし）")
+        continue
+    print(f"  {'指標':<6}{'区分':<32}{'n':>6}"
+          f"{'正解率の差':>11}{'回収率':>8}{'的中':>6}{'回収差':>8}"
+          f"{'回収判定':>10}{'回収に要るn':>12}{'z':>7}")
+    for m, v, rep, rv in sorted(rows, key=lambda r: -r[1].n):
+        if rv is None:
+            roi_txt = f"{'—':>8}{'—':>6}{'—':>8}{'—':>10}{'—':>12}{'—':>7}"
+        else:
+            roi_txt = (f"{rv.roi:>8.0%}{rv.hits:>6,}{rv.diff * 100:>+7.0f}p"
+                       f"{rv.code:>10}{rv.need_n:>12,}{rv.z:>+7.2f}")
+        print(f"  {m:<6}{v.label:<32}{v.n:>6,}"
+              f"{v.diff * 100:>+10.1f}p{roi_txt}")
+
+print()
+print("※ 第2段階bが多いのは想定どおり。回収率は正解率の4〜9倍の母数を要するため、")
+print("  正解率で差が出た区分のほとんどは回収率側がまだ判定できない。")
+print("  **「回収率にならなかった」と言えるのは第2段階aだけ**である")
+print("※ 第3段階は『対照より良い』だけでは足りず、**回収率100%以上**かつ")
+print("  **検出力も満たす（n≧要るn）**ことを要求する。有意でも検出力不足なら")
+print("  効果量が過大に出ている（勝者の呪い）ので第2段階bに置く")
+print("  対照が65%のとき74%でも赤字なので、それは第2段階a（ならなかった）に置く")
+print("※ 避ける条件は3段階とは別枠。見送るだけなので外れ馬券を買わずに済み、")
+print("  回収率の裏づけが無くても運用できる（CLAUDE.mdのブリンカー解除がこれ）")
+print("※ 回収率の判定に使う『意味のある差』は25pt（控除率25%＝損益分岐100%）。")
+print("  的中10本未満の区分は第3段階に入れない（CLAUDE.mdの母数基準）")

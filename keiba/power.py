@@ -131,3 +131,132 @@ def judge(label: str, hits: int, n: int,
 
 HEADER = (f"{'区分':<32}{'n':>6}{'率':>7}{'  95%CI':>16}"
           f"{'差':>6}{'要る差':>7}{'必要n':>8}  判定")
+
+
+# ---------------------------------------------------------------------------
+# 回収率の検出力（2026-09-12 追加）
+#
+# 「正解率は期間をまたいで再現する量、回収率は再現しない量」と記録してきたが、
+# **再現しない理由を2つに分けていなかった**:
+#
+#   (A) 正解率の優位が価格に織り込まれていて、回収率の優位が存在しない
+#   (B) 優位はあるが、回収率は分散が大きく、同じ優位を見るのに桁違いの母数が要る
+#
+# 実測すると(B)だった。前走二桁×一軍乗り替わり（n=693）で、勝率の差+3.4ptは
+# 249頭で主張できるのに、回収率の差+93ptには2,117頭が要る（**9倍**）。
+# 1頭あたり払戻のばらつきは σ≒10.8（回収率の単位）で、回収率そのものの
+# 10倍以上ある。複勝は1頭ごとに0か1しか動かないが、払戻は0円か数万円動く。
+#
+# そこで**正解率とまったく同じ枠組み**（差あり／差なし／判定不能）を
+# 回収率にも用意する。片方だけ甘い基準で読むのを防ぐため。
+
+# 回収率で「意味のある差」とみなす下限。控除率25%＝損益分岐が100%なので、
+# 25pt動かないと買い方の判断は変わらない。この母数で見分けられる差が
+# これを超えるなら「効果があっても見えない」領域
+ROI_MDD_LIMIT = 0.25
+
+
+def need_for_roi(sd: float, diff: float) -> int:
+    """回収率の差 diff（0.30 = 30pt）を見分けるのに要る母数。
+
+    sd は1頭あたり払戻の標準偏差（回収率の単位＝賭け金で割った値）。
+    2標本の平均の差の検定なので分散を2つ分見る。
+    """
+    if diff <= 0 or sd <= 0:
+        return 0
+    return int(((Z_ALPHA + Z_BETA) ** 2 * 2 * sd ** 2) / diff ** 2) + 1
+
+
+def min_detectable_roi(n: int, sd: float) -> float:
+    """その母数で見分けられる最小の回収率差。`need_for_roi` の逆。"""
+    if n <= 0 or sd <= 0:
+        return float("inf")
+    return (Z_ALPHA + Z_BETA) * sqrt(2 * sd ** 2 / n)
+
+
+@dataclass
+class RoiVerdict:
+    label: str
+    n: int
+    roi: float
+    roi_control: float
+    ci: tuple[float, float]   # ブートストラップ90%区間
+    mdd: float                # この母数で見分けられる最小の回収率差
+    diff: float
+    code: str                 # 差あり / 差なし / 判定不能
+    need_n: int
+    hits: int                 # 的中本数（CLAUDE.mdの「10本以上」基準用）
+    z: float                  # 2標本の差 ÷ その標準誤差
+
+    @property
+    def ok(self) -> bool:
+        return self.code == "差あり"
+
+    def line(self) -> str:
+        arrow = "＋" if self.diff >= 0 else "−"
+        return (f"{self.label:<32}{self.n:>6,}{self.roi:>7.0%}"
+                f"  [{self.ci[0]:>5.0%}-{self.ci[1]:>5.0%}]"
+                f"{arrow}{abs(self.diff) * 100:>4.0f}p"
+                f"{self.mdd * 100:>6.0f}p{self.need_n:>8,}"
+                f"  z={self.z:>+5.2f}  {self.code}")
+
+
+def judge_roi(label: str, pay: list[float], pay_control: list[float],
+              stake: float = 100.0, n_boot: int = 2000,
+              seed: int = 20260912,
+              mdd_limit: float = ROI_MDD_LIMIT) -> RoiVerdict | None:
+    """払戻の配列から回収率を判定する。`judge` と同じ3値を返す。
+
+    pay / pay_control は1点あたりの払戻（円、外れは0）。
+
+    ## 対照の回収率を「固定値」として扱ってはいけない（2026-09-12）
+
+    最初は `judge` と同じ形（対照の点推定が検証群の区間の外なら差あり）で
+    書いたが、**回収率では対照側の誤差が無視できない**。実測では対照
+    4,525頭でも σ=13.5 なので、その平均の標準誤差は13.5/√4525 ≒ **20pt**
+    ある。率なら対照の母数が大きければ点推定はほぼ確定するが、回収率は
+    裾が重いのでそうならない。
+
+    そこで**2標本の検定**にする:
+
+        se = √(σ²/n + σ_c²/n_c)      z = 差 / se
+
+    前走二桁×一軍乗り替わりだと se≒46pt・差104pt → z=2.3 で有意。
+    `need_n`（検出力80%に要る母数）は別の話で、**有意だが検出力不足**の
+    ときは効果量が過大に出ている可能性を含む（勝者の呪い）。
+    両方を返して読み分ける。
+
+    区間表示はブートストラップで作る（正規近似の区間は狭く出る）。
+    """
+    import random as _random
+    if len(pay) < 2 or len(pay_control) < 2:
+        return None
+    roi = [p / stake for p in pay]
+    roi_c = [p / stake for p in pay_control]
+    n = len(roi)
+    mean = sum(roi) / n
+    mean_c = sum(roi_c) / len(roi_c)
+    var = sum((x - mean) ** 2 for x in roi) / (n - 1)
+    sd = sqrt(var)
+    sd_c = sqrt(sum((x - mean_c) ** 2 for x in roi_c) / (len(roi_c) - 1))
+    rng = _random.Random(seed)
+    boot = sorted(sum(rng.choices(roi, k=n)) / n for _ in range(n_boot))
+    lo, hi = boot[int(n_boot * 0.05)], boot[int(n_boot * 0.95) - 1]
+    mdd = min_detectable_roi(n, max(sd, sd_c))
+    diff = mean - mean_c
+    se = sqrt(var / n + sd_c ** 2 / len(roi_c))
+    z = diff / se if se > 0 else 0.0
+    if abs(z) >= Z_ALPHA:
+        code = "差あり"
+    elif mdd <= mdd_limit:
+        code = "差なし"
+    else:
+        code = "判定不能"
+    return RoiVerdict(label=label, n=n, roi=mean, roi_control=mean_c,
+                      ci=(lo, hi), mdd=mdd, diff=diff, code=code,
+                      need_n=need_for_roi(max(sd, sd_c), abs(diff)),
+                      hits=sum(1 for x in roi if x > 0), z=z)
+
+
+ROI_HEADER = (f"{'区分':<32}{'n':>6}{'回収':>7}{'  90%区間':>16}"
+              f"{'差':>6}{'要る差':>7}{'必要n':>8}  判定")

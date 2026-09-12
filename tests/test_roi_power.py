@@ -89,3 +89,85 @@ class TestParseCorner(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestJudgeRoi(unittest.TestCase):
+    """回収率の判定（`keiba/power.judge_roi`）。
+
+    正解率と同じ3値（差あり／差なし／判定不能）を返すが、**対照の回収率を
+    固定値として扱わない**ことが要点。率なら対照の母数が大きければ点推定は
+    ほぼ確定するが、回収率は裾が重いので対照側の誤差も無視できない
+    （実測で対照4,525頭・σ=13.5 → 平均の標準誤差20pt）。
+    """
+
+    @staticmethod
+    def payouts(n: int, hits: int, odds: float) -> list[float]:
+        return [odds * 100] * hits + [0.0] * (n - hits)
+
+    def test_two_sample_not_point_estimate(self):
+        """対照の誤差を無視すると差ありになる例が、差ありにならないこと。
+
+        検証群の回収率は高いが、対照も裾が重くて平均が揺れている。
+        片側だけの区間で判定すると過大に有意と出る。
+        """
+        from keiba.power import judge_roi
+        test = self.payouts(700, 43, 36.0)          # 回収率≒221%
+        ctrl = self.payouts(4500, 150, 20.0)        # 回収率≒67%
+        v = judge_roi("t", test, ctrl)
+        self.assertIsNotNone(v)
+        # z は差 ÷ 2標本の標準誤差。点推定比較よりも保守的になる
+        self.assertLess(abs(v.z), 10.0)
+        self.assertIn(v.code, ("差あり", "差なし", "判定不能"))
+
+    def test_no_difference_is_not_significant(self):
+        from keiba.power import judge_roi
+        v = judge_roi("t", self.payouts(1000, 50, 13.0),
+                      self.payouts(4000, 200, 13.0))
+        self.assertNotEqual(v.code, "差あり")
+        self.assertAlmostEqual(v.diff, 0.0, delta=0.02)
+
+    def test_thin_sample_is_undetermined(self):
+        """母数が薄いと、差が大きく見えても判定不能になる。"""
+        from keiba.power import judge_roi
+        v = judge_roi("t", self.payouts(40, 4, 50.0),
+                      self.payouts(4000, 200, 13.0))
+        self.assertEqual(v.code, "判定不能")
+        self.assertGreater(v.mdd, 0.25)
+
+    def test_hits_are_counted(self):
+        from keiba.power import judge_roi
+        v = judge_roi("t", self.payouts(500, 17, 20.0),
+                      self.payouts(2000, 60, 20.0))
+        self.assertEqual(v.hits, 17)
+
+    def test_needs_two_rows_each(self):
+        from keiba.power import judge_roi
+        self.assertIsNone(judge_roi("t", [0.0], [0.0, 100.0]))
+        self.assertIsNone(judge_roi("t", [0.0, 100.0], []))
+
+    def test_zero_hits_gives_strong_negative(self):
+        """的中0本は、避ける条件としてはいちばん強い信号になる。"""
+        from keiba.power import judge_roi
+        v = judge_roi("t", self.payouts(600, 0, 0.0),
+                      self.payouts(4000, 200, 13.0))
+        self.assertEqual(v.roi, 0.0)
+        self.assertLess(v.z, -1.96)
+        self.assertEqual(v.code, "差あり")
+
+
+class TestMinDetectableRoi(unittest.TestCase):
+    def test_more_horses_sees_smaller_difference(self):
+        from keiba.power import min_detectable_roi
+        self.assertGreater(min_detectable_roi(100, 10.0),
+                           min_detectable_roi(10_000, 10.0))
+
+    def test_consistent_with_need_for_roi(self):
+        """見分けられる差ちょうどを主張するのに要る母数が、ほぼその母数。"""
+        from keiba.power import min_detectable_roi, need_for_roi
+        n, sd = 693, 10.82
+        mdd = min_detectable_roi(n, sd)
+        self.assertAlmostEqual(need_for_roi(sd, mdd) / n, 1.0, delta=0.02)
+
+    def test_degenerate(self):
+        from keiba.power import min_detectable_roi
+        self.assertEqual(min_detectable_roi(0, 10.0), float("inf"))
