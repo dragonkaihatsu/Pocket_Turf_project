@@ -343,40 +343,45 @@ def score_chokyo(horse: Horse, field_horses: list[Horse] | None = None) -> Score
 # 補正項目（加減算）
 # ---------------------------------------------------------------------------
 
+def _candidates(table: dict, name: str) -> dict:
+    """表記ゆれを含めて、その名前と両立するキーを全部集める。"""
+    return {k: v for k, v in table.items() if same_jockey(name, k)}
+
+
 def _lookup(table: dict, name: str) -> dict | None:
-    """馬柱の騎手名は略記されることがあるため、前方一致でも引く。
+    """馬柱の略記に対応して引く。表記ゆれと別人を区別する。
 
-    **曖昧な前方一致では引かない**。以前は辞書順で最初に当たったものを
-    返していたため、別人の成績を掴む事故が起きうる形だった:
+    実測の表には**同じ人物が主表記＋ごく少数の別表記で二重に入っている**:
 
-        表に 岩田康(344騎乗) と 岩田望(473騎乗) が両方ある状態で
-        「岩田」を引くと、辞書順で先に来たほうが返る
+        田口(421騎乗) と 田口貫(4騎乗)、松若(395) と 松若風(2)、
+        菊沢(472) と 菊沢一(3)、団野(455) と 団野大(7)
 
-    そこで次の順で決める:
-      1. 完全一致
-      2. 表の名前が渡された名前で始まるもの（渡された側が短い略記）。
-         **候補が2人以上なら None を返して補正を掛けない**
-      3. 渡された名前が表の名前で始まるもの（表側が短い略記）。
-         こちらは最も長い＝最も具体的なものを採る
+    一方で**別人が前方一致する**こともある:
 
-    数字を作らない方針と同じ理由で、**誰の成績か確定できないときは
-    補正しない**のが正しい（CLAUDE.mdの三浦／三浦皇の表記ゆれも同じ問題）。
+        岩田康(344) と 岩田望(473) … どちらも「岩田」で始まる
+
+    両者は構造で区別できる。**候補が入れ子（短い方が長い方の前方一致）なら
+    同一人物**、**互いに前方一致しない兄弟なら別人**である。
+
+      * 入れ子 → 同一人物なので、騎乗数がいちばん多い表記を代表にする
+        （長い方を採ると n=4 の別表記を掴んで母数不足になる）
+      * 兄弟   → 誰の成績か確定できないので **None を返して補正を掛けない**
+
+    以前は「最も長い一致」を採っていたため、田口を引くと田口貫(4騎乗)に
+    当たり、一軍騎手が一軍と判定されない不具合が出ていた。
     """
     if not name:
         return None
     if name in table:
         return table[name]
-    # 2. 表側が長い（渡された名前が略記）
-    longer = [(k, v) for k, v in table.items() if k.startswith(name)]
-    if len(longer) == 1:
-        return longer[0][1]
-    if len(longer) > 1:
-        return None      # 別人の可能性がある → 引かない
-    # 3. 表側が短い（表が略記）。最も具体的な一致を採る
-    shorter = [(k, v) for k, v in table.items() if name.startswith(k)]
-    if shorter:
-        return max(shorter, key=lambda kv: len(kv[0]))[1]
-    return None
+    cands = _candidates(table, name)
+    if not cands:
+        return None
+    keys = sorted(cands, key=len)
+    for a, b in zip(keys, keys[1:]):
+        if not b.startswith(a):
+            return None          # 兄弟関係 → 別人の可能性があるので引かない
+    return max(cands.values(), key=lambda v: v.get("n", 0))
 
 
 def correction_kishu(
@@ -415,12 +420,33 @@ def correction_kishu(
     return ScoreItem("騎手補正", 0.0, f"{horse.jockey}（実測データなし）")
 
 
-def is_tier1_jockey(name: str, ratings: dict | None = None) -> bool:
-    """実測の騎乗数から一軍騎手かどうかを判定する。"""
-    if not name:
+def same_jockey(a: str, b: str) -> bool:
+    """2つの騎手表記が同一人物を指すか。
+
+    netkeibaは表記を切る長さが一定でないため、同じ騎手が
+    「国分恭介」「国分恭」のように別の文字列で出てくる。素の文字列比較で
+    「乗り替わり」と判定すると、継続騎乗を乗り替わりと読んでしまう
+    （実例: 田山旺佑→田山、国分恭介→国分恭）。
+
+    一方が他方の前方一致なら同一人物とみなす。**前方一致しない場合は
+    別人**として扱う（角田大和と角田和はどちらも他方で始まらないので
+    正しく別人になる）。
+    """
+    a, b = (a or "").strip(), (b or "").strip()
+    if not a or not b:
         return False
-    ratings = ratings if ratings is not None else load_ratings()
-    rec = _lookup(ratings.get("騎手", {}), name)
+    return a == b or a.startswith(b) or b.startswith(a)
+
+
+def is_tier1_jockey(name: str, ratings: dict | None = None) -> bool:
+    """実測の騎乗数から一軍騎手かどうかを判定する。
+
+    同一性の解決は `_lookup` に任せる（入れ子の表記ゆれは畳み、別人の
+    可能性がある兄弟関係は引かない）。名前が確定できなければ False に
+    なるので、**曖昧な名前では加点しない**側に倒れる。
+    """
+    rec = _lookup((ratings if ratings is not None
+                   else load_ratings()).get("騎手", {}), name) if name else None
     return bool(rec and rec.get("n", 0) >= JOCKEY_TIER1_RIDES)
 
 
@@ -479,7 +505,9 @@ def correction_norikae(
     ratings = ratings if ratings is not None else load_ratings()
     now_t1 = is_tier1_jockey(horse.jockey, ratings)
     prev_t1 = is_tier1_jockey(prev, ratings)
-    changed = prev != horse.jockey
+    # 素の文字列比較にしない。前走の騎手は馬ページ由来のフルネーム、今走は
+    # 馬柱由来の略記なので、同一人物でも文字列が違う（国分恭介／国分恭）
+    changed = not same_jockey(prev, horse.jockey)
 
     if ch >= 10 and changed and now_t1 and not prev_t1:
         return ScoreItem(

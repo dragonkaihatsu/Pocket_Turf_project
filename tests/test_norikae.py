@@ -181,3 +181,51 @@ class TestLookupAmbiguity(unittest.TestCase):
         it = correction_norikae(horse("岩田", 12), records("無名"),
                                 "2026-09-12", ratings)
         self.assertEqual(it.points, 0.0)
+
+
+class TestNameVariants(unittest.TestCase):
+    """netkeibaの表記ゆれで誤って「格上げ」と判定しないことを固定する。
+
+    実測の ratings.json には同じ騎手が複数のキーで入っている
+    （`団野`(455騎乗) と `団野大`(7騎乗)）。最も具体的な一致を採ると
+    n=7 の側を掴み、前走の一軍騎手を「一軍ではない」と誤判定して
+    一軍→一軍の乗り替わりに加点してしまう（実例: 団野大成→菊沢）。
+    """
+
+    SPLIT = {"騎手": {
+        "団野": {"n": 455, "複勝率": 0.30},     # 同一人物が
+        "団野大": {"n": 7, "複勝率": 0.0},       # 2つのキーに割れている
+        "菊沢": {"n": 472, "複勝率": 0.25},
+        "国分恭": {"n": 195, "複勝率": 0.18},
+        "小林美": {"n": 60, "複勝率": 0.10},
+    }}
+
+    def test_tier1_is_tolerant_to_split_keys(self):
+        """前方一致するキーのどれかが基準を満たせば一軍とみなす。"""
+        self.assertTrue(is_tier1_jockey("団野大成", self.SPLIT))
+        self.assertTrue(is_tier1_jockey("団野", self.SPLIT))
+
+    def test_tier1_to_tier1_change_is_not_an_upgrade(self):
+        """団野大成→菊沢はどちらも一軍なので加点しない。"""
+        it = correction_norikae(horse("菊沢", 14), records("団野大成"),
+                                "2026-09-12", self.SPLIT)
+        self.assertEqual(it.points, 0.0)
+
+    def test_abbreviation_is_not_a_jockey_change(self):
+        """国分恭介→国分恭 は継続騎乗（文字列は違うが同一人物）。"""
+        from keiba.scoring import same_jockey
+        self.assertTrue(same_jockey("国分恭介", "国分恭"))
+        it = correction_norikae(horse("国分恭", 12), records("国分恭介"),
+                                "2026-09-12", self.SPLIT)
+        self.assertIn("継続騎乗", it.note)
+
+    def test_different_people_are_not_merged(self):
+        """角田大和と角田和は互いに前方一致しないので別人。"""
+        from keiba.scoring import same_jockey
+        self.assertFalse(same_jockey("角田大和", "角田和"))
+
+    def test_upgrade_from_minor_still_fires(self):
+        """本来の形（非一軍→一軍）は引き続き加点される。"""
+        it = correction_norikae(horse("菊沢", 14), records("小林美"),
+                                "2026-09-12", self.SPLIT)
+        self.assertEqual(it.points, NORIKAE_KAKUAGE_POINTS)
