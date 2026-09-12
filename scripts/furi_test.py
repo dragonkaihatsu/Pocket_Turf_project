@@ -138,3 +138,23 @@ for per, lab in ((('2025',), '2025年'), (('2026',), '2026年')):
         ('代理B 前に行く脚質×4角6番手以下', [c for p,c in sel if furi_B(p)]),
         ('対照 単に6着以下',               [c for p,c in sel if plain_bad(p)]),
     ])
+
+# ── 前走二桁着順 × 代理B（CLAUDE.mdが「本命セル」としている区分）──
+# ここを明示的に出しておく。以前この数字をアドホックに算出して
+# CLAUDE.mdに書いたため、スクリプトを回しても再現できない状態だった。
+# 主張を載せるなら、その主張を再現する行をスクリプトに残しておく
+def dd(p):      # 前走が二桁着順
+    return p['chaku'] >= 10
+
+show('前走二桁着順の中で、不利の痕跡があるか（全期間）', [
+    ('前走二桁 × 代理B（前に行って沈んだ）', [c for p, c in pairs if dd(p) and furi_B(p)]),
+    ('前走二桁 × 代理A（脚は使えた）',       [c for p, c in pairs if dd(p) and furi_A(p)]),
+    ('前走二桁 × 痕跡なし（対照）',          [c for p, c in pairs if dd(p) and plain_bad(p)]),
+])
+
+for per, lab in ((('2025',), '2025年'), (('2026',), '2026年')):
+    sel = [(p, c) for p, c in pairs if c['date'].startswith(per)]
+    show(f'{lab} 前走二桁着順の中で', [
+        ('前走二桁 × 代理B', [c for p, c in sel if dd(p) and furi_B(p)]),
+        ('前走二桁 × 痕跡なし（対照）', [c for p, c in sel if dd(p) and plain_bad(p)]),
+    ])
