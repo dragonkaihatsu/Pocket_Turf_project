@@ -7,13 +7,16 @@ in-sampleで見えた「前走二桁 × 格上げ乗り替わり」の優位が�
 import csv, glob, re
 from collections import defaultdict
 from datetime import date
+import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.parent))
+from keiba.racefiles import result_paths  # 対象レース帯の絞り込みを1か所に集約
 
 STAKE = 100
 DATE_RE = re.compile(r'.*/(\d{4}-\d{2}-\d{2})_')
 
 # 騎手ティアは2025年の勝利数だけで作る（2026年の結果を使わない＝後知恵排除）
 wins25 = defaultdict(int)
-for f in glob.glob('data/collected_jra/2025-*_結果.csv'):
+for f in [p for p in result_paths('data/collected_jra') if '/2025-' in p.replace(chr(92), '/')]:
     for r in csv.DictReader(open(f, encoding='utf-8-sig')):
         j = (r.get('騎手') or '').strip(); c = r.get('着順') or ''
         if j and c.isdigit() and int(c) == 1: wins25[j] += 1
@@ -23,7 +26,7 @@ def tier(j):
     return 3 if w >= 30 else 2 if w >= 18 else 1 if w >= 6 else 0
 
 by_horse = defaultdict(list)
-for f in sorted(glob.glob('data/collected_jra/*_結果.csv')):
+for f in result_paths('data/collected_jra'):
     m = DATE_RE.match(f)
     if not m: continue
     d = m.group(1)

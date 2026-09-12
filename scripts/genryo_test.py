@@ -11,13 +11,16 @@
 import csv, glob, re
 from collections import defaultdict
 from datetime import date
+import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.parent))
+from keiba.racefiles import result_paths  # 対象レース帯の絞り込みを1か所に集約
 
 STAKE = 100
 DATE_RE = re.compile(r'.*/(\d{4}-\d{2}-\d{2})_')
 MARKS = '☆▲△◇'
 
 wins = defaultdict(int)
-for f in glob.glob('data/collected_jra/*_結果.csv'):
+for f in result_paths('data/collected_jra'):
     for r in csv.DictReader(open(f, encoding='utf-8-sig')):
         j = (r.get('騎手') or '').strip(); c = r.get('着順') or ''
         if j and c.isdigit() and int(c) == 1: wins[j] += 1
@@ -27,7 +30,7 @@ def is_top(j):    return wins.get(j, 0) >= 30        # 一軍（30勝以上＝20
 def is_vtop(j):   return wins.get(j, 0) >= 50        # 最上位（50勝以上＝7人）
 
 by_horse = defaultdict(list)
-for f in sorted(glob.glob('data/collected_jra/*_結果.csv')):
+for f in result_paths('data/collected_jra'):
     m = DATE_RE.match(f)
     if not m: continue
     d = m.group(1)

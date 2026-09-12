@@ -37,6 +37,10 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from keiba.racefiles import DEFAULT_RACES, result_files
+
 STAKE = 100
 MIN_N_SHOW = 1     # 出力段階では削らない。「信頼できる母数」の判定は別途行う
 MIN_N_TRUST = 10   # これ未満は「回収率100%超」でも参考扱いにする
@@ -107,6 +111,9 @@ def load_tansho_payouts(path: Path) -> dict[int, int]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected_jra")
+    ap.add_argument("--races", default=DEFAULT_RACES,
+                    help="対象レース番号（既定9-12）。CLAUDE.mdに載せた"
+                         "実測は9-12R基準なので、混ぜると数字が合わなくなる")
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
     ap.add_argument("--out", help="結果をJSONで書き出す")
     ap.add_argument("--csv-out", help="組み合わせ別の一覧をCSVでも書き出す")
@@ -121,7 +128,7 @@ def main() -> None:
     used_rides = 0
     no_info = 0
 
-    for res_path in sorted(d.glob("*_結果.csv")):
+    for res_path in result_files(d, args.races):
         stem = res_path.name[: -len("_結果.csv")]
         venue = race_venue(stem)
         info = race_info.get(stem)

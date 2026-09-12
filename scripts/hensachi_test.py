@@ -17,6 +17,9 @@
 """
 import csv, glob, re, statistics
 from collections import defaultdict
+import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.parent))
+from keiba.racefiles import result_paths  # 対象レース帯の絞り込みを1か所に集約
 
 STAKE = 100
 DATE_RE = re.compile(r'.*/(\d{4}-\d{2}-\d{2})_')
@@ -24,7 +27,7 @@ DATE_RE = re.compile(r'.*/(\d{4}-\d{2}-\d{2})_')
 runs = defaultdict(list)   # 馬名 -> [{date, dev, chaku, ...}]
 race_rows = []             # 各出走（今走の予想対象になりうる行）
 
-for f in sorted(glob.glob('data/collected_jra/*_結果.csv')):
+for f in result_paths('data/collected_jra'):
     m = DATE_RE.match(f)
     if not m: continue
     d = m.group(1)

@@ -30,6 +30,10 @@ from pathlib import Path
 
 import requests
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from keiba.racefiles import DEFAULT_RACES, result_paths
+
 USER_AGENT = "Mozilla/5.0 (compatible; keiba-personal-research)"
 JRA_RETIRED_URL = "https://www.jra.go.jp/datafile/meikan/jretirement.html"
 RETIRED_PATTERN = re.compile(
@@ -61,14 +65,18 @@ def fetch_retired_list(cache_path: Path, refresh: bool = False) -> list[tuple[st
     return out
 
 
-def collect_ride_meta(collected_dir: Path) -> dict:
-    """収集済み結果CSVから 騎手表記 → 騎乗数・勝利数・初/最終騎乗日 を作る。"""
+def collect_ride_meta(collected_dir: Path, races: str | None = None) -> dict:
+    """収集済み結果CSVから 騎手表記 → 騎乗数・勝利数・初/最終騎乗日 を作る。
+
+    races で対象レース帯を絞る（既定は jockey_stats.json と同じ9-12R）。
+    絞らないと1-8Rの収集の進み具合で騎乗数・引退判定の最終騎乗日が変わる。
+    """
     ride_count: dict[str, int] = defaultdict(int)
     win_count: dict[str, int] = defaultdict(int)
     first_ride: dict[str, str] = {}
     last_ride: dict[str, str] = {}
 
-    for f in glob.glob(str(collected_dir / "*_結果.csv")):
+    for f in result_paths(collected_dir, races if races is not None else DEFAULT_RACES):
         m = re.match(r".*/(\d{4}-\d{2}-\d{2})_", f)
         date = m.group(1) if m else None
         if not date:
@@ -108,9 +116,10 @@ def match_retired(ride_count: dict, last_ride: dict,
 
 
 def build_payload(jockey_stats_path: Path, collected_dir: Path,
-                  retired_cache: Path, refresh_retired: bool) -> dict:
+                  retired_cache: Path, refresh_retired: bool,
+                  races: str | None = None) -> dict:
     stats = json.loads(jockey_stats_path.read_text(encoding="utf-8"))
-    meta = collect_ride_meta(collected_dir)
+    meta = collect_ride_meta(collected_dir, races)
     retired_full = fetch_retired_list(retired_cache, refresh=refresh_retired)
     retired = match_retired(meta["ride_count"], meta["last_ride"], retired_full)
 
@@ -172,11 +181,15 @@ def main() -> None:
     ap.add_argument("--retired-cache", default="data/raw/jra_retired_jockeys.html")
     ap.add_argument("--refresh-retired", action="store_true",
                     help="JRA公式の引退騎手一覧を再取得する（既定はキャッシュを使う）")
+    ap.add_argument("--races", default=DEFAULT_RACES,
+                    help="騎乗数を数える対象レース番号（既定9-12。"
+                         "jockey_stats.json と同じ帯に揃える）")
     ap.add_argument("--out", default="output/jockey_page.html")
     args = ap.parse_args()
 
     payload = build_payload(Path(args.jockey_stats), Path(args.collected),
-                            Path(args.retired_cache), args.refresh_retired)
+                            Path(args.retired_cache), args.refresh_retired,
+                            args.races)
     html = render_html(payload)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

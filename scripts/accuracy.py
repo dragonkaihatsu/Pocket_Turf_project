@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import keiba.scoring as sc
+from keiba.racefiles import DEFAULT_RACES, result_files
 from backtest import load_race_info, race_date, race_venue
 from keiba.horsedb import load_records
 from keiba.models import load_horses
@@ -62,6 +63,9 @@ TIERS = ["スコア上位(1-3位)", "スコア中位(4-6位)", "スコア下位(
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--races", default=DEFAULT_RACES,
+                    help="対象レース番号（既定9-12）。1-8Rを混ぜると"
+                         "収集の進み具合で期間が偏るため既定で絞る")
     ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
     ap.add_argument("--records", default="data/profiles/jra/horse_records.csv")
@@ -84,7 +88,7 @@ def main() -> None:
     band_tot: dict[str, dict] = defaultdict(lambda: {"n": 0, "win": 0, "plc": 0})
     used = 0
 
-    for res in sorted(d.glob("*_結果.csv")):
+    for res in result_files(d, args.races):
         stem = RESULT_RE.sub("", res.name)
         if args.year and not stem.startswith(args.year):
             continue

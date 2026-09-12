@@ -7,6 +7,9 @@
 """
 import csv, glob, re
 from collections import defaultdict
+import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.parent))
+from keiba.racefiles import result_paths  # 対象レース帯の絞り込みを1か所に集約
 
 STAKE = 100
 # カタカナ/ラテン文字主体の騎手名＝外国人（短期免許・通年免許とも）
@@ -14,7 +17,7 @@ FOREIGN_RE = re.compile(r'^[ァ-ヶーA-Za-z][ァ-ヶーA-Za-z・]*$')
 
 rides = defaultdict(int)
 rows_all = []
-for f in glob.glob('data/collected_jra/*_結果.csv'):
+for f in result_paths('data/collected_jra'):
     pay_t, pay_f = {}, {}
     try:
         for p in csv.DictReader(open(f.replace('_結果.csv','_配当.csv'), encoding='utf-8-sig')):

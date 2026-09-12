@@ -16,6 +16,10 @@ import re
 from pathlib import Path
 from statistics import median
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from keiba.racefiles import DEFAULT_RACES, result_files
+
 JRA_VENUES = {"札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"}
 MIN_SAMPLE = 30
 
@@ -40,10 +44,14 @@ def _float(v):
         return None
 
 
-def load(directory: Path):
-    """レース単位・馬単位のレコードを組み立てる。"""
+def load(directory: Path, race_spec: str | None = DEFAULT_RACES):
+    """レース単位・馬単位のレコードを組み立てる。
+
+    race_spec で対象レース帯を絞る（既定9-12R）。1-8Rの収集は月単位で
+    進むため、絞らないと特定の月の1-8Rだけが混ざって期間が偏る。
+    """
     races, runners = [], []
-    for res in sorted(directory.glob("*_結果.csv")):
+    for res in result_files(directory, race_spec):
         stem = res.name.replace("_結果.csv", "")
         rows = [r for r in csv.DictReader(open(res, encoding="utf-8-sig")) if _int(r.get("着順"))]
         if len(rows) < 5:
@@ -123,9 +131,11 @@ def rate_line(label: str, sub: list, width: int = 24) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--races", default=DEFAULT_RACES,
+                    help="対象レース番号（既定9-12）")
     args = ap.parse_args()
 
-    races, runners = load(Path(args.dir))
+    races, runners = load(Path(args.dir), args.races)
     print("=" * 70)
     print(f" 仮説の検証（{len(races)}レース / 延べ{len(runners)}頭）")
     print(" 複勝率の[ ]は95%信頼区間。区間が広いほど母数不足を意味する")

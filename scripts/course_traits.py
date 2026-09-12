@@ -32,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.courses import COURSES, traits
+from keiba.racefiles import DEFAULT_RACES, parse_races, race_number as rno
 
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
 VENUE_RE = re.compile(r"_(\D+?)(\d{2})R_")
@@ -99,12 +100,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
+    ap.add_argument("--races", default=DEFAULT_RACES,
+                    help="対象レース番号（既定9-12）。1-8Rの収集が完了したら"
+                         "1-12 を渡して1頭あたりの母数を増やして再検証する")
     ap.add_argument("--min-n", type=int, default=2,
                     help="適性を判定するのに必要な、特性一致の過去走数")
     args = ap.parse_args()
 
     info = load_race_info(Path(args.race_info))
-    runs = load_runs(Path(args.dir), info, None)
+    runs = load_runs(Path(args.dir), info, parse_races(args.races))
     print(f"{args.dir}: {len(runs):,}出走・"
           f"{len({r['馬名'] for r in runs}):,}頭\n")
 
