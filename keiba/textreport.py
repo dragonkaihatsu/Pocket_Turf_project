@@ -12,7 +12,7 @@ from .betting import BettingPlan
 from .boxes import build_options
 from .expectation import Expectation
 from .hensachi import by_umaban, spread_note
-from .marks import MarkedHorse
+from .marks import MarkedHorse, assign_marks, split_for_total
 from .scoring import HorseScore
 from .single import best_single
 from .tanpuku import best_tanpuku
@@ -23,6 +23,33 @@ RULE = "━" * 46
 # cp932（Shift_JIS）に無い文字の置き換え。古いWindows環境向けに
 # 出力するとき、1文字のせいで書き出しごと失敗するのを防ぐ
 CP932_SUBSTITUTES = {"—": "－"}
+
+
+def alt_order_note(scores: list[HorseScore], baba: str, n_show: int) -> str | None:
+    """馬場の良/非良が逆だった場合に買い目が変わるか。変わらなければ None。
+
+    `assign_marks` は `baba == "良"` かどうかしか見ないため、稍重・重・不良の
+    取り違えでは並びは動かない。動くのは良↔非良をまたぐときだけである。
+
+    実際に効くのは**上位4頭の顔ぶれ**（馬連4頭BOX＝推奨の買い目）が変わるか。
+    順序だけの入れ替わりなら買い目は1点も変わらないので、そこは短く伝える。
+    2026-09-12の阪神10Rがまさにこの形だった（稍重→良で3-4番手が入れ替わったが
+    上位4頭も6頭も集合は同じで、買い目は変わらなかった）。
+    """
+    other = "稍重" if baba == "良" else "良"
+    n_osae, n_chuui = split_for_total(n_show)
+
+    def order(b: str) -> list[int]:
+        return [m.score.horse.umaban for m in
+                assign_marks(scores, baba=b, n_osae=n_osae, n_chuui=n_chuui)]
+
+    now, alt = order(baba), order(other)
+    if now == alt:
+        return None
+    if set(now[:4]) == set(alt[:4]):
+        return f"※馬場が{other}でも上位4頭の顔ぶれは同じ（買い目は変わらない）"
+    return (f"※馬場が{other}なら上位4頭が {'-'.join(str(u) for u in alt[:4])} に"
+            f"変わる（買い目が変わる）。発走前に馬場を確認する")
 
 
 def to_encoding(text: str, encoding: str) -> str:
@@ -96,6 +123,14 @@ def format_race(
                f"  ◎と1番人気: {'一致' if agree else '不一致'}"
                f" ※収集時のオッズ。発走前に最終オッズで再判定")
     out.append(f"レース内{spread_note(devs)}")
+
+    # **馬場の判定が反転したときの並び順を併記する。**
+    # 印の並びは「良か、良以外か」だけで決まる（`keiba/marks.py`）。馬場は
+    # 発走までに変わり、特にダートは乾いて回復するので朝の値が古くなりやすい
+    # （2026-09-12は生成後もダート4レースの馬場がずれていた）。
+    # 反転しても並びが変わらないなら何も出さない（変わる場合だけ知らせる）
+    if alt := alt_order_note(scores, baba, len(marked)):
+        out.append(alt)
 
     if marked and (skipped := marked[0].score.skipped_items):
         out.append(f"※ {'・'.join(skipped)}は採点対象外（満点{marked[0].score.max_base:.0f}点）")

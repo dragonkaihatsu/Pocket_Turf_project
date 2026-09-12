@@ -1,6 +1,7 @@
 """買い目をそのまま書き写せるテキスト様式のテスト。"""
 import sys
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -10,7 +11,7 @@ from keiba.expectation import Expectation
 from keiba.marks import assign_marks
 from keiba.models import Horse
 from keiba.scoring import score_race
-from keiba.textreport import format_day, format_race
+from keiba.textreport import alt_order_note, format_day, format_race
 
 
 def _field(n=8):
@@ -84,3 +85,56 @@ class TestTextReport(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAltOrderNote(unittest.TestCase):
+    """馬場の良/非良が反転したとき、買い目が変わるかを併記する。
+
+    馬場は発走までに変わる。特にダートは乾いて回復するので朝の値が古くなり
+    やすく、2026-09-12は生成後もダート4レースの馬場がずれていた。
+    `assign_marks` は良か否かだけを見るので、反転で並びが動きうる。
+
+    `HorseScore` の total_yoi / total_omoi は読み取り専用なので、
+    並びだけを決める最小のスタブで測る（assign_marks はこの3つしか使わない）。
+    """
+
+    class Stub:
+        def __init__(self, umaban: int, yoi: float, omoi: float):
+            self.horse = SimpleNamespace(umaban=umaban)
+            self.total_yoi = yoi
+            self.total_omoi = omoi
+
+    def scores(self, omoi: list[float]) -> list:
+        """良馬場スコアは 10,9,8,… 固定。重馬場スコアだけを差し替える。"""
+        return [self.Stub(i + 1, 10.0 - i, omoi[i]) for i in range(len(omoi))]
+
+    def test_並びが変わらなければ何も出さない(self):
+        same = [10.0 - i for i in range(10)]
+        self.assertIsNone(alt_order_note(self.scores(same), "良", 8))
+
+    def test_上位4頭の顔ぶれが同じなら買い目は変わらないと伝える(self):
+        # 3番手(馬番3)と4番手(馬番4)だけを入れ替える → 上位4頭の集合は同じ
+        omoi = [10.0 - i for i in range(10)]
+        omoi[2], omoi[3] = omoi[3], omoi[2]
+        note = alt_order_note(self.scores(omoi), "重", 8)
+        self.assertIsNotNone(note)
+        self.assertIn("買い目は変わらない", note)
+
+    def test_上位4頭が入れ替わるなら馬番を出して警告する(self):
+        # 重馬場スコアだけ4番手(馬番4)と5番手(馬番5)を入れ替える。
+        # いま重で採点しているので現在の上位4頭は 1-2-3-5、
+        # 対置する良の上位4頭は 1-2-3-4 → 集合が変わる
+        omoi = [10.0 - i for i in range(10)]
+        omoi[3], omoi[4] = omoi[4], omoi[3]
+        note = alt_order_note(self.scores(omoi), "重", 8)
+        self.assertIsNotNone(note)
+        self.assertIn("買い目が変わる", note)
+        self.assertIn("1-2-3-4", note)   # 対置する良の並びを出す
+
+    def test_反転先は良の裏返しになる(self):
+        omoi = [10.0 - i for i in range(10)]
+        omoi[3], omoi[4] = omoi[4], omoi[3]
+        # いま重馬場で採点しているなら、対置するのは良
+        self.assertIn("馬場が良", alt_order_note(self.scores(omoi), "稍重", 8))
+        # いま良で採点しているなら、対置するのは非良（稍重と表示する）
+        self.assertIn("馬場が稍重", alt_order_note(self.scores(omoi), "良", 8))

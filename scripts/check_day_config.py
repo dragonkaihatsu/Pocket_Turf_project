@@ -43,6 +43,23 @@
     python3 scripts/check_day_config.py --config config/2026-09-12_中央.json
 
 不一致があれば終了コード1を返すので、予想フローの手前に置ける。
+
+## 発走直前の馬場に更新する（--refresh --write）
+
+馬柱は朝に取るので、**ダートの馬場だけ系統的に古くなる**（乾いて回復する）。
+一覧ページは1ページしかないので発走前に取り直しても負荷が小さい。
+
+    python3 scripts/check_day_config.py --config <設定> --refresh --write
+
+`--refresh` は一覧ページだけをキャッシュを無視して取り直し、`--write` を
+付けると**開催区分ごとの馬場を設定JSONへ書き戻す**。芝ダ・距離は書き換えない
+（そこが違うなら読み取りの誤りであって、更新すべき値ではない）。
+
+**書き戻しは照合元が設定の生成元より新しいときだけ行う。** 実際にこの守りを
+入れる前、前日12:14に取ったキャッシュで書き戻して**古い値へ巻き戻した**
+（阪神芝 良→稍重、阪神ダ 稍重→重。確定値はどちらも良）。
+「時刻を出さない照合は古い値を正解として扱う」という同じ失敗をコードでも
+踏んだので、`--write` は必ず `--refresh` と併用し、かつ時刻を比べる。
 """
 from __future__ import annotations
 
@@ -139,11 +156,60 @@ def race_ids_for(cache: Path, date: str) -> dict[tuple[str, int], str]:
     return out
 
 
+def refresh_list_page(cache: Path, date: str) -> bool:
+    """一覧ページだけをキャッシュ無視で取り直す。1ページなので負荷は小さい。"""
+    try:
+        from keiba.collect import JRA_RACE_LIST_URL, Fetcher
+    except ImportError as e:
+        print(f"! 取得モジュールを読めない（{e}）。--refresh を無視する")
+        return False
+    key = date.replace("-", "")
+    fetcher = Fetcher(cache)
+    got = fetcher.get(JRA_RACE_LIST_URL.format(date=key), f"jra_list_{key}",
+                      refresh=True)
+    if got is None:
+        print("! 一覧ページを取り直せなかった。キャッシュの値で続ける")
+        return False
+    print(f"一覧ページを取り直した（{len(got):,}バイト）")
+    return True
+
+
+def newest_source_time(cache: Path, date: str) -> float:
+    """設定JSONの馬場の出どころ（その日の馬柱）のうち最も新しい取得時刻。"""
+    times = [p.stat().st_mtime for p in cache.glob("*_past.html")
+             if len(p.name.split("_")[0]) == 12
+             and p.name.startswith(date[:4])]
+    return max(times, default=0.0)
+
+
+def write_baba(path: Path, cfg: dict, list_baba: dict[tuple[str, str], str]) -> int:
+    """開催区分ごとの馬場を設定JSONへ書き戻す。芝ダ・距離は触らない。"""
+    changed = 0
+    for r in cfg["races"]:
+        key = (r["venue"], r["surface"][0])
+        new = list_baba.get(key)
+        if new and new != r["baba"]:
+            print(f"  {r['venue']}{r['race_no']:<6}馬場 {r['baba']} → {new}")
+            r["baba"] = new
+            changed += 1
+    if changed:
+        path.write_text(json.dumps(cfg, ensure_ascii=False, indent=1) + "\n",
+                        encoding="utf-8")
+        print(f"  {changed}レースの馬場を書き戻した → {path}")
+    else:
+        print("  更新の必要なし（設定と一覧ページが一致している）")
+    return changed
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--cache-dir", default="data/raw")
     ap.add_argument("--date", help="省略時は設定JSONの heading/title から拾う")
+    ap.add_argument("--refresh", action="store_true",
+                    help="一覧ページだけを取り直す（馬場は発走までに変わる）")
+    ap.add_argument("--write", action="store_true",
+                    help="--refresh と併用し、開催区分ごとの馬場を設定JSONへ書き戻す")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -159,6 +225,8 @@ def main() -> int:
         return 1
 
     cache = Path(args.cache_dir)
+    if args.refresh:
+        refresh_list_page(cache, date)
     list_path = cache / f"jra_list_{date.replace('-', '')}.html"
     list_baba: dict[tuple[str, str], str] = {}
     list_cond: dict[str, str] = {}
@@ -170,6 +238,24 @@ def main() -> int:
         print(f"! {list_path.name} が無い。一覧ページとの突き合わせは省略")
     ids = race_ids_for(cache, date)
     print()
+
+    if args.write:
+        src = newest_source_time(cache, date)
+        ref = list_path.stat().st_mtime if list_path.exists() else 0.0
+        if not list_baba:
+            print("! 一覧ページが読めないので書き戻さない\n")
+        elif ref <= src:
+            # ここを守らないと古い値へ巻き戻す。実際に一度やってしまった
+            print("■ 書き戻しを中止した（照合元が設定の生成元より古い）")
+            print(f"  一覧ページ {datetime.fromtimestamp(ref):%m/%d %H:%M}"
+                  f" ≦ 馬柱 {datetime.fromtimestamp(src):%m/%d %H:%M}")
+            print("  --refresh を付けて取り直してから --write する\n")
+        else:
+            print("■ 開催区分ごとの馬場を設定JSONへ書き戻す")
+            print(f"  一覧ページ {datetime.fromtimestamp(ref):%m/%d %H:%M}"
+                  f" > 馬柱 {datetime.fromtimestamp(src):%m/%d %H:%M} なので採用する")
+            write_baba(Path(args.config), cfg, list_baba)
+            print()
 
     problems = 0
     minor = 0
