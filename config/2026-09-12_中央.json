@@ -6,89 +6,89 @@
    "venue": "中山",
    "race_no": "9R",
    "name": "御宿特別(2勝クラス)",
+   "grade": "2勝クラス",
    "entries": "data/2026-09-12_中山09R_御宿特別(2勝クラス)_出走馬.csv",
    "kyori": 1600,
-   "surface": "ダ1600m",
-   "baba": "不良",
-   "post_time": "14:10",
-   "grade": "2勝クラス"
+   "surface": "芝1600m",
+   "baba": "重",
+   "post_time": "14:10"
   },
   {
    "venue": "中山",
    "race_no": "10R",
    "name": "レインボーS(3勝クラス)",
+   "grade": "3勝クラス",
    "entries": "data/2026-09-12_中山10R_レインボーS(3勝クラス)_出走馬.csv",
    "kyori": 2000,
-   "surface": "ダ2000m",
-   "baba": "不良",
-   "post_time": "14:50",
-   "grade": "3勝クラス"
+   "surface": "芝2000m",
+   "baba": "重",
+   "post_time": "14:50"
   },
   {
    "venue": "中山",
    "race_no": "11R",
    "name": "ラジオ日本賞(OP)",
+   "grade": "OP",
    "entries": "data/2026-09-12_中山11R_ラジオ日本賞(OP)_出走馬.csv",
    "kyori": 1200,
    "surface": "ダ1200m",
    "baba": "不良",
-   "post_time": "15:30",
-   "grade": "OP"
+   "post_time": "15:30"
   },
   {
    "venue": "中山",
    "race_no": "12R",
    "name": "3歳以上1勝クラス",
+   "grade": "1勝クラス",
    "entries": "data/2026-09-12_中山12R_3歳以上1勝クラス_出走馬.csv",
    "kyori": 1800,
    "surface": "ダ1800m",
    "baba": "不良",
-   "post_time": "16:10",
-   "grade": "3歳以上1勝クラス"
+   "post_time": "16:10"
   },
   {
    "venue": "阪神",
    "race_no": "9R",
    "name": "瀬戸内海特別(2勝クラス)",
+   "grade": "2勝クラス",
    "entries": "data/2026-09-12_阪神09R_瀬戸内海特別(2勝クラス)_出走馬.csv",
    "kyori": 1400,
-   "surface": "ダ1400m",
-   "baba": "重",
-   "post_time": "14:25",
-   "grade": "2勝クラス"
+   "surface": "芝1400m",
+   "baba": "良",
+   "post_time": "14:25"
   },
   {
    "venue": "阪神",
    "race_no": "10R",
    "name": "竹田城S(3勝クラス)",
+   "grade": "3勝クラス",
    "entries": "data/2026-09-12_阪神10R_竹田城S(3勝クラス)_出走馬.csv",
    "kyori": 1800,
    "surface": "ダ1800m",
-   "baba": "重",
-   "post_time": "15:05",
-   "grade": "3勝クラス"
+   "baba": "稍重",
+   "post_time": "15:05"
   },
   {
    "venue": "阪神",
    "race_no": "11R",
    "name": "チャレンジC(G3)",
+   "grade": "G3",
    "entries": "data/2026-09-12_阪神11R_チャレンジC(G3)_出走馬.csv",
    "kyori": 2000,
    "surface": "芝2000m",
-   "baba": "稍重",
-   "post_time": "15:45",
-   "grade": "G3"
+   "baba": "良",
+   "post_time": "15:45"
   },
   {
    "venue": "阪神",
    "race_no": "12R",
    "name": "3歳以上1勝クラス",
+   "grade": "1勝クラス",
    "entries": "data/2026-09-12_阪神12R_3歳以上1勝クラス_出走馬.csv",
    "kyori": 1200,
    "surface": "ダ1200m",
-   "baba": "重",
-   "post_time": "16:20",
-   "grade": "3歳以上1勝クラス"
+   "baba": "稍重",
+   "post_time": "16:30"
   }
  ]
 }
