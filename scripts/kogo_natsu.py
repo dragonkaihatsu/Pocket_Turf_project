@@ -39,7 +39,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.power import min_detectable_diff, wilson
-from keiba.racefiles import DEFAULT_RACES, result_paths
+from keiba.racefiles import (DEFAULT_RACES, parse_races, race_number,
+                             result_paths)
 
 DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})_")
 AUTUMN = (9, 10, 11, 12)
@@ -70,6 +71,7 @@ def load(directory: str, races: str, months: str | None = None
                 odds = None
             runs.append({
                 "race": Path(path).name, "date": d, "field": len(rows),
+                "R": race_number(Path(path).name),
                 "name": (r.get("馬名") or "").strip(),
                 "age": int(age.group(1)) if age else None,
                 "chaku": int(r["着順"]),
@@ -111,14 +113,26 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", default=DEFAULT_RACES)
+    ap.add_argument("--target-races", default=None,
+                    help="秋の評価対象にするレース番号。既定は --races と同じ。"
+                         "夏の勝ち鞍は --races から拾うので、`--races 1-12 "
+                         "--target-races 9-12` で「夏の勝ち鞍は平場まで見て、"
+                         "秋は9-12Rだけ評価する」になる")
     ap.add_argument("--months", default=None,
                     help="対象月。1-8Rの収集が途中のあいだ `--races 1-12` をそのまま渡すと「1-8Rが入っている数ヶ月」と「9-12Rだけの残り」が混ざるので、効果を測るときは期間を揃える（例 2025-01..2025-03）")
     args = ap.parse_args()
 
     runs, hist = load(args.dir, args.races, args.months)
-    autumn = [r for r in runs if r["date"].month in AUTUMN]
+    # 夏の勝ち鞍（hist）は全帯から拾い、秋の評価対象だけ帯で絞る。
+    # CLAUDE.md「秋の54%が判定できない側に落ちている」の原因は、平場で
+    # 勝ち上がった馬＝いちばん典型的な夏の上がり馬を見られないことだった
+    target = parse_races(args.target_races or args.races)
+    autumn = [r for r in runs if r["date"].month in AUTUMN
+              and (target is None or r["R"] in target)]
     for r in autumn:
         r["group"] = classify(hist, r)
+    print(f"夏の勝ち鞍は{args.races}R / 秋の評価は"
+          f"{args.target_races or args.races}R")
     print(f"収集 延べ{len(runs):,}出走 / 秋(9-12月) {len(autumn):,}出走"
           f" / {len(set(r['race'] for r in autumn)):,}レース")
     years = sorted({r["date"].year for r in autumn})
