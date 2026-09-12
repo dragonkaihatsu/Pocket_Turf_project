@@ -1,7 +1,12 @@
 """設定JSONの検算（開催区分ごと）を固定する。
 
-2026-09-12に「距離は全部正しく、馬場が4レース違い、全部ダートだった」という
-事故があった。危ないのは**良↔非良をまたぐ取り違えだけ**で、稍重/重/不良の
+2026-09-12の事故は2段あった:
+
+1. **手書き設定で芝ダートが4レース逆だった**（距離は全部合っていた）。
+   これが本体。「レインボーがダートで、ラジオ日本が芝」と取り違えていた
+2. 生成に切り替えたあとも**馬場が4レースずれていた**（全部ダート）
+
+馬場については、危ないのは**良↔非良をまたぐ取り違えだけ**で、稍重/重/不良の
 取り違えは印の並び順を変えない（`keiba/marks.py` は良か否かしか見ない）。
 この区別を緩めると、直す優先順位を取り違える。
 """
@@ -12,7 +17,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+from build_day_config import parse as parse_racedata
 from check_day_config import axis, parse_list_page, severity
+
+
+def parse_paren(paren: str) -> dict:
+    """`build_day_config.parse` に括弧だけを食わせるための小さな包み。"""
+    html = ('<div class="RaceData01">10:00発走 /<span> 芝1600m</span> '
+            f'{paren} / 天候:曇<span class="Item03">/ 馬場:良</span></div>')
+    return parse_racedata(html) or {}
 
 
 class TestAxis(unittest.TestCase):
@@ -47,6 +60,28 @@ class TestSeverity(unittest.TestCase):
         for a, b in (("不良", "重"), ("重", "稍重"), ("稍重", "不良")):
             v = severity("ダ1200m", a, "ダ1200m", b)
             self.assertTrue(v.startswith("軽微"), f"{a}→{b}: {v}")
+
+
+class TestCourseSymbolImpliesTurf(unittest.TestCase):
+    """コース記号(A/B/C/D)と内/外は芝にしか付かない。芝ダの裏づけになる。
+
+    `芝(B)` の (B) は **Bコース（柵の位置）であって馬場ではない**。
+    実データ: `芝1600m (右 外 B)` / `芝2000m (右 B)` / `ダ1200m (右)`
+    """
+
+    def test_芝には柵の記号が付く(self):
+        for paren, kui in (("(右 外 B)", "B"), ("(右 B)", "B"), ("(右 A)", "A")):
+            self.assertEqual(parse_paren(paren).get("kui"), kui, paren)
+
+    def test_ダートには柵の記号が付かない(self):
+        got = parse_paren("(右)")
+        self.assertNotIn("kui", got)
+        self.assertNotIn("inner_outer", got)
+        self.assertEqual(got.get("turn"), "右")
+
+    def test_内外も読む(self):
+        self.assertEqual(parse_paren("(右 外 B)").get("inner_outer"), "外")
+        self.assertEqual(parse_paren("(左 内 C)").get("inner_outer"), "内")
 
 
 class TestParseListPage(unittest.TestCase):

@@ -3,23 +3,31 @@
 
 ## なぜ開催区分ごとなのか（2026-09-12の反省）
 
-`scripts/build_day_config.py` で手書きをやめたあと、なお馬場が4レース間違って
-いた。**間違いは全部ダートだった**:
+**本体は芝ダートの取り違えだった。** 手書きの設定で、距離は全部合っていたのに
+芝ダだけが4レース逆になっていた:
 
-| レース | 確定（結果ページ） | 生成した設定 |
+| レース | 手書き | 正しい |
 |---|---|---|
-| 中山11R ダ | 重 | 不良 |
-| 中山12R ダ | 重 | 不良 |
-| 阪神10R ダ | 良 | 稍重 |
-| 阪神12R ダ | 良 | 稍重 |
+| 中山9R 御宿特別 1600m | ダ | **芝** |
+| 中山10R レインボーS 2000m | ダ | **芝** |
+| 中山11R ラジオ日本賞 1200m | 芝 | **ダ** |
+| 阪神9R 瀬戸内海特別 1400m | ダ | **芝** |
 
-芝4レースは全部合っていた。距離と芝ダも8レース全部合っていた。つまり
+本人の言葉:「距離は正しいのですが開催区分が芝、ダート別であったことです。
+朝、確認した時レインボーがダートで、ラジオ日本が、芝と取り違えられていました」。
+**距離が合っていると条件も合っている気になる**のが危ないところ。
 
-  **馬場状態は「競馬場 × 芝ダ」という開催区分ごとの値で、しかも日中に変わる。**
-  ダートは芝より乾きやすいので、朝に取った馬柱の値はダートだけ系統的に古くなる。
+だから検算は**芝ダートを最初に見る**。その上で馬場も開催区分ごとに見る
+（馬場は「競馬場 × 芝ダ」の値で、しかも日中に変わる。ダートは芝より乾きやすく
+朝の値はダートだけ系統的に古くなる。2026-09-12は生成後も馬場が4件ずれていた）。
 
-馬場は印の並び順を決める（良なら良馬場スコア、それ以外なら重馬場スコア）。
-稍重→良 の見落としは並び順の軸ごと変える。
+## 芝(B) は馬場ではなく「Bコース」
+
+一覧ページの `芝(B)：重` の (B) は**柵の位置**（Aが最も内、B以降は外へ移す）で、
+馬場状態は「：」の後ろの「重」だけ。馬柱側も `芝1600m (右 外 B)` と持っている。
+
+**コース記号(A/B/C/D)と内/外は芝にしか付かない**（`ダ1200m (右)`）。
+つまり記号の有無がそのまま芝ダの裏づけになる。
 
 ## 何と突き合わせるか
 
@@ -166,7 +174,29 @@ def main() -> int:
     problems = 0
     minor = 0
 
-    # 1) 開催区分（競馬場 × 芝ダ）ごとにまとめる
+    # 1) いちばん間違えたところから見る: 芝ダ・距離
+    print("■ 芝ダ・距離（2026-09-12に4レース取り違えた箇所）")
+    print(f"  {'レース':<10}{'設定':<12}{'一覧ページ':<12}{'コース記号':<12}{'判定'}")
+    for r in sorted(races, key=lambda r: (r["venue"], int(r["race_no"][:-1]))):
+        rid = ids.get((r["venue"], int(r["race_no"][:-1])))
+        ref = list_cond.get(rid or "", "—")
+        sym = " ".join(x for x in (r.get("turn", ""), r.get("inner_outer", ""),
+                                   r.get("kui", "")) if x) or "—"
+        notes = []
+        if ref != "—" and ref != r["surface"]:
+            notes.append(f"✗ 一覧ページは{ref}")
+            problems += 1
+        # コース記号は芝にしか付かない。有無が芝ダと食い違えば取り違えを疑う
+        has = bool(r.get("kui") or r.get("inner_outer"))
+        if r["surface"].startswith("芝") and not has:
+            notes.append("? 芝なのにコース記号が無い")
+        if r["surface"].startswith("ダ") and has:
+            notes.append("? ダなのにコース記号がある")
+        print(f"  {r['venue'] + r['race_no']:<10}{r['surface']:<12}{ref:<12}"
+              f"{sym:<12}{'・'.join(notes) or 'OK'}")
+    print()
+
+    # 2) 開催区分（競馬場 × 芝ダ）ごとの馬場
     print("■ 開催区分（競馬場 × 芝ダ）ごとの馬場")
     print(f"  {'開催区分':<12}{'R数':>4}  {'設定の馬場':<14}{'一覧ページ':<12}{'判定'}")
     groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -175,11 +205,9 @@ def main() -> int:
     for key in sorted(groups):
         rs = sorted(groups[key], key=lambda r: r.get("post_time") or "")
         seen = list(dict.fromkeys(r["baba"] for r in rs))
-        shown = " → ".join(seen)
         ref = list_baba.get(key, "—")
         notes = []
         if len(seen) > 1:
-            # 日中の変化なら乾く向き（または濡れる向き）に単調であるはず
             idx = [DRYING.index(b) for b in seen if b in DRYING]
             if not (idx == sorted(idx) or idx == sorted(idx, reverse=True)):
                 notes.append("変化が単調でない→読み間違いを疑う")
@@ -188,25 +216,9 @@ def main() -> int:
                 notes.append("日中に変化（時刻順）")
         if ref != "—" and ref not in seen:
             notes.append(f"一覧ページは{ref}")
-        print(f"  {key[0] + key[1]:<12}{len(rs):>4}  {shown:<14}{ref:<12}"
+        print(f"  {key[0] + key[1]:<12}{len(rs):>4}  {' → '.join(seen):<14}{ref:<12}"
               f"{'・'.join(notes) or 'OK'}")
     print()
-
-    # 2) レースごとに、芝ダ・距離を一覧ページと突き合わせる
-    if list_cond:
-        print("■ 芝ダ・距離の突き合わせ（設定 vs 一覧ページ）")
-        bad = []
-        for r in races:
-            rid = ids.get((r["venue"], int(r["race_no"][:-1])))
-            ref = list_cond.get(rid or "")
-            if ref and ref != r["surface"]:
-                bad.append((r, ref))
-        for r, ref in bad:
-            print(f"  ✗ {r['venue']}{r['race_no']} {r['name']}: "
-                  f"設定 {r['surface']} / 一覧 {ref}")
-            problems += 1
-        print(f"  {len(races) - len(bad)}/{len(races)}レース一致" if races else "  —")
-        print()
 
     # 3) 結果ページがあれば確定値と突き合わせる（レース後の検証）
     finals = []

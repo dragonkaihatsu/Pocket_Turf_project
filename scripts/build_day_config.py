@@ -50,9 +50,22 @@ def parse(html: str) -> dict | None:
         out["post_time"] = m.group(1)
     # 距離と芝ダ。**RaceData01 の中だけを見る**（ページ全体を検索すると
     # 過去走の表記を拾って別のレースの条件になる）
-    if m := re.search(r"<span>\s*(芝|ダ|障)\s*(\d{3,4})m\s*</span>", block):
+    # 括弧は span の外に出ている: `<span> 芝1600m</span> (右 外&nbsp;B)`
+    if m := re.search(r"<span>\s*(芝|ダ|障)\s*(\d{3,4})m\s*</span>\s*(\([^)]*\))?", block):
         out["surface"] = f"{SURFACE[m.group(1)]}{m.group(2)}m"
         out["kyori"] = int(m.group(2))
+        # 括弧の中は「(右 外 B)」のような回り・内外・柵の位置。
+        # **芝(B) は馬場ではなく Bコース**（内柵を外へ移した設定）である。
+        # そして **コース記号(A/B/C/D)と内/外は芝にしか付かない**:
+        #     芝1600m (右 外 B) / 芝2000m (右 B) / ダ1200m (右)
+        # つまり記号の有無が芝ダの独立した裏づけになる（`kui` を参照）。
+        paren = htmllib.unescape(m.group(3) or "")
+        if t := re.search(r"(右|左|直線)", paren):
+            out["turn"] = t.group(1)
+        if io := re.search(r"(内|外)", paren):
+            out["inner_outer"] = io.group(1)
+        if k := re.search(r"\b([A-D])\b", paren):
+            out["kui"] = k.group(1)          # 柵の位置。Aが最も内、B以降は外へ
     if m := re.search(r"天候:\s*([^<\s]+)", block):
         out["weather"] = m.group(1)
     if m := re.search(r"馬場:\s*([^<\s]+)", block):
@@ -124,6 +137,10 @@ def main() -> None:
             "kyori": info["kyori"], "surface": info["surface"],
             "baba": info.get("baba", "良"),
             "post_time": info.get("post_time", ""),
+            # 回り・内外・柵の位置。スコアには入れていない（表示と検算のみ）
+            "turn": info.get("turn", ""),
+            "inner_outer": info.get("inner_outer", ""),
+            "kui": info.get("kui", ""),
         })
 
     races.sort(key=lambda r: (r["venue"], int(r["race_no"][:-1])))
@@ -135,10 +152,12 @@ def main() -> None:
     Path(args.out).write_text(json.dumps(cfg, ensure_ascii=False, indent=1) + "\n",
                               encoding="utf-8")
     print(f"{len(races)}レース → {args.out}\n")
-    print(f"{'レース':<10}{'レース名':<22}{'条件':<10}{'馬場':<6}{'発走':<7}{'格'}")
+    print(f"{'レース':<10}{'レース名':<22}{'芝ダ':<5}{'距離':>6}  {'コース':<10}"
+          f"{'馬場':<6}{'発走':<7}{'格'}")
     for r in races:
-        print(f"{r['venue'] + r['race_no']:<10}{r['name']:<22}{r['surface']:<10}"
-              f"{r['baba']:<6}{r['post_time']:<7}{r['grade']}")
+        course = " ".join(x for x in (r["turn"], r["inner_outer"], r["kui"]) if x)
+        print(f"{r['venue'] + r['race_no']:<10}{r['name']:<22}{r['surface'][0]:<5}"
+              f"{r['kyori']:>6}  {course:<10}{r['baba']:<6}{r['post_time']:<7}{r['grade']}")
 
     # **開催区分（競馬場 × 芝ダ）ごとにまとめて見せる**。馬場はこの単位の値で
     # あり、同じ競馬場でも芝とダで別。2026-09-12は馬場を4レース間違えたが、
@@ -153,7 +172,14 @@ def main() -> None:
         babas = " → ".join(dict.fromkeys(r["baba"] for r in rs))
         kyori = " ".join(f"{r['kyori']}" for r in rs)
         print(f"  {key[0] + key[1]:<12}{len(rs):>4}  {babas:<14}{kyori}")
-    print("\n次に必ず検算する（芝ダ・距離を一覧ページと、馬場を開催区分ごとに照合）:")
+    # 芝にコース記号が無い／ダに有るのは、芝ダの取り違えの兆候
+    for r in races:
+        sym = r["kui"] or r["inner_outer"]
+        if r["surface"].startswith("芝") and not sym and r["kyori"] >= 1000:
+            print(f"  ? {r['venue']}{r['race_no']} は芝なのにコース記号が無い")
+        if r["surface"].startswith("ダ") and sym:
+            print(f"  ? {r['venue']}{r['race_no']} はダなのにコース記号 {sym} がある")
+    print("\n次に必ず検算する（まず芝ダ・距離、次に開催区分ごとの馬場）:")
     print(f"  python3 scripts/check_day_config.py --config {args.out}")
 
 
