@@ -140,6 +140,22 @@ def main() -> None:
         print(f"{r['venue'] + r['race_no']:<10}{r['name']:<22}{r['surface']:<10}"
               f"{r['baba']:<6}{r['post_time']:<7}{r['grade']}")
 
+    # **開催区分（競馬場 × 芝ダ）ごとにまとめて見せる**。馬場はこの単位の値で
+    # あり、同じ競馬場でも芝とダで別。2026-09-12は馬場を4レース間違えたが、
+    # 全部ダートだった（朝の値のまま日中の回復を拾えていなかった）
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for r in races:
+        groups.setdefault((r["venue"], r["surface"][0]), []).append(r)
+    print(f"\n開催区分ごとの馬場（この単位で確認する）")
+    print(f"  {'開催区分':<12}{'R数':>4}  {'馬場':<14}{'距離'}")
+    for key in sorted(groups):
+        rs = sorted(groups[key], key=lambda r: r.get("post_time") or "")
+        babas = " → ".join(dict.fromkeys(r["baba"] for r in rs))
+        kyori = " ".join(f"{r['kyori']}" for r in rs)
+        print(f"  {key[0] + key[1]:<12}{len(rs):>4}  {babas:<14}{kyori}")
+    print("\n次に必ず検算する（芝ダ・距離を一覧ページと、馬場を開催区分ごとに照合）:")
+    print(f"  python3 scripts/check_day_config.py --config {args.out}")
+
 
 if __name__ == "__main__":
     main()
