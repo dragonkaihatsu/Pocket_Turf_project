@@ -301,3 +301,110 @@ for lab, f_band in BANDS:
             b = sum(1 for c in base if c['chaku'] <= 3) / len(base)
             line += f"{len(rows):>8}{r:>8.1%}{(r - b) * 100:>+7.1f}p"
         print(line)
+
+print("=" * 78)
+print("【5】妙味は時系列で薄れているか（新規装着が画面に表示され始めた影響）\n")
+print("netkeibaなどで『ブリンカー新規＝赤いB』として表示されるようになると、")
+print("本来は2枚の馬柱を突き合わせないと見えなかった情報が表面化する。")
+print("新規装着の優位は確率ではなく価格のズレだったので、表面化すれば消える。\n")
+
+
+def half(d: str) -> str:
+    y, m = d[:4], int(d[5:7])
+    return f"{y}H1" if m <= 6 else f"{y}H2"
+
+
+def quarter(d: str) -> str:
+    y, m = d[:4], int(d[5:7])
+    return f"{y}Q{(m - 1) // 3 + 1}"
+
+for keyf, label in ((half, '半年'), (quarter, '四半期')):
+    buckets = sorted({keyf(c['date']) for p, c in known})
+    print(f"── {label}ごと（新規装着）")
+    print(f"{'期間':<10}{'n':>6}{'複勝率':>8}{'複回収':>8}{'複的中':>7}"
+          f"{'単回収':>8}{'勝利':>6}   {'対照 複勝率':>11}{'対照 複回収':>11}")
+    for b in buckets:
+        rows = [c for p, c in known
+                if keyf(c['date']) == b and trans(p, c) == '新規装着']
+        base = [c for p, c in known
+                if keyf(c['date']) == b and trans(p, c) == 'なし']
+        a, bb = agg(rows), agg(base)
+        if not a or not bb:
+            continue
+        mark = '' if a['plc_hits'] >= 10 else '*'
+        print(f"{b:<10}{a['n']:>6}{a['plc']:>8.1%}{a['fuku']:>8.0%}"
+              f"{str(a['plc_hits']) + mark:>7}{a['tan']:>8.0%}{a['wins']:>6}"
+              f"   {bb['plc']:>11.1%}{bb['fuku']:>11.0%}")
+    print("  * = 複勝の的中が10本未満\n")
+
+print("── 参考: 新規装着の『頭数シェア』が増えていないか")
+print("（狙う人が増えたというより、装着自体が流行っていないかの確認）")
+print(f"{'期間':<10}{'全ペア':>8}{'新規装着':>9}{'シェア':>8}"
+      f"{'継続':>7}{'解除':>7}")
+for b in sorted({half(c['date']) for p, c in known}):
+    tot = [(p, c) for p, c in known if half(c['date']) == b]
+    n_new = sum(1 for p, c in tot if trans(p, c) == '新規装着')
+    n_con = sum(1 for p, c in tot if trans(p, c) == '継続装着')
+    n_off = sum(1 for p, c in tot if trans(p, c) == '解除')
+    print(f"{b:<10}{len(tot):>8,}{n_new:>9}{n_new / len(tot):>8.1%}"
+          f"{n_con:>7}{n_off:>7}")
+
+print("=" * 78)
+print("【6】信頼区間で見る（傾向があるのか、ただのばらつきなのか）\n")
+
+
+def wilson(k: int, n: int) -> tuple[float, float]:
+    """複勝率の95%信頼区間（Wilson）。母数が薄い区分の判断に使う。"""
+    if n == 0:
+        return (0.0, 0.0)
+    z = 1.96
+    ph = k / n
+    d = 1 + z * z / n
+    c = ph + z * z / (2 * n)
+    m = z * ((ph * (1 - ph) / n + z * z / (4 * n * n)) ** 0.5)
+    return ((c - m) / d, (c + m) / d)
+
+
+def ci_line(lab: str, rows: list) -> str:
+    a = agg(rows)
+    if not a:
+        return f"{lab:<34}{0:>6}"
+    lo, hi = wilson(a['plc_hits'], a['n'])
+    return (f"{lab:<34}{a['n']:>6,}{a['plc']:>8.1%}"
+            f"  [{lo:>5.1%}-{hi:>5.1%}]{a['plc_hits']:>7}")
+
+
+print(f"{'区分':<34}{'n':>6}{'複勝率':>8}{'  95%CI':>16}{'複的中':>7}")
+for lab, f_sub in SUBS:
+    print(ci_line(lab, [c for p, c in known if f_sub(p, c)]))
+print()
+print("── 新規装着の複勝率は、対照の区間と重なるか")
+newb = [c for p, c in known if trans(p, c) == '新規装着']
+ctrl = [c for p, c in known if trans(p, c) == 'なし']
+an, ac = agg(newb), agg(ctrl)
+ln, hn = wilson(an['plc_hits'], an['n'])
+lc, hc = wilson(ac['plc_hits'], ac['n'])
+print(f"  新規装着 {an['plc']:.1%} [{ln:.1%}-{hn:.1%}]  n={an['n']}")
+print(f"  対照     {ac['plc']:.1%} [{lc:.1%}-{hc:.1%}]  n={ac['n']:,}")
+print(f"  → 対照の点推定 {ac['plc']:.1%} は新規装着の区間に"
+      f"{'含まれる（差を主張できない）' if ln <= ac['plc'] <= hn else '含まれない'}")
+print()
+
+print("── 頑健な側（解除・継続装着×人気馬）も薄れていないか")
+print(f"{'期間':<10}{'解除 n':>8}{'複勝率':>8}{'複回収':>8}"
+      f"   {'継続×1-3人気 n':>15}{'複勝率':>8}{'リフト':>8}")
+for b in sorted({half(c['date']) for p, c in known}):
+    off = [c for p, c in known if half(c['date']) == b and trans(p, c) == '解除']
+    fav_con = [c for p, c in known if half(c['date']) == b
+               and trans(p, c) == '継続装着' and c['ninki'] and c['ninki'] <= 3]
+    fav_all = [c for p, c in known if half(c['date']) == b
+               and c['ninki'] and c['ninki'] <= 3]
+    a1 = agg(off)
+    line = f"{b:<10}"
+    line += (f"{a1['n']:>8}{a1['plc']:>8.1%}{a1['fuku']:>8.0%}" if a1
+             else f"{0:>8}{'—':>8}{'—':>8}")
+    if fav_con and fav_all:
+        r = sum(1 for c in fav_con if c['chaku'] <= 3) / len(fav_con)
+        bb = sum(1 for c in fav_all if c['chaku'] <= 3) / len(fav_all)
+        line += f"   {len(fav_con):>15}{r:>8.1%}{(r - bb) * 100:>+7.1f}p"
+    print(line)
