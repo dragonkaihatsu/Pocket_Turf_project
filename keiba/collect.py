@@ -366,7 +366,7 @@ ENTRY_COLUMNS = [
     "馬番", "枠番", "馬名", "性齢", "騎手", "厩舎", "脚質", "単勝オッズ", "人気",
     "前走着順", "前走レース名", "上がり3F", "馬体重",
     "前走開催場", "前走間隔日数", "間隔表記", "転入初戦", "長期休養明け", "直近3走JRA数",
-    "血統父", "血統母父", "調教評価",
+    "血統父", "血統母父", "調教評価", "ブリンカー",
 ]
 
 KYAKUSHITSU = {"逃": "逃げ", "先": "先行", "差": "差し", "追": "追込"}
@@ -408,6 +408,15 @@ def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
                          ("血統母父", "Horse04"), ("厩舎", "Horse05")):
             if m := re.search(rf'<(dt|div) class="{cls}[^"]*">(.*?)</\1>', row, re.S):
                 h[key] = _text(m.group(2)).strip("()")
+        # ブリンカー着用馬は馬名の末尾に「 B」が付く。**馬名から外す**。
+        # 馬名は結果CSV・馬別戦績との突き合わせキーであり、結果ページ側には
+        # この記号が付かない。付いたままだと keiba/scoring.py の
+        # records.get(horse.name) が空を返し、**B着用馬だけコース適性・
+        # 距離適性が静かに中立値へ落ちる**（収集済みデータで4,022行が該当）。
+        # 情報自体は捨てず別列に残す（着用/非着用は実際に成績へ効く要素）
+        if (name := h.get("馬名")) and name.endswith(" B"):
+            h["馬名"] = name[:-2].strip()
+            h["ブリンカー"] = "B"
         if m := re.search(r'<(dt|div) class="Horse06[^"]*">(.*?)</\1>', row, re.S):
             body = m.group(2)
             k = (re.search(r'<div class="Type[^"]*"><span>(.*?)</span>', body)

@@ -145,7 +145,9 @@ def cmd_text(args) -> None:
         title = f"{r.get('venue', '')}{r['race_no']} {r['name']}"
         blocks.append(format_race(title, r.get("surface", ""), r.get("post_time", ""),
                                   marked, scores, plan, exp,
-                                  baba=r.get("baba", "良")))
+                                  baba=r.get("baba", "良"),
+                                  records=records, venue=r.get("venue"),
+                                  as_of=args.race_date))
     text = format_day(blocks, cfg.get("heading", "予想"))
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

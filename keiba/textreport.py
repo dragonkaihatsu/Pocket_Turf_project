@@ -16,6 +16,7 @@ from .marks import MarkedHorse
 from .scoring import HorseScore
 from .single import best_single
 from .tanpuku import best_tanpuku
+from .tekisei import trait_records
 
 RULE = "━" * 46
 
@@ -66,6 +67,9 @@ def format_race(
     exp: Expectation | None = None,
     n_show: int = 8,
     baba: str = "良",
+    records: dict[str, list[dict]] | None = None,
+    venue: str | None = None,
+    as_of: str | None = None,
 ) -> str:
     """1レース分をテキストにする。
 
@@ -129,6 +133,29 @@ def format_race(
         out.append("  参考(印なし): " + " ".join(
             f"{s.horse.umaban}{s.horse.name}(偏差{devs.get(s.horse.umaban, 50):.0f})"
             for s in rest[:5]))
+
+    if records and venue:
+        # コース特性ごとの適性。**点数には入れていない**（scripts/course_traits.py
+        # の独立検証で判別力が確認できなかったため）。母数と対比を出して
+        # 買う人が判断できる形にする第1段階
+        lines = []
+        for i, m in enumerate(marked[:n_show], start=1):
+            h = m.score.horse
+            recs = trait_records(records.get(h.name, []), venue,
+                                 "芝" if surface.startswith("芝") else "ダート",
+                                 as_of)
+            notable = [r for r in recs if r.tag in ("得意", "苦手")]
+            if not notable:
+                continue
+            lines.append(f"  {i:>2} {m.mark} {h.umaban:>2} {h.name:<14}" +
+                         "  ".join(f"{r.axis}={r.tag}({r.diff:+.0%} "
+                                   f"{r.n_match}走複{r.rate_match:.0%}"
+                                   f"→他{r.n_other}走複{r.rate_other:.0%})"
+                                   for r in notable[:2]))
+        if lines:
+            out.append("")
+            out.append("【コース特性】全キャリアから。その馬の中での対比（点数には未反映）")
+            out.extend(lines)
 
     out.append("")
     out.append("【候補】スコア順に並べた馬番")
