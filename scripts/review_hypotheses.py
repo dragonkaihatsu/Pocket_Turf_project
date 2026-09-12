@@ -20,6 +20,21 @@ CLAUDE.md「主指標は同一人気帯内の正解率リフト」に合わせ�
 これまで一度も期間をまたいで再現していないため、判定には使わない
 （参考として表示する）。
 
+## 履歴と「今走」は分ける（`--target-races`・2026-09-12）
+
+`--races 1-12` をそのまま渡すと、**今走が1-8R（下級条件）のペアも母集団に
+入る**。前走ペアは14,542組→22,939組に増えるが、増えた分の多くは
+「下級条件の馬が下級条件を走った」ペアで、9-12Rを予想するための集計とは
+母集団が違う。特に減量騎手は1-8Rに3.7倍密に乗っているので影響が大きい。
+
+そこで**前走（履歴）は `--races`、今走は `--target-races`** で分ける:
+
+    # 前走が平場のペアも拾いつつ、今走は9-12Rだけ
+    python3 scripts/review_hypotheses.py --races 1-12 --target-races 9-12
+
+CLAUDE.md「前走の47.6%が平場にある（今の収集では前走が見つからない）」が
+狙っていたのはこの形である。既定は `--races` と同じ（従来の挙動）。
+
 ## 期間の再現も見る
 
 差ありと出た区分は、2025年と2026年で符号が一致するかも確認する。
@@ -29,6 +44,7 @@ CLAUDE.md「主指標は同一人気帯内の正解率リフト」に合わせ�
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import re
 import sys
@@ -39,7 +55,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.power import HEADER, judge
-from keiba.racefiles import result_paths
+from keiba.scoring import tier1_min_rides
+from keiba.racefiles import (DEFAULT_RACES, parse_races, race_number,
+                             result_paths)
 
 STAKE = 100
 DATE_RE = re.compile(r'.*/(\d{4}-\d{2}-\d{2})_')
@@ -62,18 +80,36 @@ def parse_corner(s: str, n: int):
     return out
 
 
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dir", default="data/collected_jra")
+    ap.add_argument("--races", default=DEFAULT_RACES)
+    ap.add_argument("--target-races", default=None,
+                    help="「今走」のレース番号。既定は --races と同じ。"
+                         "前走は --races から拾うので、`--races 1-12 "
+                         "--target-races 9-12` で「前走が平場のペアも使い、"
+                         "今走は9-12Rだけ」になる")
+    ap.add_argument("--months", default=None,
+                    help="対象月。1-8Rの収集が途中のあいだ `--races 1-12` をそのまま渡すと「1-8Rが入っている数ヶ月」と「9-12Rだけの残り」が混ざるので、効果を測るときは期間を揃える（例 2025-01..2025-03）")
+    return ap.parse_args()
+
+
+ARGS = parse_args()
+
+
 def load() -> list[dict]:
     by_horse: dict[str, list[dict]] = defaultdict(list)
     # 騎手ごとの騎乗数（ティア判定用）。材料と検証を分けず全期間で数えるが、
     # ティアは「一軍かどうか」という粗い区分なので後知恵の影響は小さい
     rides: dict[str, int] = defaultdict(int)
 
-    files = result_paths('data/collected_jra')
+    files = result_paths(ARGS.dir, ARGS.races, ARGS.months)
     for f in files:
         m = DATE_RE.match(f)
         if not m:
             continue
         d = m.group(1)
+        rno = race_number(f)
         pay_t, pay_f = {}, {}
         try:
             for p in csv.DictReader(open(f.replace('_結果.csv', '_配当.csv'),
@@ -136,7 +172,8 @@ def load() -> list[dict]:
             rides[jk] += 1
             e = ent.get(nm, {})
             by_horse[nm].append({
-                'date': d, 'chaku': int(r['着順']), 'field': len(rows),
+                'date': d, 'R': rno,
+                'chaku': int(r['着順']), 'field': len(rows),
                 'ninki': int(nk) if nk.isdigit() else None,
                 'jockey': jk,
                 'agari_rank': agari_rank.get(ub), 'pos4': pos4.get(int(ub)),
@@ -156,11 +193,15 @@ def to_o(s: str) -> int:
 
 
 by_horse, rides = load()
+TARGET = parse_races(ARGS.target_races or ARGS.races)
 pairs = []
 for nm, lst in by_horse.items():
     for i in range(1, len(lst)):
         cur = lst[i]
         if cur['interval'] is None:
+            continue
+        # 前走（履歴）は全帯から拾うが、「今走」は対象帯だけ
+        if TARGET is not None and cur['R'] not in TARGET:
             continue
         t = to_o(cur['date']) - cur['interval']
         for cand in lst[:i][::-1]:
@@ -169,11 +210,23 @@ for nm, lst in by_horse.items():
                 break
 
 runs = [r for lst in by_horse.values() for r in lst]
-print(f"中央9-12R: {len(runs):,}出走 / 前走ペア {len(pairs):,}組 / "
+print(f"中央 履歴{ARGS.races}R: {len(runs):,}出走 / "
+      f"今走{ARGS.target_races or ARGS.races}R の前走ペア {len(pairs):,}組 / "
       f"騎手 {len(rides):,}人\n")
 
-TIER1 = {j for j, n in rides.items() if n >= 400}      # 一軍（400騎乗超）
-TINY = {j for j, n in rides.items() if n < 50}         # 極少騎乗
+# 一軍の判定は **keiba.scoring と同じ関数**を通す。ここに `n >= 400` と
+# 書いていたため、1-8Rの収集で延べ騎乗が増えたときに検証側の一軍だけが
+# 15人→32人に膨らみ、「前走二桁×一軍へ乗り替わり」の複勝率が
+# 16.9%→13.6%に薄まった（人数を固定すると16.2%で再現する）。
+# 閾値を2か所に書くと、実装と検証が静かにずれる
+TIER1_CUT = tier1_min_rides({"騎手": {j: {"n": n} for j, n in rides.items()}})
+TIER1 = {j for j, n in rides.items() if n >= TIER1_CUT}
+# 極少騎乗の下限も**騎乗数の比**で決める。生の50騎乗のままだと、収集が
+# 増えるほど「極少」に該当する騎手が減っていく
+TINY_CUT = max(1, round(50 * sum(rides.values()) / 25877))
+TINY = {j for j, n in rides.items() if n < TINY_CUT}
+print(f"一軍 {len(TIER1)}人（{TIER1_CUT:,}騎乗以上）/ "
+      f"極少騎乗 {len(TINY)}人（{TINY_CUT:,}騎乗未満）\n")
 
 
 def place(rows) -> tuple[int, int]:

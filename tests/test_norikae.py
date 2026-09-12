@@ -229,3 +229,58 @@ class TestNameVariants(unittest.TestCase):
         it = correction_norikae(horse("菊沢", 14), records("小林美"),
                                 "2026-09-12", self.SPLIT)
         self.assertEqual(it.points, NORIKAE_KAKUAGE_POINTS)
+
+
+class TestTier1DefinitionDoesNotLoosen(unittest.TestCase):
+    """一軍の定義が収集量で緩まないことを固定する（2026-09-12）。
+
+    `n >= 400` という生の騎乗数だけで切っていたため、1-8Rの収集で
+    延べ騎乗が1.5倍になったところ一軍が15人→32人に増え、
+    「前走二桁×一軍へ乗り替わり」の複勝率が16.9%→13.6%に薄まった。
+    人数を固定して測ると16.2%で再現したので、効果が消えたのではなく
+    **定義が緩んだ**だけだった。NORIKAE_KAKUAGE_POINTS はこの複勝率から
+    校正しているため、緩むと補正の校正が静かに崩れる。
+    """
+
+    @staticmethod
+    def roster(n_jockeys: int, scale: int = 1) -> dict:
+        """騎乗数が等差で並ぶ騎手表。scale はコーパスの大きさ倍率。"""
+        return {"騎手": {f"騎手{i:03d}": {"n": (n_jockeys - i) * 40 * scale,
+                                        "複勝率": 0.22, "勝率": 0.07,
+                                        "単勝回収率": 0.8}
+                         for i in range(n_jockeys)}}
+
+    def tier_size(self, ratings: dict) -> int:
+        from keiba.scoring import is_tier1_jockey
+        return sum(1 for name in ratings["騎手"]
+                   if is_tier1_jockey(name, ratings))
+
+    def test_corpus_growth_does_not_expand_the_tier(self):
+        """コーパスが3倍になっても一軍の人数は増えない。"""
+        base = self.tier_size(self.roster(300))
+        for scale in (2, 3, 5):
+            self.assertEqual(
+                self.tier_size(self.roster(300, scale)), base,
+                f"コーパス{scale}倍で一軍の人数が変わった"
+                "（生の騎乗数で切ると緩む）")
+
+    def test_tier_size_is_capped_at_topn(self):
+        from keiba.scoring import JOCKEY_TIER1_TOPN
+        self.assertLessEqual(self.tier_size(self.roster(300, 10)),
+                             JOCKEY_TIER1_TOPN)
+
+    def test_thin_corpus_names_nobody(self):
+        """騎乗数が全員少ない薄いコーパスでは誰も一軍にしない。
+
+        順位だけで決めると、母数が無いのに上位16人が一軍になってしまう。
+        騎乗数の下限（JOCKEY_TIER1_RIDES）がそれを防ぐ。
+        """
+        thin = {"騎手": {f"騎手{i}": {"n": 30, "複勝率": 0.2}
+                         for i in range(100)}}
+        self.assertEqual(self.tier_size(thin), 0)
+
+    def test_top_jockeys_are_still_tier1(self):
+        from keiba.scoring import is_tier1_jockey
+        r = self.roster(300)
+        self.assertTrue(is_tier1_jockey("騎手000", r))    # 最多騎乗
+        self.assertFalse(is_tier1_jockey("騎手299", r))   # 最少騎乗

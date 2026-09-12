@@ -54,9 +54,31 @@ def load_ratings(path: Path | str | None = None) -> dict:
         return {}
 
 
-# 一軍騎手とみなす騎乗数（ratings.json の n）。scripts/review_hypotheses.py の
-# 検証と同じ基準にそろえる。名前の列挙ではなく実測の騎乗数で決めるのは、
-# リストの更新漏れで静かに古い評価になるのを避けるため
+# 一軍騎手の判定。名前の列挙ではなく実測の騎乗数で決めるのは、リストの
+# 更新漏れで静かに古い評価になるのを避けるため。
+#
+# ## 生の騎乗数だけで切ってはいけない（2026-09-12に判明）
+#
+# 当初は `n >= 400` だけで判定していた。**この閾値は収集量が増えると
+# 静かに緩む**。1-8Rの収集で延べ騎乗が25,877→38,575に増えたところ、
+# 400騎乗以上の騎手が**15人→32人**になり、同じ「一軍」という言葉が
+# 別の集団を指すようになった。その結果:
+#
+#   前走二桁 × 一軍へ乗り替わりの複勝率
+#     9-12R（一軍15人）              16.9%  → 前走6-9着(17.2%)相当
+#     1-12R・n>=400（一軍32人）      13.6%  → 前走10着以下(11.8%)相当
+#     1-12R・上位15人に固定           16.2%  ← 効果は再現していた
+#     1-12R・上位16人に固定           16.4%
+#
+# つまり効果が消えたのではなく、**定義が緩んで薄まっただけ**だった。
+# NORIKAE_KAKUAGE_POINTS はこの複勝率から校正しているので、放置すると
+# 収集が進むほど「該当が増えて効果が薄い補正」に化けていく。
+#
+# そこで**人数（順位）で決める**。上位 JOCKEY_TIER1_TOPN 人、かつ
+# JOCKEY_TIER1_RIDES 騎乗以上の両方を満たす騎手だけを一軍とする。
+# 順位が収集量への不変性を、騎乗数の下限が「薄いコーパスで誰かを
+# 一軍と呼んでしまう」ことを防ぐ（測れないなら補正しない側に倒れる）。
+JOCKEY_TIER1_TOPN = 16
 JOCKEY_TIER1_RIDES = 400
 
 # 前走二桁着順の馬が一軍騎手に乗り替わったときに、前走内容へ足す点数。
@@ -438,16 +460,49 @@ def same_jockey(a: str, b: str) -> bool:
     return a == b or a.startswith(b) or b.startswith(a)
 
 
+_TIER1_CUT_CACHE: dict[tuple[int, int], int] = {}
+
+
+def tier1_min_rides(ratings: dict | None = None) -> int:
+    """一軍とみなす騎乗数の下限を、その表の中の**順位**から決める。
+
+    上位 `JOCKEY_TIER1_TOPN` 人目の騎乗数と `JOCKEY_TIER1_RIDES` の
+    大きいほうを返す。収集量が増えて全体の騎乗数が膨らんでも、一軍の
+    人数は増えない（上の解説を参照）。同数の騎手が並ぶと16人を少し
+    超えることはあるが、境界の扱いとして許容する。
+    """
+    table = (ratings if ratings is not None else load_ratings()).get("騎手", {})
+    # キーは**中身**から作る。最初 `id(table)` を混ぜたところ、別の表が
+    # 同じidを再利用して（前の表がGCされた後）古い閾値を返した。
+    # 人数と延べ騎乗が一致する表は実質同じ表なので、これで十分に区別できる
+    counts = [r.get("n", 0) for r in table.values()
+              if isinstance(r, dict) and r.get("n", 0) > 0]
+    key = (len(counts), sum(counts))
+    hit = _TIER1_CUT_CACHE.get(key)
+    if hit is not None:
+        return hit
+    ns = sorted(counts, reverse=True)
+    cut = ns[min(JOCKEY_TIER1_TOPN, len(ns)) - 1] if ns else 0
+    val = max(cut, JOCKEY_TIER1_RIDES)
+    if len(_TIER1_CUT_CACHE) > 64:
+        _TIER1_CUT_CACHE.clear()
+    _TIER1_CUT_CACHE[key] = val
+    return val
+
+
 def is_tier1_jockey(name: str, ratings: dict | None = None) -> bool:
     """実測の騎乗数から一軍騎手かどうかを判定する。
 
     同一性の解決は `_lookup` に任せる（入れ子の表記ゆれは畳み、別人の
     可能性がある兄弟関係は引かない）。名前が確定できなければ False に
     なるので、**曖昧な名前では加点しない**側に倒れる。
+
+    閾値は `tier1_min_rides` が表から決める。固定の騎乗数ではないのは、
+    収集量が増えると該当者が増えて定義が緩むため。
     """
-    rec = _lookup((ratings if ratings is not None
-                   else load_ratings()).get("騎手", {}), name) if name else None
-    return bool(rec and rec.get("n", 0) >= JOCKEY_TIER1_RIDES)
+    table = (ratings if ratings is not None else load_ratings())
+    rec = _lookup(table.get("騎手", {}), name) if name else None
+    return bool(rec and rec.get("n", 0) >= tier1_min_rides(table))
 
 
 def zenso_jockey(records: dict[str, list[dict]] | None, horse: Horse,

@@ -17,6 +17,23 @@
 情報漏れ対策: ある馬のある出走を評価するとき、**その出走より前の日付の
 走りだけ**を使う。同じ日の他レースも使わない。
 
+## 履歴と測定対象は分ける（`--target-races`・2026-09-12）
+
+`--races 1-12` にすると出走は25,877→37,884（+46%）に増えるのに、
+**母数表の割合も過去走の中央値も動かなかった**（一致率52.7%→52.5%、
+中央値3走→3走）。1-8Rは走りを足すだけでなく**1-8Rにしか出ていない馬**も
+連れてくるので、履歴の浅い出走が分母に入って効果を打ち消していた。
+
+知りたいのは「予想対象（9-12R）の出走で、履歴がどれだけ深くなったか」。
+そこで**履歴は `--races`、測定対象は `--target-races`** で別に指定する:
+
+    # 履歴は1-12R、測るのは9-12Rの出走だけ
+    python3 scripts/course_traits.py --races 1-12 --target-races 9-12
+
+これで2026年の9-12R出走について、過去走の中央値は3走→5走、
+「2走以上ある」割合は70.4%→78.2%に上がることが確認できた。
+既定は `--races` と同じ（従来どおりの挙動）。
+
     python3 scripts/course_traits.py --dir data/collected_jra \
         --race-info data/profiles/jra/race_info.csv
 """
@@ -32,7 +49,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.courses import COURSES, traits
-from keiba.racefiles import DEFAULT_RACES, parse_races, race_number as rno
+from keiba.racefiles import DEFAULT_RACES, parse_races, result_files
 
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
 VENUE_RE = re.compile(r"_(\D+?)(\d{2})R_")
@@ -57,17 +74,20 @@ def load_race_info(path: Path) -> dict[str, dict]:
     return out
 
 
-def load_runs(d: Path, info: dict[str, dict], races: range | None) -> list[dict]:
-    """全出走を1行ずつ返す（馬名・日付・場・馬場種別・着順・人気）。"""
+def load_runs(d: Path, info: dict[str, dict], races: str | None,
+              months: str | None = None) -> list[dict]:
+    """全出走を1行ずつ返す（馬名・日付・場・馬場種別・着順・人気）。
+
+    レース番号・期間の絞り込みは `keiba.racefiles` に任せる（CLAUDE.md
+    「新しく集計スクリプトを書くときは glob を直接使わないこと」）。
+    """
     runs = []
-    for res in sorted(d.glob("*_結果.csv")):
+    for res in result_files(d, races, months):
         stem = res.name[: -len("_結果.csv")]
         parsed = parse_stem(stem)
         if parsed is None:
             continue
         date, venue, rn = parsed
-        if races is not None and rn not in races:
-            continue
         surface = (info.get(stem, {}) or {}).get("馬場種別") or None
         with open(res, encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
@@ -103,14 +123,25 @@ def main() -> None:
     ap.add_argument("--races", default=DEFAULT_RACES,
                     help="対象レース番号（既定9-12）。1-8Rの収集が完了したら"
                          "1-12 を渡して1頭あたりの母数を増やして再検証する")
+    ap.add_argument("--target-races", default=None,
+                    help="測定対象のレース番号。既定は --races と同じ。"
+                         "履歴は --races から作るので、`--races 1-12 "
+                         "--target-races 9-12` とすれば「1-8Rも履歴に使い、"
+                         "測るのは9-12Rだけ」になる")
+    ap.add_argument("--months", default=None,
+                    help="対象月。1-8Rの収集が途中のあいだ `--races 1-12` をそのまま渡すと「1-8Rが入っている数ヶ月」と「9-12Rだけの残り」が混ざるので、効果を測るときは期間を揃える（例 2025-01..2025-03）")
     ap.add_argument("--min-n", type=int, default=2,
                     help="適性を判定するのに必要な、特性一致の過去走数")
     args = ap.parse_args()
 
     info = load_race_info(Path(args.race_info))
-    runs = load_runs(Path(args.dir), info, parse_races(args.races))
-    print(f"{args.dir}: {len(runs):,}出走・"
-          f"{len({r['馬名'] for r in runs}):,}頭\n")
+    runs = load_runs(Path(args.dir), info, args.races, args.months)
+    target = parse_races(args.target_races or args.races)
+    n_target = sum(1 for r in runs if target is None or r["R"] in target)
+    print(f"{args.dir}: 履歴{len(runs):,}出走・"
+          f"{len({r['馬名'] for r in runs}):,}頭"
+          f"／測定対象{n_target:,}出走"
+          f"（{args.target_races or args.races}R）\n")
 
     by_horse: dict[str, list[dict]] = defaultdict(list)
     for r in runs:
@@ -129,6 +160,8 @@ def main() -> None:
             prior = lst[:i]
             if not prior:
                 continue
+            if target is not None and cur["R"] not in target:
+                continue   # 履歴には使うが、測定対象ではない
             total += 1
             prior_counts.append(len(prior))
             if sum(1 for p in prior if p["場"] == cur["場"]) >= args.min_n:
@@ -171,6 +204,8 @@ def main() -> None:
                 band = ninki_band(cur["人気"])
                 if not prior or band is None:
                     continue
+                if target is not None and cur["R"] not in target:
+                    continue   # 履歴には使うが、測定対象ではない
                 year = cur["日付"][:4]
                 val = traits(cur["場"], cur["馬場種別"]).get(axis)
                 if val is None:

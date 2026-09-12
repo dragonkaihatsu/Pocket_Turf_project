@@ -48,10 +48,11 @@ BANDS = (("1-3番人気", 1, 3), ("4-5番人気", 4, 5), ("6-9番人気", 6, 9),
          ("10番人気以下", 10, 99), ("（全体）", 1, 99))
 
 
-def load(directory: str, races: str) -> tuple[list[dict], dict[str, list[dict]]]:
+def load(directory: str, races: str, months: str | None = None
+         ) -> tuple[list[dict], dict[str, list[dict]]]:
     """出走を1行ずつ読み、馬名ごとの履歴も作る。"""
     runs: list[dict] = []
-    for path in result_paths(directory, races):
+    for path in result_paths(directory, races, months):
         m = DATE_RE.search(Path(path).name)
         if not m:
             continue
@@ -110,9 +111,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", default=DEFAULT_RACES)
+    ap.add_argument("--months", default=None,
+                    help="対象月。1-8Rの収集が途中のあいだ `--races 1-12` をそのまま渡すと「1-8Rが入っている数ヶ月」と「9-12Rだけの残り」が混ざるので、効果を測るときは期間を揃える（例 2025-01..2025-03）")
     args = ap.parse_args()
 
-    runs, hist = load(args.dir, args.races)
+    runs, hist = load(args.dir, args.races, args.months)
     autumn = [r for r in runs if r["date"].month in AUTUMN]
     for r in autumn:
         r["group"] = classify(hist, r)

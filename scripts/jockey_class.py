@@ -70,13 +70,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", default=DEFAULT_RACES)
+    ap.add_argument("--months", default=None,
+                    help="対象月。1-8Rの収集が途中のあいだ `--races 1-12` をそのまま渡すと「1-8Rが入っている数ヶ月」と「9-12Rだけの残り」が混ざるので、効果を測るときは期間を揃える（例 2025-01..2025-03）")
     ap.add_argument("--min-rides", type=int, default=100,
                     help="両方の階層でこの騎乗数を満たす騎手だけ比べる")
     ap.add_argument("--top", type=int, default=12)
     args = ap.parse_args()
 
     rides: list[dict] = []
-    for path in result_paths(args.dir, args.races):
+    for path in result_paths(args.dir, args.races, args.months):
         m = NAME_RE.match(Path(path).name)
         if not m:
             continue
