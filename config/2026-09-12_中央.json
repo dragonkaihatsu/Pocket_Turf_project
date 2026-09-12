@@ -30,8 +30,8 @@
    "name": "ラジオ日本賞(OP)",
    "entries": "data/2026-09-12_中山11R_ラジオ日本賞(OP)_出走馬.csv",
    "kyori": 1200,
-   "surface": "芝1200m",
-   "baba": "重",
+   "surface": "ダ1200m",
+   "baba": "不良",
    "post_time": "15:30",
    "grade": "OP"
   },
