@@ -89,8 +89,12 @@ def format_race(
         fav_umaban = next((s.horse.umaban for s in scores if s.horse.ninki == 1), None)
     agree = fav_umaban is not None and order and order[0] == fav_umaban
     fav_txt = f"1番人気 {fav:.1f}倍" if fav else "1番人気 オッズ不明"
+    # 一致・不一致は収集した時点のオッズで決まる。朝と最終で人気が入れ替わる馬が
+    # 実際にいる（2026-09-12の中央8レースでは3レースで判定がひっくり返った）ため、
+    # どの時点の判定なのかを必ず添える。買い目の型も同じ理由で最終オッズで決める
     out.append(f"{fav_txt} → 【{plan.strategy}型】"
-               f"  ◎と1番人気: {'一致' if agree else '不一致'}")
+               f"  ◎と1番人気: {'一致' if agree else '不一致'}"
+               f" ※収集時のオッズ。発走前に最終オッズで再判定")
     out.append(f"レース内{spread_note(devs)}")
 
     if marked and (skipped := marked[0].score.skipped_items):

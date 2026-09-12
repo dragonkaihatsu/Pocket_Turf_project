@@ -58,6 +58,8 @@ class TestTextReport(unittest.TestCase):
     def test_reports_whether_the_top_pick_matches_the_favorite(self):
         self.assertTrue("◎と1番人気: 一致" in self.text
                         or "◎と1番人気: 不一致" in self.text)
+        # 判定がどの時点のオッズによるものかを必ず添える（朝と最終で入れ替わる）
+        self.assertIn("最終オッズで再判定", self.text)
 
     def test_notes_that_training_is_not_scored(self):
         self.assertIn("調教は採点対象外", self.text)
