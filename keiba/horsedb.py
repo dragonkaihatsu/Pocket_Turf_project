@@ -149,6 +149,35 @@ def summarize(rows: list[dict], ba: str | None = None,
     }
 
 
+def summarize_trait(rows: list[dict], venue: str, axis: str,
+                    surface: str | None = None) -> dict:
+    """特性が一致する競馬場に絞った戦績。`summarize(ba=...)` の一般化。
+
+    `summarize(rows, ba="中山")` は中山だけを見るが、こちらは中山と
+    同じ特性を持つ場（axis="小回り" なら中山・福島・小倉・札幌・函館）を
+    まとめて見る。1頭あたりの母数を増やすのが目的。
+
+    実測（中央9-12R 26,704出走）では、「2走以上の実績を持つ出走」の割合が
+    **同じ場では17.6%しかないのに、同じ小回りなら53.8%**まで増える。
+    コース適性が全馬中立値に倒れていた原因は配点ではなく、この母数不足だった。
+
+    戻り値に `対象場` を入れて、どの場を束ねた数字なのかを必ず示す
+    （CLAUDE.md「スコア算出根拠は必ず馬ごとに表示し、ブラックボックス化しない」）。
+    """
+    from .courses import same_trait_courses, traits
+
+    group = set(same_trait_courses(venue, axis, surface))
+    if not group:
+        return {"出走": 0, "着順あり": 0, "勝": 0, "複": 0,
+                "平均着順": None, "対象場": [], "軸": axis, "値": None}
+    sel = [r for r in rows if r["場"] in group]
+    out = summarize(sel)
+    out["対象場"] = sorted(group)
+    out["軸"] = axis
+    out["値"] = traits(venue, surface).get(axis)
+    return out
+
+
 def rebuild_from_cache(cache_dir: Path, outpath: Path) -> int:
     """通信せず、キャッシュ済みHTMLだけから戦績CSVを作り直す。"""
     rows: list[dict] = []
