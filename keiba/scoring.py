@@ -54,6 +54,24 @@ def load_ratings(path: Path | str | None = None) -> dict:
         return {}
 
 
+# 一軍騎手とみなす騎乗数（ratings.json の n）。scripts/review_hypotheses.py の
+# 検証と同じ基準にそろえる。名前の列挙ではなく実測の騎乗数で決めるのは、
+# リストの更新漏れで静かに古い評価になるのを避けるため
+JOCKEY_TIER1_RIDES = 400
+
+# 前走二桁着順の馬が一軍騎手に乗り替わったときに、前走内容へ足す点数。
+#
+# **勘で決めていない**。中央9-12Rの前走ペア14,485組で測ると、この形の馬の
+# 今走複勝率は17.0%（n=507）で、前走6-9着だった馬の17.2%（n=4,090）とほぼ
+# 同じだった（前走二桁で継続騎乗なら10.4%）。前走内容の素点は
+# 二桁=3点・6-9着=6点なので、その差の3点を足して「前走6-9着相当」に
+# 見なす、という意味の補正である（scripts/review_hypotheses.py）。
+#
+# 勝率でも +3.3p（6.7%対3.4%）で、複勝率・勝率の両方が2025年と2026年で
+# 再現している。母数507に対して見分けられる差は4.0pt（複勝）なので、
+# 観測した6.6ptは母数の裏付けがある
+NORIKAE_KAKUAGE_POINTS = 3.0
+
 # 騎手補正の目安ティア（必要に応じて呼び出し側で差し替え可能）
 DEFAULT_JOCKEY_TIERS: dict[int, tuple[str, ...]] = {
     3: ("ルメール", "川田将雅"),
@@ -326,14 +344,38 @@ def score_chokyo(horse: Horse, field_horses: list[Horse] | None = None) -> Score
 # ---------------------------------------------------------------------------
 
 def _lookup(table: dict, name: str) -> dict | None:
-    """馬柱の騎手名は略記されることがあるため、前方一致でも引く。"""
+    """馬柱の騎手名は略記されることがあるため、前方一致でも引く。
+
+    **曖昧な前方一致では引かない**。以前は辞書順で最初に当たったものを
+    返していたため、別人の成績を掴む事故が起きうる形だった:
+
+        表に 岩田康(344騎乗) と 岩田望(473騎乗) が両方ある状態で
+        「岩田」を引くと、辞書順で先に来たほうが返る
+
+    そこで次の順で決める:
+      1. 完全一致
+      2. 表の名前が渡された名前で始まるもの（渡された側が短い略記）。
+         **候補が2人以上なら None を返して補正を掛けない**
+      3. 渡された名前が表の名前で始まるもの（表側が短い略記）。
+         こちらは最も長い＝最も具体的なものを採る
+
+    数字を作らない方針と同じ理由で、**誰の成績か確定できないときは
+    補正しない**のが正しい（CLAUDE.mdの三浦／三浦皇の表記ゆれも同じ問題）。
+    """
     if not name:
         return None
     if name in table:
         return table[name]
-    for k, v in table.items():
-        if k.startswith(name) or name.startswith(k):
-            return v
+    # 2. 表側が長い（渡された名前が略記）
+    longer = [(k, v) for k, v in table.items() if k.startswith(name)]
+    if len(longer) == 1:
+        return longer[0][1]
+    if len(longer) > 1:
+        return None      # 別人の可能性がある → 引かない
+    # 3. 表側が短い（表が略記）。最も具体的な一致を採る
+    shorter = [(k, v) for k, v in table.items() if name.startswith(k)]
+    if shorter:
+        return max(shorter, key=lambda kv: len(kv[0]))[1]
     return None
 
 
@@ -371,6 +413,89 @@ def correction_kishu(
     if horse.kishu_norikae:
         return ScoreItem("騎手補正", -1.0, f"乗り替わり（プラス実績なし）: {horse.jockey}")
     return ScoreItem("騎手補正", 0.0, f"{horse.jockey}（実測データなし）")
+
+
+def is_tier1_jockey(name: str, ratings: dict | None = None) -> bool:
+    """実測の騎乗数から一軍騎手かどうかを判定する。"""
+    if not name:
+        return False
+    ratings = ratings if ratings is not None else load_ratings()
+    rec = _lookup(ratings.get("騎手", {}), name)
+    return bool(rec and rec.get("n", 0) >= JOCKEY_TIER1_RIDES)
+
+
+def zenso_jockey(records: dict[str, list[dict]] | None, horse: Horse,
+                 as_of=None) -> str | None:
+    """前走の騎手。馬別戦績から、レース日より前の最新の1走を見る。
+
+    馬柱（出走馬CSV）には前走の騎手が入っていないため、全キャリアを
+    取ってある馬でしか判定できない。取れない馬は None を返し、補正を
+    掛けない（データが無いことを「該当しない」と混同しないため）。
+    """
+    if not records:
+        return None
+    from .horsedb import records_before
+    past = records_before(records.get(horse.name, []), as_of)
+    if not past:
+        return None
+    return (past[-1].get("騎手") or "").strip() or None
+
+
+def correction_norikae(
+    horse: Horse,
+    records: dict[str, list[dict]] | None = None,
+    as_of=None,
+    ratings: dict | None = None,
+) -> ScoreItem:
+    """乗り替わり補正: 前走大敗のあと一軍騎手に乗り替わった形だけを評価する。
+
+    **測れた条件にしか点を付けない**。中央9-12Rの前走ペア14,485組での実測:
+
+      前走二桁着順 × 一軍騎手へ乗り替わり  複勝率17.0%(n=507) / 勝率6.7%
+      前走二桁着順 × 継続騎乗              複勝率10.4%       / 勝率3.4%
+      前走1-5着   × 一軍騎手へ乗り替わり  複勝率31.7%(n=755) / 勝率 差-0.2p
+      前走1-5着   × 継続騎乗              複勝率32.5%
+
+    前者は複勝率+6.6p・勝率+3.3pで、どちらも2025年と2026年で再現した。
+    後者は母数755で差が無い（4.8pt以上なら見えた）。つまり
+    **「強い騎手に替われば走る」のではなく「大敗のあと騎手を強化した形」
+    だけが効く**。前走6-9着は未検証なので補正しない。
+
+    回収率は別の話である。ここで足すのは「前走をどれだけ割り引くか」という
+    能力評価であって、妙味の主張ではない（複勝回収76%・単勝回収も独立検証
+    では再現しない）。KISHU_KETTO_WEIGHT を掛けないのは、この点数が
+    騎手の上乗せではなく前走内容の読み替えであり、実測の対応表から
+    直接出した大きさだから。掛けると校正が崩れる
+    """
+    ch = horse.zenso_chakujun
+    if ch is None:
+        return ScoreItem("乗り替わり補正", 0.0, "前走着順データなし→補正なし")
+
+    prev = zenso_jockey(records, horse, as_of)
+    if prev is None:
+        return ScoreItem("乗り替わり補正", 0.0,
+                         "前走の騎手が不明（馬別戦績が無い）→補正なし")
+
+    ratings = ratings if ratings is not None else load_ratings()
+    now_t1 = is_tier1_jockey(horse.jockey, ratings)
+    prev_t1 = is_tier1_jockey(prev, ratings)
+    changed = prev != horse.jockey
+
+    if ch >= 10 and changed and now_t1 and not prev_t1:
+        return ScoreItem(
+            "乗り替わり補正", NORIKAE_KAKUAGE_POINTS,
+            f"前走{ch}着→一軍騎手へ乗り替わり（{prev}→{horse.jockey}）"
+            f"。実測で前走6-9着相当（複勝率17.0%・n=507）")
+    if ch <= 5 and changed and now_t1 and not prev_t1:
+        return ScoreItem(
+            "乗り替わり補正", 0.0,
+            f"前走{ch}着からの格上げ乗り替わり（{prev}→{horse.jockey}）"
+            f"。実測で差なし（n=755）→補正なし")
+    if changed:
+        return ScoreItem("乗り替わり補正", 0.0,
+                         f"乗り替わり（{prev}→{horse.jockey}）だが"
+                         "測れている条件に当たらない→補正なし")
+    return ScoreItem("乗り替わり補正", 0.0, f"継続騎乗（{horse.jockey}）")
 
 
 def correction_ketto(horse: Horse, ratings: dict | None = None) -> ScoreItem:
@@ -540,6 +665,7 @@ def score_horse(
     ]
     corrections = [
         correction_kishu(horse, jockey_tiers, ratings),
+        correction_norikae(horse, records, as_of, ratings),
         correction_ketto(horse, ratings),
         correction_wakuban(horse, history),
         correction_zenso_furi(horse),

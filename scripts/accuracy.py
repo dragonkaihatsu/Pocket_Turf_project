@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 import sys
 from collections import defaultdict
@@ -70,9 +71,28 @@ def main() -> None:
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
     ap.add_argument("--records", default="data/profiles/jra/horse_records.csv")
     ap.add_argument("--year", help="この年のレースだけ見る（独立検証用）")
+    ap.add_argument("--ratings", default="data/profiles/jra/ratings.json",
+                    help="騎乗数を引く実測ファイル。**明示しないと既定プロファイル"
+                         "（地方）を読んでしまい、中央のレースに大井の騎手データを"
+                         "当てる事故になる**")
+    ap.add_argument("--with-norikae", action="store_true",
+                    help="乗り替わり補正を効かせる。騎手の騎乗数だけを渡し、"
+                         "複勝率は中立値に潰すので騎手補正・血統補正は働かない。"
+                         "騎乗数は結果（着順）ではないため後知恵にならない")
     args = ap.parse_args()
 
-    sc.load_ratings = lambda *a, **k: {}   # 騎手・血統補正は切る（後知恵排除）
+    if args.with_norikae:
+        # 一軍判定に必要な騎乗数だけを残す。複勝率は correction_kishu が
+        # 0点を返す帯（0.18〜0.28）の値に固定し、騎手補正が混ざらないようにする。
+        # こうしないと「乗り替わり補正の効果」と「騎手補正の効果」を
+        # 分離できない
+        _real = json.loads(Path(args.ratings).read_text(encoding="utf-8"))
+        _tier_only = {"騎手": {k: {"n": v.get("n", 0), "複勝率": 0.22,
+                                   "勝率": 0.0, "単勝回収率": 0.0}
+                              for k, v in _real.get("騎手", {}).items()}}
+        sc.load_ratings = lambda *a, **k: _tier_only
+    else:
+        sc.load_ratings = lambda *a, **k: {}   # 騎手・血統補正は切る（後知恵排除）
 
     kyori_by = load_race_info(args.race_info)
     recs = load_records(args.records)
