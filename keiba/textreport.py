@@ -147,8 +147,11 @@ def format_race(
             notable = [r for r in recs if r.tag in ("得意", "苦手")]
             if not notable:
                 continue
+            # 軸名ではなく**値**を出す。阪神（広いコース）で「小回り=得意」と
+            # 表示すると、小回りが得意なのだと誤読される。実際は
+            # 「広いコースが得意」なので、値そのものを見せる
             lines.append(f"  {i:>2} {m.mark} {h.umaban:>2} {h.name:<14}" +
-                         "  ".join(f"{r.axis}={r.tag}({r.diff:+.0%} "
+                         "  ".join(f"{r.value}={r.tag}({r.diff:+.0%} "
                                    f"{r.n_match}走複{r.rate_match:.0%}"
                                    f"→他{r.n_other}走複{r.rate_other:.0%})"
                                    for r in notable[:2]))

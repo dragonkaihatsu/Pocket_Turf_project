@@ -114,7 +114,9 @@ def summary_line(rows: list[dict], venue: str, surface: str | None = None,
     recs = trait_records(rows, venue, surface, as_of)
     notable = [r for r in recs if r.tag in ("得意", "苦手")][:limit]
     if notable:
-        return " ".join(f"{r.axis}={r.tag}({r.diff:+.0%})" for r in notable)
+        # 軸名ではなく値（「広い」「急坂」「洋芝」など）を出す。
+        # 軸名だと阪神で「小回り=得意」のような誤読を招く
+        return " ".join(f"{r.value}={r.tag}({r.diff:+.0%})" for r in notable)
     if recs:
         return f"特性差なし（{recs[0].n_match}走ベース）"
     return "データ不足"

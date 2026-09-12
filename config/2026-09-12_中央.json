@@ -1,4 +1,5 @@
 {
+ "title": "2026-09-12 中央予想（中山・阪神 9-12R）",
  "heading": "2026-09-12 中央 9-12R（中山・阪神）",
  "races": [
   {
@@ -9,7 +10,8 @@
    "kyori": 1600,
    "surface": "ダ1600m",
    "baba": "不良",
-   "post_time": "14:10"
+   "post_time": "14:10",
+   "grade": "2勝クラス"
   },
   {
    "venue": "中山",
@@ -19,7 +21,8 @@
    "kyori": 2000,
    "surface": "ダ2000m",
    "baba": "不良",
-   "post_time": "14:50"
+   "post_time": "14:50",
+   "grade": "3勝クラス"
   },
   {
    "venue": "中山",
@@ -29,7 +32,8 @@
    "kyori": 1200,
    "surface": "芝1200m",
    "baba": "重",
-   "post_time": "15:30"
+   "post_time": "15:30",
+   "grade": "OP"
   },
   {
    "venue": "中山",
@@ -39,7 +43,8 @@
    "kyori": 1800,
    "surface": "ダ1800m",
    "baba": "不良",
-   "post_time": "16:10"
+   "post_time": "16:10",
+   "grade": "3歳以上1勝クラス"
   },
   {
    "venue": "阪神",
@@ -49,7 +54,8 @@
    "kyori": 1400,
    "surface": "ダ1400m",
    "baba": "重",
-   "post_time": "14:25"
+   "post_time": "14:25",
+   "grade": "2勝クラス"
   },
   {
    "venue": "阪神",
@@ -59,7 +65,8 @@
    "kyori": 1800,
    "surface": "ダ1800m",
    "baba": "重",
-   "post_time": "15:05"
+   "post_time": "15:05",
+   "grade": "3勝クラス"
   },
   {
    "venue": "阪神",
@@ -69,7 +76,8 @@
    "kyori": 2000,
    "surface": "芝2000m",
    "baba": "稍重",
-   "post_time": "15:45"
+   "post_time": "15:45",
+   "grade": "G3"
   },
   {
    "venue": "阪神",
@@ -79,7 +87,8 @@
    "kyori": 1200,
    "surface": "ダ1200m",
    "baba": "重",
-   "post_time": "16:20"
+   "post_time": "16:20",
+   "grade": "3歳以上1勝クラス"
   }
  ]
 }

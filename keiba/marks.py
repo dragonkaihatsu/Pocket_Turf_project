@@ -21,6 +21,19 @@ class MarkedHorse:
     score: HorseScore
 
 
+def split_for_total(total: int) -> tuple[int, int]:
+    """印の総数から (△の頭数, 注の頭数) を決める。
+
+    ◎○▲ は固定なので、残りをまず△に、あふれた分を注に割る。
+    既定の8頭は ◎○▲ + △3 + 注2。6頭に絞るなら ◎○▲ + △3 + 注0 になる。
+
+    印を何頭にするかは買い目の型と噛み合っている（標準型は相手6頭を
+    必要とするため既定は8頭）。絞る指示があったときだけ狭める
+    """
+    rest = max(0, total - len(MARK_ORDER))
+    return min(rest, 3), max(0, rest - 3)
+
+
 def assign_marks(
     scores: list[HorseScore],
     baba: str = "良",

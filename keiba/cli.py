@@ -32,7 +32,7 @@ from .feedback import RaceResult, generate_feedback_report, load_payouts
 from .horsedb import collect_horses, horse_ids_from_cache
 from .horsedb import load_records as load_horse_records
 from .horsedb import rebuild_from_cache
-from .marks import assign_marks
+from .marks import assign_marks, split_for_total
 from .models import load_history, load_horses
 from .pace import forecast_pace
 from .report import generate_report
@@ -138,7 +138,9 @@ def cmd_text(args) -> None:
         horses = load_horses(r["entries"])
         scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
                             as_of=args.race_date, venue=r.get("venue"))
-        marked = assign_marks(scores, baba=r.get("baba", "良"))
+        n_osae, n_chuui = split_for_total(args.marks)
+        marked = assign_marks(scores, baba=r.get("baba", "良"),
+                              n_osae=n_osae, n_chuui=n_chuui)
         fav = min((h for h in horses if h.ninki), key=lambda h: h.ninki, default=None)
         plan = make_betting_plan(marked, baba=r.get("baba", "良"),
                                  favorite_odds=fav.tansho_odds if fav else None)
@@ -147,7 +149,7 @@ def cmd_text(args) -> None:
                                   marked, scores, plan, exp,
                                   baba=r.get("baba", "良"),
                                   records=records, venue=r.get("venue"),
-                                  as_of=args.race_date))
+                                  as_of=args.race_date, n_show=args.marks))
     text = format_day(blocks, cfg.get("heading", "予想"))
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -314,6 +316,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_text.add_argument("--output", required=True, help="出力テキストパス")
     p_text.add_argument("--records", help="馬別戦績CSV")
     p_text.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_text.add_argument("--marks", type=int, default=8,
+                        help="印を付ける頭数（既定8＝◎○▲+△3+注2）。"
+                             "6にすると◎○▲+△3で止まる。標準型の買い目は"
+                             "相手6頭を必要とするため、絞るときは買い目の"
+                             "幅も合わせて確認すること")
     p_text.add_argument("--encoding", default="utf-8-sig",
                         choices=["utf-8-sig", "utf-8", "cp932"],
                         help="出力の文字コード。既定はBOM付きUTF-8（Windowsで"
