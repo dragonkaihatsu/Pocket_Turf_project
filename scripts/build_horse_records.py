@@ -43,9 +43,9 @@ DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
 VENUE_RE = re.compile(r"_(\D+?)\d{2}R_")
 
 # horse_records.csv と同じ列（keiba/horsedb.py の load_records が読む形）
-COLUMNS = ["馬ID", "馬名", "日付", "場", "R", "レース名", "頭数", "枠番",
-           "馬番", "オッズ", "人気", "着順", "騎手", "斤量",
-           "馬場種別", "距離", "馬場"]
+# 列は keiba/horsedb.py の FIELDS に合わせる（load_records が読む形）。
+# ずれると持ち時計指数が静かに計算できなくなるのでテストで固定した
+from keiba.horsedb import FIELDS as COLUMNS  # noqa: E402
 
 
 def load_race_info(path: Path) -> dict[str, dict]:
@@ -105,6 +105,13 @@ def main() -> None:
                 "馬場種別": ri.get("馬場種別", ""),
                 "距離": ri.get("距離", ""),
                 "馬場": ri.get("馬場", ""),
+                # 持ち時計指数の材料。馬場は race_info の略記（稍/不）のままなので
+                # mochidokei.canon_baba で正規化して使う
+                "タイム": (r.get("タイム") or "").strip(),
+                "着差": (r.get("着差") or "").strip(),
+                # 結果CSVに通過順・ペースは無い（レース単位の別CSV）ので空
+                "通過": "", "ペース": "",
+                "上り": (r.get("上がり3F") or "").strip(),
             })
 
     rows_out.sort(key=lambda r: (r["馬名"], r["日付"]))

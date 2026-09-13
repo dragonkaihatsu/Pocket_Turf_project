@@ -26,7 +26,12 @@ RESULT_URL = "https://db.netkeiba.com/horse/result/{horse_id}/"
 from . import profile
 
 FIELDS = ["馬ID", "馬名", "日付", "場", "R", "レース名", "頭数", "枠番", "馬番",
-          "オッズ", "人気", "着順", "騎手", "斤量", "馬場種別", "距離", "馬場"]
+          "オッズ", "人気", "着順", "騎手", "斤量", "馬場種別", "距離", "馬場",
+          # 持ち時計指数を作るための列（2026-09-13 追加）。馬ページには
+          # タイム・着差・通過・ペース・上り が無料で載っている（指数系の列は
+          # プレミアムで空）。これが無いと `keiba/mochidokei.py` が予想時に
+          # 何も計算できず、基礎能力25点が前走の上がり3Fだけに戻る
+          "タイム", "着差", "通過", "ペース", "上り"]
 
 _TAG = re.compile(r"<[^>]+>")
 # 出走馬のリンクは <a href=".../horse/ID/"><span class="Icon_HorseMark"></span>馬名</a>
@@ -75,16 +80,22 @@ def parse_horse_results(html: str, horse_id: str, name: str = "") -> list[dict]:
         key = h.split()[0] if h.split() else ""
         idx.setdefault(key, i)
     needed = ("日付", "開催", "R", "レース名", "頭数", "枠番", "馬番",
-              "オッズ", "人気", "着順", "騎手", "斤量", "距離", "馬場")
-    if not all(k in idx for k in ("日付", "開催", "着順", "距離")):
+              "オッズ", "人気", "着順", "騎手", "斤量", "距離", "馬場",
+              "タイム", "着差", "通過", "ペース", "上り")
+    # 行が成立する条件は**この4つだけ**にする。タイム等を必須に混ぜると、
+    # 列が1つ欠けた行がまるごと落ちる（列を足したせいで母数が減るのは本末転倒）
+    essential = ("日付", "開催", "着順", "距離")
+    if not all(k in idx for k in essential):
         return []
 
     out = []
     for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table, re.S):
         cells = [_text(c) for c in re.findall(r"<td[^>]*>.*?</td>", row, re.S)]
-        if len(cells) < max(idx[k] for k in needed if k in idx) + 1:
+        if len(cells) < max(idx[k] for k in essential) + 1:
             continue
-        g = {k: cells[idx[k]] if k in idx else "" for k in needed}
+        # セルが足りない列は空にする（行を捨てない）
+        g = {k: (cells[idx[k]] if k in idx and idx[k] < len(cells) else "")
+             for k in needed}
         if not re.match(r"\d{4}/\d{1,2}/\d{1,2}", g["日付"]):
             continue
         kyori = g["距離"]
@@ -99,6 +110,8 @@ def parse_horse_results(html: str, horse_id: str, name: str = "") -> list[dict]:
             "枠番": g["枠番"], "馬番": g["馬番"], "オッズ": g["オッズ"],
             "人気": g["人気"], "着順": g["着順"], "騎手": g["騎手"],
             "斤量": g["斤量"], "馬場種別": shubetsu, "距離": dist, "馬場": g["馬場"],
+            "タイム": g["タイム"], "着差": g["着差"], "通過": g["通過"],
+            "ペース": g["ペース"], "上り": g["上り"],
         })
     return out
 

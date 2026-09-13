@@ -174,13 +174,52 @@ def _scale(value: float, lo: float, hi: float, out_lo: float, out_hi: float) -> 
 # 基礎項目（85点満点の内訳）
 # ---------------------------------------------------------------------------
 
-def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse]) -> ScoreItem:
-    """基礎能力（25点）: 上がり3F の相対順位を近走能力の代理指標として使用。
-    手動評価（基礎能力評価カラム）があればそちらを優先する。
+# 持ち時計指数を基礎能力に使うのに要求する、メンバー内で指数が作れた頭数。
+# 2頭では「最小〜最大に正規化」が両端2頭だけの話になり、尺度にならない
+MIN_MOCHI_FIELD = 4
+
+
+def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse],
+                        mochi: dict[str, float] | None = None) -> ScoreItem:
+    """基礎能力（25点）: 近走能力の相対評価。
+
+    尺度の優先順位（2026-09-13 に更新）:
+
+      1. 基礎能力評価カラム（手動）
+      2. **持ち時計指数**（直近365日・距離と馬場で正規化した走破タイム）
+      3. 前走の上がり3F
+
+    2 を上に置いた理由は実測である（`scripts/mochidokei_test.py`、中央9-12R・
+    窓内3走以上の17,585出走）。1-3番人気帯の複勝リフトが
+
+        素の上がり3F偏差値   2025 +1.0p(判定不能) → 2026 +4.9p(差あり)
+        持ち時計・メンバー相対 2025 +6.0p(差あり)  → 2026 +7.6p(差あり)
+
+    と、**上がり3Fは期間で出方が変わるのに、持ち時計は両期間で差あり**だった。
+    4-5番人気帯で上がり3Fが示す逆転（上位の勝率が下位より低い）も、
+    メンバー相対の持ち時計では順方向に直る。
+
+    **絶対値では使わない。** 絶対値のまま帯に切ると1-3番人気の複勝リフトが
+    2025 −0.5p → 2026 +3.4p と符号ごと変わる。レース内で最小〜最大に
+    正規化することがメンバー相対（重要度表の「トップとの差」「平均との差」）
+    と同じ形になる。
+
+    持ち時計が作れない馬（窓内3走未満）は上がり3Fに落とす。**混在するのは
+    承知の上**で、落とす先が中立値だと情報のある馬だけ動いて歪むため。
     """
     if horse.kiso_nouryoku_override is not None:
         pts = max(0.0, min(MAX_KISO, horse.kiso_nouryoku_override))
         return ScoreItem("基礎能力", pts, "手動評価カラムによる上書き")
+
+    if mochi and len(mochi) >= MIN_MOCHI_FIELD and horse.name in mochi:
+        v = mochi[horse.name]
+        lo, hi = min(mochi.values()), max(mochi.values())
+        pts = _scale(v, lo, hi, MAX_KISO * 0.4, MAX_KISO)
+        return ScoreItem(
+            "基礎能力", round(pts, 2),
+            f"持ち時計指数{v:+.2f}（メンバー{len(mochi)}頭中 "
+            f"{hi:+.2f}〜{lo:+.2f}・平均差{v - statistics.fmean(mochi.values()):+.2f}）",
+        )
 
     times = [h.agari_3f for h in field_horses if h.agari_3f is not None]
     if not times or horse.agari_3f is None:
@@ -189,9 +228,11 @@ def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse]) -> ScoreItem:
     best, worst = min(times), max(times)
     # 上がり3F は小さいほど速い＝良い
     pts = _scale(horse.agari_3f, worst, best, MAX_KISO * 0.4, MAX_KISO)
+    tail = "（持ち時計が作れず上がり3Fで代替）" if mochi is not None else ""
     return ScoreItem(
         "基礎能力", round(pts, 2),
-        f"上がり3F={horse.agari_3f:.1f}秒（出走馬中 最速{best:.1f}〜最遅{worst:.1f}）の相対評価",
+        f"上がり3F={horse.agari_3f:.1f}秒（出走馬中 最速{best:.1f}〜最遅{worst:.1f}）"
+        f"の相対評価{tail}",
     )
 
 
@@ -720,6 +761,7 @@ def score_horse(
     records: dict[str, list[dict]] | None = None,
     as_of=None,
     venue: str | None = None,
+    mochi: dict[str, float] | None = None,
 ) -> HorseScore:
     """venue は開催場名。コース適性はその場での自己成績から出すため、
     **渡さないとコース適性は中立になる**。以前は既定が「大井」だったが、
@@ -740,7 +782,7 @@ def score_horse(
     ratings = load_ratings()
 
     base_items = [
-        score_kiso_nouryoku(horse, field_horses),
+        score_kiso_nouryoku(horse, field_horses, mochi),
         score_zenso_naiyou(horse),
         course_item,
         score_kyori_tekisei(horse, None, ratings, self_kyori),
@@ -773,6 +815,7 @@ def score_race(
     records: dict[str, list[dict]] | None = None,
     as_of=None,
     venue: str | None = None,
+    base_times=None,
 ) -> list[HorseScore]:
     """出走馬をまとめて採点する。
 
@@ -782,5 +825,26 @@ def score_race(
     venue に開催場名を渡すとコース適性がその場の自己成績になる。
     渡さなければコース適性は中立のままになる。
     """
+    mochi = load_mochi(records, horses, as_of, base_times)
     return [score_horse(h, horses, history, kyori, jockey_tiers,
-                        records, as_of, venue) for h in horses]
+                        records, as_of, venue, mochi) for h in horses]
+
+
+def load_mochi(records, horses, as_of, base_times=None) -> dict[str, float]:
+    """出走馬の持ち時計（近走平均）をまとめて出す。基準表が無ければ空。
+
+    **レース単位で1回だけ作る**。1頭ずつ作るとメンバー内の正規化ができない。
+    基準表を渡さなければプロファイルの base_times.json を読む。無ければ
+    空を返し、基礎能力は従来どおり上がり3Fで採点される（静かに壊れないよう、
+    「作れなかった」と「全馬0」を区別する）。
+    """
+    if not records:
+        return {}
+    from . import mochidokei as mk
+    base = base_times
+    if base is None:
+        p = profile.active().path("base_times.json")
+        if not Path(p).exists():
+            return {}
+        base = mk.BaseTimes.load(p)
+    return mk.field_indices(records, [h.name for h in horses], as_of, base)
