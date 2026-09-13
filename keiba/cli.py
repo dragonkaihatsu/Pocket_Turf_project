@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from .betting import make_betting_plan
@@ -70,6 +71,41 @@ def _build_common(args) -> tuple:
     return horses, history, scores, marked
 
 
+# HTMLもBOM付きUTF-8で書き出す。CSV・テキスト出力（utf-8-sig）と揃える。
+# ブラウザはmetaのcharsetよりBOMを優先するので表示は変わらないが、Windowsで
+# ローカルのファイルをメモ帳やExcel・古いビューアで開いたときに化けなくなる
+HTML_ENCODING = "utf-8-sig"
+
+# `<title>` `<link>` `<style>` が先頭に並んでいる範囲。ここまでが head に入る
+_HEAD_RUN = re.compile(
+    r"\A(?:\s*(?:<title>.*?</title>|<link\b[^>]*>|<style\b[^>]*>.*?</style>))+",
+    re.S,
+)
+
+
+def standalone_document(html: str, lang: str = "ja") -> str:
+    """断片を、そのまま開ける完全なHTMLにする。
+
+    レポート生成側（report/feedback/daily）は `<title>` と `<style>` から始まる
+    **断片**を返す。ページに埋め込む用途ではそれでよいが、**ファイルに書いて
+    Windowsで開く用途では doctype が無いと互換モード（quirks mode）になり、
+    box-sizing などの既定が変わってレイアウトが崩れる**。BOMを付けるのと
+    同じ理由（ローカルで開く人のため）なので、書き出し口で完全な文書にする。
+
+    既に doctype があるものはそのまま返す（二重に包まない）。
+    """
+    if html.lstrip().lower().startswith("<!doctype"):
+        return html
+    m = _HEAD_RUN.match(html)
+    head, body = (html[: m.end()].strip(), html[m.end():]) if m else ("", html)
+    return (
+        f"<!doctype html>\n<html lang=\"{lang}\">\n<head>\n"
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"{head}\n</head>\n<body>\n{body.strip()}\n</body>\n</html>\n"
+    )
+
+
 def cmd_predict(args) -> None:
     horses, history, scores, marked = _build_common(args)
     pace = forecast_pace(horses)
@@ -79,7 +115,7 @@ def cmd_predict(args) -> None:
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html_out, encoding="utf-8")
+    out_path.write_text(standalone_document(html_out), encoding=HTML_ENCODING)
     print(f"書き出し完了: {out_path}")
 
     if skipped := (marked[0].score.skipped_items if marked else []):
@@ -124,7 +160,7 @@ def cmd_feedback(args) -> None:
     html_out = generate_feedback_report(args.race_name, marked, plan, result, payouts)
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html_out, encoding="utf-8")
+    out_path.write_text(standalone_document(html_out), encoding=HTML_ENCODING)
     print(f"書き出し完了: {out_path}")
 
 
@@ -163,7 +199,7 @@ def cmd_daily(args) -> None:
     html_out = build_from_config(args.config)
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html_out, encoding="utf-8")
+    out_path.write_text(standalone_document(html_out), encoding=HTML_ENCODING)
     print(f"書き出し完了: {out_path}")
 
 
