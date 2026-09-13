@@ -180,3 +180,44 @@ class TestRaceIdsComeFromTheListPage(unittest.TestCase):
         """一覧ページが無ければ空。照合できないことを一致と混同しない。"""
         self.assertEqual(
             check_day_config.race_ids_for(self.cache, "2026-09-14"), {})
+
+
+class TestUnrunPagesAreNotConfirmed(unittest.TestCase):
+    """発走前の結果ページを「確定値」として扱わないこと。
+
+    結果ページのURLは発走前でも200を返し RaceData01 を持っている。着順
+    テーブルだけが無い。ここを見落とすと、朝に取ったキャッシュの馬場を
+    確定として、いま更新したばかりの設定のほうを不一致として責める
+    （2026-09-13の12:00に実際に起きた）。
+    """
+
+    def _page(self, body: str) -> Path:
+        d = Path(self._tmp.name)
+        (d / "202606040409.html").write_text(body, encoding="utf-8")
+        return d
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    DATA = '<div class="RaceData01">15:45発走 / 芝1800m (右 B) / 天候:曇 / 馬場:重</div>'
+
+    def test_unrun_page_returns_none(self):
+        cache = self._page(self.DATA)          # 着順テーブルが無い
+        self.assertIsNone(check_day_config.result_condition(cache, "202606040409"))
+
+    def test_finished_page_is_read(self):
+        cache = self._page(self.DATA + '<table class="ResultTableWrap"></table>')
+        self.assertEqual(check_day_config.result_condition(cache, "202606040409"),
+                         ("芝1800m", "重"))
+
+    def test_rank_cells_also_count_as_finished(self):
+        cache = self._page(self.DATA + '<span class="Rank">1</span>')
+        self.assertEqual(check_day_config.result_condition(cache, "202606040409"),
+                         ("芝1800m", "重"))
+
+    def test_missing_page(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(check_day_config.result_condition(Path(d), "202606040409"))

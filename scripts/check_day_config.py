@@ -136,13 +136,43 @@ def parse_list_page(path: Path) -> tuple[dict[tuple[str, str], str], dict[str, s
     return baba, cond
 
 
+def fetched_at(path: Path) -> str:
+    """そのキャッシュを取った時刻。照合元の時刻を出さない照合はしない。"""
+    if not path.exists():
+        return "—"
+    return datetime.fromtimestamp(path.stat().st_mtime).strftime("%m/%d %H:%M")
+
+
+# 結果ページが「走り終わっている」ことの印。未走のページにも RaceData01 は
+# 載っているので、これが無ければ確定値ではない（下記参照）
+FINISHED_RE = re.compile(r'class="(?:ResultTableWrap|Rank)"')
+
+
 def result_condition(cache: Path, race_id: str) -> tuple[str, str] | None:
-    """結果ページから確定の (条件, 馬場) を読む。無ければ None。"""
+    """結果ページから確定の (条件, 馬場) を読む。**走り終わっていなければ None**。
+
+    ## 未走のページを「確定値」と呼んでいた（2026-09-13に判明）
+
+    結果ページのURLは発走前でも200を返し、`RaceData01`（芝ダ・距離・馬場）を
+    持っている。**着順テーブルだけが無い。** もとの実装は RaceData01 だけを
+    見ていたので、発走前に取ったキャッシュの馬場を「確定」として表示し、
+    **その時点の設定のほうを不一致として責めていた**。
+
+    実際に2026-09-13の12:00（第1レースは14:10）に、05:17に取った
+    キャッシュの「重」を確定値として、一覧ページで更新した「稍重」を
+    軽微な不一致と報告した。**いちばん古い値を正解として扱っている**形で、
+    CLAUDE.md「時刻を出さない照合は、古い値を正解として扱う」そのもの。
+
+    対策は2つ。着順テーブルの有無で走り終わりを判定し、通ったものには
+    **取得時刻を併記する**（照合元の時刻を出さない照合はしない）。
+    """
     p = cache / f"{race_id}.html"
     if not p.exists():
         return None
-    m = re.search(r'<div class="RaceData01">(.*?)</div>',
-                  p.read_text(encoding="utf-8", errors="replace"), re.S)
+    html = p.read_text(encoding="utf-8", errors="replace")
+    if not FINISHED_RE.search(html):
+        return None          # 発走前のページ。確定値ではない
+    m = re.search(r'<div class="RaceData01">(.*?)</div>', html, re.S)
     if not m:
         return None
     txt = strip_tags(m.group(1))
@@ -337,22 +367,28 @@ def main() -> int:
 
     # 3) 結果ページがあれば確定値と突き合わせる（レース後の検証）
     finals = []
+    pending = 0
     for r in races:
         rid = ids.get((r["venue"], int(r["race_no"][:-1])))
         got = result_condition(cache, rid) if rid else None
         if got:
-            finals.append((r, got))
+            finals.append((r, got, fetched_at(cache / f"{rid}.html")))
+        elif rid:
+            pending += 1
+    if pending:
+        print(f"■ 確定値との突き合わせ: {pending}レースはまだ走り終わっていない（照合しない）")
+        print()
     if finals:
         print("■ 確定値との突き合わせ（結果ページ・発走後にしか無い）")
-        print(f"  {'レース':<10}{'設定':<18}{'確定':<18}{'判定'}")
-        for r, (cond, baba) in finals:
+        print(f"  {'レース':<10}{'設定':<18}{'確定':<18}{'取得':<14}{'判定'}")
+        for r, (cond, baba), when in finals:
             tag = severity(r["surface"], r["baba"], cond, baba)
             if tag.startswith("重大"):
                 problems += 1
             elif tag.startswith("軽微"):
                 minor += 1
             print(f"  {r['venue'] + r['race_no']:<10}{r['surface'] + ' ' + r['baba']:<18}"
-                  f"{cond + ' ' + baba:<18}{tag}")
+                  f"{cond + ' ' + baba:<18}{when:<14}{tag}")
         print()
 
     if problems:
