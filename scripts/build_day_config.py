@@ -28,7 +28,15 @@ import argparse
 import html as htmllib
 import json
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# 一覧ページの読み方は check_day_config と同じものを使う。2か所に書くと
+# 片方だけ直して静かにずれる（CLAUDE.md「閾値を2か所に書くと実装と検証が
+# 静かにずれる」と同じ話）
+from check_day_config import parse_list_page
 
 # 中央の場コード（race_id の 5-6 桁目）
 VENUES = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京",
@@ -105,11 +113,32 @@ def main() -> None:
         else (int(args.races), int(args.races))
     y = args.date[:4]
 
+    # **その日のレースだけに絞る**。race_id には開催日が入っていない
+    # （年+場+開催回+日目+R）ので、キャッシュを年だけで絞ると**別の開催日の
+    # 同じ場・同じR**を拾う。実際に2026-09-13で51レース（同じ阪神11Rが
+    # 条件違いで5回）が出た。**エラーは出ず、もっともらしい違う条件の設定が
+    # 書かれる**ので、9/12の芝ダ取り違えと同じ事故になる。
+    #
+    # 一覧ページ（jra_list_YYYYMMDD.html）はその日のrace_idを列挙しているので、
+    # それを唯一の権威として使う。無ければ**推測せずに止める**
+    list_page = Path(args.cache_dir) / f"jra_list_{args.date.replace('-', '')}.html"
+    if not list_page.exists():
+        print(f"✗ 一覧ページが無い: {list_page}")
+        print("  race_id には開催日が入っていないため、その日のレースを特定できない。")
+        print("  先に馬柱を取得すると一覧ページも取れる:")
+        print(f"    python3 -m keiba.cli shutuba --date {args.date} --venue 中央 "
+              f"--races {args.races}")
+        sys.exit(1)
+    todays_ids = set(parse_list_page(list_page)[1])
+    print(f"一覧ページ: {list_page.name} に {len(todays_ids)}レース\n")
+
     races = []
     for p in sorted(Path(args.cache_dir).glob("*_past.html")):
         rid = p.name.split("_")[0]
         if len(rid) != 12 or not rid.startswith(y):
             continue
+        if rid not in todays_ids:
+            continue          # 別の開催日の同じ場・同じR
         venue = VENUES.get(rid[4:6])
         rno = int(rid[10:12])
         if venue is None or not (lo <= rno <= hi):

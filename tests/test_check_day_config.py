@@ -13,10 +13,12 @@
 import sys
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import check_day_config
 from build_day_config import parse as parse_racedata
 from check_day_config import axis, parse_list_page, severity
 
@@ -129,3 +131,52 @@ class TestParseListPage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRaceIdsComeFromTheListPage(unittest.TestCase):
+    """(競馬場, R) → race_id は**その日の一覧ページ**から作る（2026-09-13）。
+
+    race_id に開催日は入っていない（年+場+開催回+日目+R）ので、年だけで
+    絞って走査すると同じ場・同じRが開催日の数だけ当たり、後勝ちで
+    **別の日のレース**が選ばれる。実際に2026-09-13の検算で、中山9R
+    （芝1800m 重）の確定値として別の日の ダ1200m 不良 が出て、
+    **設定は正しいのに8レース全部を「重大な不一致」**と誤報した。
+    """
+
+    LIST_HTML = """
+    <li class="RaceList_DataItem">
+      <a href="../race/result.html?race_id=202606040409">
+      <span>芝1800m</span></a></li>
+    <li class="RaceList_DataItem">
+      <a href="../race/result.html?race_id=202609040411">
+      <span>芝1800m</span></a></li>
+    """
+
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.cache = Path(self.tmp.name)
+        (self.cache / "jra_list_20260913.html").write_text(
+            self.LIST_HTML, encoding="utf-8")
+        # 別の開催日の馬柱キャッシュ。**これに引きずられてはいけない**
+        for rid in ("202606040109", "202606049909", "202609040111"):
+            (self.cache / f"{rid}_past.html").write_text("", encoding="utf-8")
+        (self.cache / "202606040409_past.html").write_text("", encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_only_the_days_races(self):
+        ids = check_day_config.race_ids_for(self.cache, "2026-09-13")
+        self.assertEqual(ids.get(("中山", 9)), "202606040409")
+        self.assertEqual(ids.get(("阪神", 11)), "202609040411")
+
+    def test_other_days_do_not_win(self):
+        """同じ場・同じRの別開催日が混ざっても選ばれない。"""
+        ids = check_day_config.race_ids_for(self.cache, "2026-09-13")
+        self.assertNotIn("202606049909", ids.values())
+        self.assertNotIn("202606040109", ids.values())
+
+    def test_no_list_page_means_empty(self):
+        """一覧ページが無ければ空。照合できないことを一致と混同しない。"""
+        self.assertEqual(
+            check_day_config.race_ids_for(self.cache, "2026-09-14"), {})

@@ -146,13 +146,30 @@ def result_condition(cache: Path, race_id: str) -> tuple[str, str] | None:
 
 
 def race_ids_for(cache: Path, date: str) -> dict[tuple[str, int], str]:
-    """その日の馬柱キャッシュから (競馬場, R) → race_id を作る。"""
+    """(競馬場, R) → race_id を、**その日の一覧ページ**から作る。
+
+    ## 年だけで絞ると別の開催日と衝突する（2026-09-13に判明）
+
+    もとは馬柱キャッシュを年で絞って走査していたが、**race_id に開催日は
+    入っていない**（年+場+開催回+日目+R）。同じ場・同じRは開催日の数だけ
+    あるので、辞書に入れると後勝ちで**別の日のレースが選ばれる**。
+
+    実際に2026-09-13の検算で、中山9R（芝1800m 重）の「確定値」として
+    別の日の ダ1200m 不良 が出て、**8レース全部が「重大な不一致」**と
+    誤報した。設定は正しかったのに「予想を出すな」と言う状態で、
+    9/12の芝ダ取り違えと**同じ失敗の仕方**（エラーは出ず、もっともらしい
+    違う値が出る）。
+
+    一覧ページはその日のrace_idだけを列挙しているので、それを使う。
+    無ければ**空を返す**（照合できないことを「一致」と混同しない）。
+    """
+    page = cache / f"jra_list_{date.replace('-', '')}.html"
+    if not page.exists():
+        return {}
     out: dict[tuple[str, int], str] = {}
-    for p in cache.glob("*_past.html"):
-        rid = p.name.split("_")[0]
-        if len(rid) == 12 and rid.startswith(date[:4]):
-            if venue := VENUES.get(rid[4:6]):
-                out[(venue, int(rid[10:12]))] = rid
+    for rid in parse_list_page(page)[1]:
+        if venue := VENUES.get(rid[4:6]):
+            out[(venue, int(rid[10:12]))] = rid
     return out
 
 
