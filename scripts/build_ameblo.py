@@ -201,6 +201,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=LIMIT)
     ap.add_argument("--split", choices=["race", "venue"], default="race",
                     help="race=レースごと1記事 / venue=競馬場ごと1記事")
+    ap.add_argument("--as-text", action="store_true", default=True,
+                    help="貼り付け用に .txt でも出す（既定で出す）")
     ap.add_argument("--no-breakdown", action="store_true",
                     help="配点内訳を落とす（本文の82%%。venue分割はこれが無いと入らない）")
     args = ap.parse_args()
@@ -232,6 +234,15 @@ def main() -> None:
         p = outdir / f"{i:02d}_{name}.html"
         # アメブロはコピペで貼る。BOMを付けると先頭にゴミ文字が入るので付けない
         p.write_text(doc, encoding="utf-8")
+        if args.as_text:
+            # **貼るのに要るのはソースそのもの**。`.html` で渡すと開いたときに
+            # 描画されてしまい、コピーできるのは「見た目」であってタグではない。
+            # さらにこの断片は `<meta charset>` を入れられない（禁止タグ）ので、
+            # ローカルで直接開くと文字コードが判定できず日本語が化ける。
+            # `.txt` なら中身がそのまま出て、全選択→コピーで貼れる。
+            # こちらは**BOMを付ける**（Windowsのメモ帳が化けないため。
+            # 全選択のコピーにBOMは含まれないので貼り付け先には入らない）
+            p.with_suffix(".txt").write_text(doc, encoding="utf-8-sig")
         size = len(doc.encode())
         tag = "OK" if size <= args.limit and not bad else ""
         if bad:
