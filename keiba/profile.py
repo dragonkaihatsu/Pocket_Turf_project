@@ -114,6 +114,17 @@ def use_for_venue(venue: str | None) -> Profile:
     return use(profile_for_venue(venue))
 
 
+def for_venue(venue: str | None) -> Profile:
+    """その競馬場のプロファイルを**切り替えずに**返す。
+
+    `use_for_venue` はグローバルを書き換えるため、採点の途中で呼ぶと
+    他の読み込み（ratings など）にも影響する。実測ファイルを引くだけの
+    用途はこちらを使う（CLAUDE.md「プロファイル任せにせずパスを引数で受ける」の
+    精神に沿って、少なくとも**場から決める**）。
+    """
+    return Profile(profile_for_venue(venue))
+
+
 # ---------------------------------------------------------------------------
 # 収集ディレクトリと出力先プロファイルの食い違いを止める（2026-09-13 追加）
 #

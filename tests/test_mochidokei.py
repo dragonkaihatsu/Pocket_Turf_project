@@ -252,3 +252,47 @@ class TestHorseRecordSchema(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBaseTimesResolvedByVenue(unittest.TestCase):
+    """基準表は**競馬場名から**探すこと。active() に頼らないこと。
+
+    集計スクリプトはプロファイルを切り替えないものが多い
+    （accuracy.py / calibrate.py は既定の nar のまま）。active() に頼ると
+    中央のレースを採点しているのに nar の基準表を探して「無い」と判断し、
+    静かに旧尺度（上がり3F）へ落ちる。実際にそれで A/B が12セル全部
+    完全一致し、新尺度が動いていないことに気づきかけなかった。
+    """
+
+    def test_venue_decides_the_profile(self):
+        from keiba import profile
+        self.assertIn("jra", str(profile.for_venue("中山").path("base_times.json")))
+        self.assertIn("nar", str(profile.for_venue("大井").path("base_times.json")))
+
+    def test_for_venue_does_not_switch_the_global(self):
+        from keiba import profile
+        before = profile.active()
+        profile.for_venue("中山")
+        self.assertIs(profile.active(), before)
+
+    @unittest.skipUnless(BASE_TIMES.exists(), "基準表が未生成")
+    def test_jra_race_finds_the_table_even_with_nar_active(self):
+        from keiba import profile
+        profile.use("nar")
+        try:
+            self.assertIsNotNone(sc._base_times("中山"))
+            self.assertIsNone(sc._base_times("大井"))
+        finally:
+            profile.use("nar")
+
+    @unittest.skipUnless(BASE_TIMES.exists(), "基準表が未生成")
+    def test_load_mochi_fires_for_a_jra_race_without_profile_switching(self):
+        from keiba import profile
+        profile.use("nar")
+        rows = [{"日付": f"2026-0{i}-10", "場": "中山", "馬場種別": "芝",
+                 "距離": "1600", "馬場": "良", "タイム": "1:33.0"}
+                for i in (1, 2, 3)]
+        horses = [horse(i, f"馬{i}", agari=34.0) for i in range(1, 7)]
+        records = {h.name: rows for h in horses}
+        got = sc.load_mochi(records, horses, "2026-09-13", None, venue="中山")
+        self.assertEqual(len(got), 6, "中央のレースで持ち時計が作れていない")

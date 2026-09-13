@@ -825,22 +825,28 @@ def score_race(
     venue に開催場名を渡すとコース適性がその場の自己成績になる。
     渡さなければコース適性は中立のままになる。
     """
-    mochi = load_mochi(records, horses, as_of, base_times)
+    mochi = load_mochi(records, horses, as_of, base_times, venue)
     return [score_horse(h, horses, history, kyori, jockey_tiers,
                         records, as_of, venue, mochi) for h in horses]
 
 
-def load_mochi(records, horses, as_of, base_times=None) -> dict[str, float]:
+def load_mochi(records, horses, as_of, base_times=None,
+               venue: str | None = None) -> dict[str, float]:
     """出走馬の持ち時計（近走平均）をまとめて出す。基準表が無ければ空。
 
     **レース単位で1回だけ作る**。1頭ずつ作るとメンバー内の正規化ができない。
-    基準表を渡さなければプロファイルの base_times.json を読む。無ければ
-    空を返し、基礎能力は従来どおり上がり3Fで採点される（静かに壊れないよう、
-    「作れなかった」と「全馬0」を区別する）。
+
+    基準表の探し方は **競馬場名から決める**（`profile.profile_for_venue`）。
+    `profile.active()` に頼ってはいけない: 集計スクリプトはプロファイルを
+    切り替えないものが多く（`accuracy.py` / `calibrate.py` は既定の nar のまま）、
+    **中央のレースを採点しているのに nar の基準表を探して「無い」と判断し、
+    静かに旧尺度（上がり3F）へ落ちる**。実際にそれで A/B が12セル全部
+    完全一致し、「新尺度でも数字が動かない」と誤読しかけた。
+    CLAUDE.md「集計スクリプトがプロファイルを指定していない事故」の再発である。
     """
     if not records:
         return {}
-    base = base_times if base_times is not None else _base_times()
+    base = base_times if base_times is not None else _base_times(venue)
     if base is None:
         return {}
     from . import mochidokei as mk
@@ -853,14 +859,16 @@ def load_mochi(records, horses, as_of, base_times=None) -> dict[str, float]:
 _BASE_CACHE: dict[tuple[str, float], object] = {}
 
 
-def _base_times():
-    """プロファイルの base_times.json を読む。無ければ None。
+def _base_times(venue: str | None = None):
+    """基準表を読む。無ければ None。
 
+    venue を渡せばその競馬場のプロファイル（中山→jra、大井→nar）から探す。
     None は「持ち時計を作れない」という意味で、全馬0とは区別する
     （区別しないと基準表を置き忘れたときに静かに全馬同点になる）。
     """
     from . import mochidokei as mk
-    p = Path(profile.active().path("base_times.json"))
+    prof = profile.for_venue(venue) if venue else profile.active()
+    p = Path(prof.path("base_times.json"))
     if not p.exists():
         return None
     key = (str(p), p.stat().st_mtime)

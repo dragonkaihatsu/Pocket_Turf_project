@@ -92,3 +92,25 @@ class TestEveryTableBuilderHasTheGuard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNoScriptReadsRecordsFromAmbientProfile(unittest.TestCase):
+    """集計スクリプトが馬別戦績を既定プロファイル任せに読まないこと。
+
+    `_load_horse_records()` を引数なしで呼ぶと `profile.active()`（既定 nar）
+    の horse_records.csv を読む。集計スクリプトはプロファイルを切り替えない
+    ので、**中央のレースに大井の戦績を当てる**。boxstats / single / tanpuku が
+    実際にそうなっており、box_stats.json 等はその状態で作られていた。
+    """
+
+    SCRIPTS = ["boxstats", "single", "tanpuku", "calibrate", "accuracy"]
+
+    def test_records_path_is_explicit(self):
+        import re
+        for name in self.SCRIPTS:
+            src = Path(f"scripts/{name}.py").read_text(encoding="utf-8")
+            self.assertNotRegex(
+                src, r"_load_horse_records\(\s*\)",
+                f"{name}.py が引数なしで戦績を読んでいる")
+            if "_load_horse_records" in src or "--records" in src:
+                self.assertIn("--records", src, f"{name}.py に --records が無い")

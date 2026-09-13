@@ -56,6 +56,10 @@ def main() -> None:
     ap.add_argument("--races", default="9-12")
     ap.add_argument("--ratings")
     ap.add_argument("--race-info", default="data/race_info.csv")
+    ap.add_argument("--records",
+                    default="data/profiles/jra/horse_records.csv",
+                    help="馬別戦績CSV。**明示しないと既定プロファイル（地方）を読み、"
+                         "中央のレースに大井の戦績を当てる事故になる**")
     ap.add_argument("--out", default="data/box_stats.json")
     args = ap.parse_args()
 
@@ -69,7 +73,7 @@ def main() -> None:
 
     wanted = parse_races(args.races)
     kyori_by = load_race_info(args.race_info)
-    records = _load_horse_records()
+    records = _load_horse_records(args.records)
     d = Path(args.dir)
 
     series: dict[tuple, list] = {}

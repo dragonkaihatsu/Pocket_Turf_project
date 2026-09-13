@@ -81,6 +81,10 @@ def main() -> None:
                     help="土曜・日曜に分けても集計する（曜日で中身が違わないかの確認）")
     ap.add_argument("--sort", choices=("的中率", "回収率"), default="回収率",
                     help="表の並び順。正解率を主指標にするときは 的中率")
+    ap.add_argument("--records",
+                    default="data/profiles/jra/horse_records.csv",
+                    help="馬別戦績CSV。**明示しないと既定プロファイル（地方）を読み、"
+                         "中央のレースに大井の戦績を当てる事故になる**")
     ap.add_argument("--out", help="結果をJSONで書き出す")
     ap.add_argument("--dump", help="レース×買い目の明細をCSVで書き出す。"
                     "スコア計算をやり直さずに年別・場別など任意の切り方で"
@@ -97,7 +101,7 @@ def main() -> None:
 
     wanted = parse_races(args.races)
     kyori_by = load_race_info(args.race_info)
-    records = _load_horse_records()
+    records = _load_horse_records(args.records)
     d = Path(args.dir)
 
     series: dict[tuple, list] = {}
