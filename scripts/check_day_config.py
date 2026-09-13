@@ -72,6 +72,14 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+# **プロジェクト直下を通す**。`python3 scripts/check_day_config.py` で起動すると
+# sys.path[0] は scripts/ になるので、これが無いと `from keiba.collect import …`
+# が ImportError になる。しかも --refresh はその例外を握りつぶして
+# 「取得モジュールを読めない」と出すだけなので、**取り直せていないことに
+# 気づかないまま古いキャッシュで書き戻す**。2026-09-12に馬場を古い値へ
+# 巻き戻した事故は、実はこれが原因だった（当時は取得できていたと思っていた）
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 VENUES = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京",
           "06": "中山", "07": "中京", "08": "京都", "09": "阪神", "10": "小倉"}
 BABA = {"稍": "稍重", "不": "不良", "稍重": "稍重", "重": "重", "不良": "不良", "良": "良"}
@@ -178,8 +186,12 @@ def refresh_list_page(cache: Path, date: str) -> bool:
     try:
         from keiba.collect import JRA_RACE_LIST_URL, Fetcher
     except ImportError as e:
-        print(f"! 取得モジュールを読めない（{e}）。--refresh を無視する")
-        return False
+        # **握りつぶさない**。--refresh を指定したのに取り直せていない状態で
+        # --write まで進むと、古いキャッシュを「最新」として書き戻してしまう
+        print(f"✗ 取得モジュールを読めない（{e}）")
+        print("  --refresh は指定されたが取り直せていない。"
+              "このまま --write すると古い値を書き戻すので中止する")
+        raise SystemExit(1)
     key = date.replace("-", "")
     fetcher = Fetcher(cache)
     got = fetcher.get(JRA_RACE_LIST_URL.format(date=key), f"jra_list_{key}",
