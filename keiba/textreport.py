@@ -25,6 +25,24 @@ RULE = "━" * 46
 CP932_SUBSTITUTES = {"—": "－"}
 
 
+NAME_CHARS = 3      # 買い目に添える馬名の文字数
+
+
+def umaban_label(umaban: int, name: str | None, chars: int = NAME_CHARS) -> str:
+    """馬番に馬名の頭を付ける。収支計算のとき番号だけだと照合できないため。
+
+    「2-11」では、どの馬を買ったのか馬柱を開き直さないと分からない。
+    「2テラメ-11ヨウシ」なら投票履歴や結果画面とそのまま突き合わせられる。
+    名前が無い・短いときは在るぶんだけ付ける（`?` などを作らない）。
+    """
+    return f"{umaban}{(name or '')[:chars]}"
+
+
+def ticket_label(combo, names: dict[int, str], chars: int = NAME_CHARS) -> str:
+    """買い目1点を「2テラメ-11ヨウシ」の形にする。馬番の昇順で並べる。"""
+    return "-".join(umaban_label(u, names.get(u), chars) for u in sorted(combo))
+
+
 def alt_order_note(scores: list[HorseScore], baba: str, n_show: int) -> str | None:
     """馬場の良/非良が逆だった場合に買い目が変わるか。変わらなければ None。
 
