@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.expectation import MAX_RANK, rank_key, wilson
+from keiba import profile
 from keiba.models import load_horses
 from keiba.scoring import score_race
 
@@ -140,6 +141,10 @@ def main() -> None:
                     help="使用する補正ファイル。1-9Rだけで作った補正を10-12Rに当てれば"
                          "後知恵の入らない対応表になる（--with-ratings と併用）")
     args = ap.parse_args()
+
+    # 入力データと出力先プロファイルの食い違いで止める
+    # （大井244レースの対応表を中央へ書いた事故があった）
+    profile.assert_same_profile(args.dir, args.out)
 
     import keiba.scoring as sc
     if not args.with_ratings:

@@ -25,6 +25,7 @@ import re
 from backtest import (load_race, load_race_info, parse_races, race_date,
                       race_number, race_venue, settle)
 from keiba.cli import _load_horse_records
+from keiba import profile
 from keiba.marks import assign_marks
 
 WIDTHS = (3, 4, 5, 6)
@@ -57,6 +58,10 @@ def main() -> None:
     ap.add_argument("--race-info", default="data/race_info.csv")
     ap.add_argument("--out", default="data/box_stats.json")
     args = ap.parse_args()
+
+    # 入力データと出力先プロファイルの食い違いで止める
+    # （大井244レースの対応表を中央へ書いた事故があった）
+    profile.assert_same_profile(args.dir, args.out)
 
     if args.ratings:
         table = json.loads(Path(args.ratings).read_text(encoding="utf-8"))

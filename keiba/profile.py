@@ -112,3 +112,60 @@ def use(name: str) -> Profile:
 
 def use_for_venue(venue: str | None) -> Profile:
     return use(profile_for_venue(venue))
+
+
+# ---------------------------------------------------------------------------
+# 収集ディレクトリと出力先プロファイルの食い違いを止める（2026-09-13 追加）
+#
+# 実際に踏んだ事故: `scripts/calibrate.py --out data/profiles/jra/calibration.json`
+# を既定の `--dir data/collected`（地方）で走らせ、**大井244レースの対応表を
+# 中央のプロファイルに書き込んだ**。ヘッダには「大井9-12R 244レース」と
+# 出ていたが、エラーは出ないので気づかずに通る。
+#
+# CLAUDE.mdはこの型の事故を繰り返し記録している（プロファイル取り違え・
+# 帯の絞り込み・一軍の定義・race_idに開催日が無い件）。共通しているのは
+# **もっともらしい違う数字が静かに出る**ことなので、書き込む前に止める。
+# ---------------------------------------------------------------------------
+
+def venues_in_dir(directory, limit: int = 400) -> set[str]:
+    """収集ディレクトリのファイル名から競馬場名を集める。"""
+    from .racefiles import race_venue
+    out = set()
+    for p in sorted(Path(directory).glob("*_結果.csv"))[:limit]:
+        v = race_venue(p.name)
+        if v:
+            out.add(v)
+    return out
+
+
+def profile_for_dir(directory) -> str | None:
+    """そのディレクトリが地方/中央どちらのデータか。混在・不明なら None。"""
+    kinds = {profile_for_venue(v) for v in venues_in_dir(directory)}
+    kinds.discard(None)
+    return kinds.pop() if len(kinds) == 1 else None
+
+
+def profile_of_path(path) -> str | None:
+    """出力先パスから、どのプロファイルに書こうとしているかを読む。"""
+    parts = {p for p in Path(path).parts}
+    for name in ("jra", "nar"):
+        if name in parts:
+            return name
+    return None
+
+
+def assert_same_profile(directory, out_path) -> None:
+    """入力データと出力先プロファイルが一致しなければ止める。
+
+    どちらかが判定できないときは通す（推測で止めると使えなくなる）。
+    止めるのは**はっきり食い違っているときだけ**。
+    """
+    src, dst = profile_for_dir(directory), profile_of_path(out_path)
+    if src and dst and src != dst:
+        raise SystemExit(
+            f"■ 中止: 入力データと出力先プロファイルが食い違っている\n"
+            f"    入力 {directory} は {src} のデータ"
+            f"（{'・'.join(sorted(venues_in_dir(directory)))[:40]}…）\n"
+            f"    出力 {out_path} は {dst} のプロファイル\n"
+            f"  --dir を出力先に合わせること。地方の実測値を中央に当てても"
+            f"エラーは出ず、もっともらしい違う予想が出るだけなので危険")

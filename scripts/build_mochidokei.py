@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba import mochidokei as mk
+from keiba import profile
 from keiba.racefiles import (DEFAULT_RACES, parse_months, race_month,
                              race_number, race_venue, result_files)
 
@@ -175,6 +176,10 @@ def main() -> int:
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
     ap.add_argument("--out", default="data/profiles/jra/base_times.json")
     a = ap.parse_args()
+
+    # 入力データと出力先プロファイルの食い違いで止める
+    # （大井244レースの対応表を中央へ書いた事故があった）
+    profile.assert_same_profile(a.dir, a.out)
 
     info = load_race_info(Path(a.race_info))
     paths = result_files(a.dir, races=a.races, months=a.months)

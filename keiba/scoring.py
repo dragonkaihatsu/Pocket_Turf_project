@@ -840,11 +840,31 @@ def load_mochi(records, horses, as_of, base_times=None) -> dict[str, float]:
     """
     if not records:
         return {}
-    from . import mochidokei as mk
-    base = base_times
+    base = base_times if base_times is not None else _base_times()
     if base is None:
-        p = profile.active().path("base_times.json")
-        if not Path(p).exists():
-            return {}
-        base = mk.BaseTimes.load(p)
+        return {}
+    from . import mochidokei as mk
     return mk.field_indices(records, [h.name for h in horses], as_of, base)
+
+
+# 基準表はレースごとに読み直すと 2,000 レースで 2,000 回 JSON を開く。
+# パスと更新時刻でキャッシュする（**id() では鍵にしない**。一軍騎手の閾値
+# キャッシュで前の表がGCされた後に同じidが再利用され、古い値を返した）
+_BASE_CACHE: dict[tuple[str, float], object] = {}
+
+
+def _base_times():
+    """プロファイルの base_times.json を読む。無ければ None。
+
+    None は「持ち時計を作れない」という意味で、全馬0とは区別する
+    （区別しないと基準表を置き忘れたときに静かに全馬同点になる）。
+    """
+    from . import mochidokei as mk
+    p = Path(profile.active().path("base_times.json"))
+    if not p.exists():
+        return None
+    key = (str(p), p.stat().st_mtime)
+    if key not in _BASE_CACHE:
+        _BASE_CACHE.clear()
+        _BASE_CACHE[key] = mk.BaseTimes.load(p)
+    return _BASE_CACHE[key]

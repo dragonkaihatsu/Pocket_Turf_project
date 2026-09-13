@@ -38,6 +38,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.racefiles import DEFAULT_RACES, race_number, result_files
+from keiba import profile
 
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
 VENUE_RE = re.compile(r"_(\D+?)\d{2}R_")
@@ -65,6 +66,10 @@ def main() -> None:
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
     ap.add_argument("--out", default="data/profiles/jra/horse_records_corpus.csv")
     args = ap.parse_args()
+
+    # 入力データと出力先プロファイルの食い違いで止める
+    # （大井244レースの対応表を中央へ書いた事故があった）
+    profile.assert_same_profile(args.dir, args.out)
 
     info = load_race_info(Path(args.race_info))
     rows_out: list[dict] = []

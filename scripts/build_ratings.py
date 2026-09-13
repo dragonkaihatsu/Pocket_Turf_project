@@ -19,6 +19,11 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from keiba import profile
+
 
 # ファイル名は「日付_場名+レース番号R_レース名_種別.csv」。競馬場名は
 # 大井にも東京にも東京競馬場以外にもなるので、場名を決め打ちしない
@@ -115,6 +120,9 @@ def main() -> None:
     ap.add_argument("--out", default="data/ratings.json")
     ap.add_argument("--races", help="対象レース番号で絞る (例: 1-9)")
     args = ap.parse_args()
+
+    # 入力データと出力先プロファイルの食い違いで止める
+    profile.assert_same_profile(args.dir, args.out)
 
     wanted = parse_races(args.races) if args.races else None
     ratings = build(Path(args.dir), wanted)
