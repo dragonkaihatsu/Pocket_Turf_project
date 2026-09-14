@@ -295,6 +295,11 @@
     border-radius:6px;padding:1px 6px;margin-top:3px;
   }
   .store-item .data-link{font-size:.72rem;color:var(--purple);word-break:break-all;}
+  .store-item .rotation-badge{
+    display:inline-block;font-size:.66rem;font-weight:700;
+    color:#60a5fa;background:rgba(96,165,250,.12);
+    border-radius:6px;padding:1px 6px;margin-top:3px;
+  }
   .store-item .btns{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
   .edit-row-btn{background:none;border:none;color:var(--text-dim);font-size:.9rem;padding:2px 6px;cursor:pointer;}
   .edit-row-btn:hover{color:var(--purple);}
@@ -317,6 +322,7 @@
   .c-source.src-pworld{color:var(--gold);background:rgba(240,193,75,.14);}
   .c-source.src-anaslo{color:#60a5fa;background:rgba(96,165,250,.14);}
   .c-source.src-minpachi{color:var(--text-dim);background:rgba(154,161,181,.14);}
+  .c-source.src-rotation{color:#60a5fa;background:rgba(96,165,250,.14);}
   .candidate-item button{
     flex-shrink:0;padding:5px 10px;font-size:.72rem;
     background:var(--bg-card2);border:1px solid var(--line);color:var(--text);
@@ -472,6 +478,16 @@
       <label for="storeDataUrl">データ確認先（URL・任意）</label>
       <input type="text" id="storeDataUrl" placeholder="例: https://...">
     </div>
+    <div class="grid" style="margin-top:8px;">
+      <div class="field">
+        <label for="storeAvgRotation">平均回転数（参考値・任意）</label>
+        <input type="number" id="storeAvgRotation" min="0" placeholder="例: 2500">
+      </div>
+      <div class="field">
+        <label for="storeAvgRotationNote">回転数の出典・取材日など（任意）</label>
+        <input type="text" id="storeAvgRotationNote" placeholder="例: スロパイ 2026/09/07取材">
+      </div>
+    </div>
     <div class="field" style="margin-top:8px;">
       <label for="storeNote">備考（パターン化できない場合など・任意）</label>
       <input type="text" id="storeNote" placeholder="例: 第2日曜・SNSで要確認">
@@ -482,7 +498,24 @@
     </div>
     <div id="storeMsg"></div>
 
-    <h3 class="sub-title">登録済みの店舗</h3>
+    <h3 class="sub-title">🎯 対象の絞り込み（中小店舗を除外）</h3>
+    <div class="note" style="margin-top:0;">
+      マイジャグラー・アイムジャグラー・ゴーゴージャグラーは設定が入りにくいとされる小規模店舗と、
+      集中投資が期待できる大型店・稼働店を、台データからは機械的に区別できません。そこで
+      「平均回転数（参考値）」がしきい値以上の店舗だけを一覧・イベントカレンダーの対象にする
+      絞り込みです（回転数データが未入力の店舗はしきい値を満たさない扱いになります）。
+    </div>
+    <div class="chk-row">
+      <input type="checkbox" id="rotationFilterEnabled">
+      <label for="rotationFilterEnabled">平均回転数がしきい値以上の店舗のみ一覧・カレンダーに表示する</label>
+    </div>
+    <div class="row" style="align-items:center;margin-top:6px;">
+      <label for="rotationThreshold" style="margin:0;">しきい値:</label>
+      <input type="number" id="rotationThreshold" min="0" step="100" value="2000" style="width:110px;">
+      <span style="color:var(--text-dim);font-size:.85rem;">G以上</span>
+    </div>
+
+    <h3 class="sub-title">登録済みの店舗<span id="storeListFilterNote" class="note" style="display:inline;margin:0 0 0 6px;"></span></h3>
     <div id="storeList"><div class="empty-note">まだ登録がありません。</div></div>
 
     <h3 class="sub-title">📅 イベントカレンダー（登録ルールから自動作成）</h3>
@@ -685,6 +718,7 @@
   var LS_LAST_MACHINE = "juggler_app_last_machine_v1";
   var LS_HISTORY = "juggler_app_history_v1";
   var LS_STORES = "juggler_app_stores_v1";
+  var LS_ROTATION_FILTER = "juggler_app_rotation_filter_v1";
 
   function loadJSON(key, fallback){
     try{
@@ -700,6 +734,12 @@
   var customMachines = loadJSON(LS_CUSTOM, {});    // { id: {name, settings[]} }
   var history = loadJSON(LS_HISTORY, []);          // [{id,date,machineId,label,hall,isEvent,n,kb,kr,posterior,highBand,lowBand,best,savedAt}]
   var stores = loadJSON(LS_STORES, []);            // [{id,name,monthDays:[1-31],weekdays:[0-6],note,createdAt}]
+  var rotationFilter = loadJSON(LS_ROTATION_FILTER, {enabled:false, threshold:2000});
+
+  function passesRotationFilter(store){
+    if (!rotationFilter.enabled) return true;
+    return typeof store.avgRotation === "number" && isFinite(store.avgRotation) && store.avgRotation >= rotationFilter.threshold;
+  }
 
   function allMachineIds(){
     return Object.keys(DEFAULT_MACHINES).concat(Object.keys(customMachines));
@@ -756,11 +796,16 @@
   var storeWeekdaysEl = document.getElementById("storeWeekdays");
   var storeDataPublishedEl = document.getElementById("storeDataPublished");
   var storeDataUrlEl = document.getElementById("storeDataUrl");
+  var storeAvgRotationEl = document.getElementById("storeAvgRotation");
+  var storeAvgRotationNoteEl = document.getElementById("storeAvgRotationNote");
   var storeNoteEl = document.getElementById("storeNote");
   var addStoreBtn = document.getElementById("addStoreBtn");
   var cancelEditStoreBtn = document.getElementById("cancelEditStoreBtn");
   var storeMsg = document.getElementById("storeMsg");
   var storeListEl = document.getElementById("storeList");
+  var storeListFilterNoteEl = document.getElementById("storeListFilterNote");
+  var rotationFilterEnabledEl = document.getElementById("rotationFilterEnabled");
+  var rotationThresholdEl = document.getElementById("rotationThreshold");
   var candidateFilterEl = document.getElementById("candidateFilter");
   var candidateListEl = document.getElementById("candidateList");
   var calPrevBtn = document.getElementById("calPrevBtn");
@@ -1015,6 +1060,11 @@
   //   みんパチは口コミ・換金率・イベント情報中心のホール掲載サイトで、台データ公開の有無は
   //   ホールごとに未確認（登録後、自分で確認したら「自店データ公開」にチェックしてください）
   // イベント日パターンは含まれていません（ホールごとに個別確認のうえ登録してください）
+  // avgRotation / avgRotationNote … 一部の候補にのみ、スロパイ(slotana777.com)の「取材実績」
+  // ページから拾った店舗全体の平均回転数（参考値）を付与しています。機種別（マイ/アイム/ゴーゴー
+  // 個別）の内訳ではなく、あくまで店舗全体の実績です。主要な台データサイト（アナスロ・ペカセン・
+  // スロレポ等）は自動取得をブロックしているため、機種別の平均回転数を全候補ぶん収集すること
+  // はできていません（未収録の候補は avgRotation なし＝フィルタ対象外）
   var TOKYO_DATA_HALLS = [
     {name:"キコーナ 新宿三丁目店", area:"新宿区", source:"P-WORLD", dataUrl:""},
     {name:"エスパス日拓高田馬場本店", area:"新宿区", source:"P-WORLD", dataUrl:""},
@@ -1036,7 +1086,7 @@
     {name:"グランドホール西高島平店", area:"板橋区", source:"P-WORLD", dataUrl:""},
     {name:"パーラースーパーセブン新高円寺店", area:"杉並区", source:"P-WORLD", dataUrl:""},
     {name:"ニュー太平", area:"豊島区", source:"P-WORLD", dataUrl:""},
-    {name:"エスパス日拓西武新宿駅前", area:"新宿区", source:"P-WORLD", dataUrl:""},
+    {name:"エスパス日拓西武新宿駅前", area:"新宿区", source:"P-WORLD", dataUrl:"", avgRotation:3183, avgRotationNote:"スロパイ(slotana777.com)取材実績 2026/08/31 平均3,183G（店舗全体・機種別内訳なし）"},
     {name:"BIGディッパー新橋２号店", area:"港区", source:"P-WORLD", dataUrl:""},
     {name:"パーラースーパーセブン新中野店", area:"中野区", source:"P-WORLD", dataUrl:""},
     {name:"ジュラク３", area:"北区", source:"P-WORLD", dataUrl:""},
@@ -1069,7 +1119,7 @@
     {name:"エクスアリーナ東京", area:"新宿区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%A8%E3%82%AF%E3%82%B9%E3%82%A2%E3%83%AA%E3%83%BC%E3%83%8A%E6%9D%B1%E4%BA%AC-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
     {name:"TOYO HALL", area:"新宿区", source:"アナスロ", dataUrl:""},
     {name:"マルハン蒲田駅東店", area:"大田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%9E%E3%83%AB%E3%83%8F%E3%83%B3%E8%92%B2%E7%94%B0%E9%A7%85%E6%9D%B1%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
-    {name:"マルハン新宿東宝ビル店", area:"新宿区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%9E%E3%83%AB%E3%83%8F%E3%83%B3%E6%96%B0%E5%AE%BF%E6%9D%B1%E5%AE%9D%E3%83%93%E3%83%AB%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"マルハン新宿東宝ビル店", area:"新宿区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%9E%E3%83%AB%E3%83%8F%E3%83%B3%E6%96%B0%E5%AE%BF%E6%9D%B1%E5%AE%9D%E3%83%93%E3%83%AB%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/", avgRotation:5563, avgRotationNote:"スロパイ(slotana777.com)取材実績 2026/09/07=5,589G・8/27=5,496G・8/17=5,603G の平均（店舗全体・機種別内訳なし）"},
     {name:"エスパス日拓新宿歌舞伎町店", area:"新宿区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%A8%E3%82%B9%E3%83%91%E3%82%B9%E6%97%A5%E6%8B%93%E6%96%B0%E5%AE%BF%E6%AD%8C%E8%88%9E%E4%BC%8E%E7%94%BA%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
     {name:"ピーアーク三田", area:"港区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%94%E3%83%BC%E3%82%A2%E3%83%BC%E3%82%AF%E4%B8%89%E7%94%B0-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
     {name:"楽園池袋店", area:"豊島区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E6%A5%BD%E5%9C%92%E6%B1%A0%E8%A2%8B%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
@@ -1085,7 +1135,7 @@
     {name:"大井ニュー東京東口店", area:"品川区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E5%A4%A7%E4%BA%95%E3%83%8B%E3%83%A5%E3%83%BC%E6%9D%B1%E4%BA%AC%E6%9D%B1%E5%8F%A3%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
     {name:"BIGディッパー大井町店", area:"品川区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/big%E3%83%87%E3%82%A3%E3%83%83%E3%83%91%E3%83%BC%E5%A4%A7%E4%BA%95%E7%94%BA%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
     {name:"メガガイア蒲田", area:"大田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%A1%E3%82%AC%E3%82%AC%E3%82%A4%E3%82%A2%E8%92%B2%E7%94%B0-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
-    {name:"楽園蒲田店", area:"大田区", source:"アナスロ", dataUrl:""},
+    {name:"楽園蒲田店", area:"大田区", source:"アナスロ", dataUrl:"", avgRotation:2815, avgRotationNote:"スロパイ(slotana777.com)取材実績 2026/09/07=3,597G・8/24=2,998G・8/4=1,849G の平均（店舗全体・機種別内訳なし・日によりばらつきあり）"},
     {name:"みとやジャックポット錦糸町", area:"墨田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%81%BF%E3%81%A8%E3%82%84%E3%82%B8%E3%83%A3%E3%83%83%E3%82%AF%E3%83%9D%E3%83%83%E3%83%88%E9%8C%A6%E7%B3%B8%E7%94%BA-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
     {name:"スーパーDステーション錦糸町店", area:"墨田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%B9%E3%83%BC%E3%83%91%E3%83%BCd%E3%82%B9%E3%83%86%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E9%8C%A6%E7%B3%B8%E7%94%BA%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
     {name:"みとや水道橋", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
@@ -1243,6 +1293,8 @@
     renderWeekdayCheckboxes(storeWeekdaysEl, store.weekdays || []);
     storeDataPublishedEl.checked = !!store.dataPublished;
     storeDataUrlEl.value = store.dataUrl || "";
+    storeAvgRotationEl.value = (typeof store.avgRotation === "number") ? store.avgRotation : "";
+    storeAvgRotationNoteEl.value = store.avgRotationNote || "";
     storeNoteEl.value = store.note || "";
     addStoreBtn.textContent = "この内容で更新する";
     cancelEditStoreBtn.style.display = "inline-block";
@@ -1254,6 +1306,7 @@
     editingStoreId = null;
     storeNameEl.value = ""; storeAreaEl.value = ""; storeMonthDaysEl.value = "";
     storeDataPublishedEl.checked = false; storeDataUrlEl.value = ""; storeNoteEl.value = "";
+    storeAvgRotationEl.value = ""; storeAvgRotationNoteEl.value = "";
     renderWeekdayCheckboxes(storeWeekdaysEl, []);
     addStoreBtn.textContent = "＋この店舗を登録";
     cancelEditStoreBtn.style.display = "none";
@@ -1267,10 +1320,19 @@
   function renderStoreList(){
     if (!stores.length){
       storeListEl.innerHTML = '<div class="empty-note">まだ登録がありません。</div>';
+      storeListFilterNoteEl.textContent = "";
+      return;
+    }
+    var visible = stores.filter(passesRotationFilter);
+    storeListFilterNoteEl.textContent = rotationFilter.enabled
+      ? "（絞り込み中: "+visible.length+" / "+stores.length+" 件表示）"
+      : "";
+    if (!visible.length){
+      storeListEl.innerHTML = '<div class="empty-note">平均回転数'+rotationFilter.threshold+'G以上の登録店舗がありません。しきい値を下げるか、各店舗に平均回転数を入力してください。</div>';
       return;
     }
     storeListEl.innerHTML = "";
-    stores.forEach(function(s){
+    visible.forEach(function(s){
       var item = document.createElement("div");
       item.className = "store-item";
       var body = document.createElement("div");
@@ -1278,6 +1340,7 @@
                       + '<div class="pattern">'+patternText(s)+'</div>'
                       + (s.dataPublished ? '<div class="data-badge">データ公開店</div>' : '')
                       + (s.dataUrl ? '<div class="data-link"><a href="'+escapeHtml(s.dataUrl)+'" target="_blank" rel="noopener">'+escapeHtml(s.dataUrl)+'</a></div>' : '')
+                      + (typeof s.avgRotation === "number" ? '<div class="rotation-badge">平均'+s.avgRotation.toLocaleString()+'G'+(s.avgRotationNote?'（'+escapeHtml(s.avgRotationNote)+'）':'')+'</div>' : '')
                       + (s.note ? '<div class="note-txt">'+escapeHtml(s.note)+'</div>' : '');
       var btns = document.createElement("div");
       btns.className = "btns";
@@ -1318,11 +1381,18 @@
     var filter = (candidateFilterEl.value || "").trim().toLowerCase();
     var registeredNames = stores.map(function(s){ return s.name; });
     var list = TOKYO_DATA_HALLS.filter(function(h){
+      if (rotationFilter.enabled){
+        if (typeof h.avgRotation !== "number" || h.avgRotation < rotationFilter.threshold) return false;
+      }
       if (!filter) return true;
       return h.name.toLowerCase().indexOf(filter) !== -1 || h.area.toLowerCase().indexOf(filter) !== -1;
     });
     if (!list.length){
-      candidateListEl.innerHTML = '<div class="empty-note">該当する候補がありません。</div>';
+      candidateListEl.innerHTML = '<div class="empty-note">'
+        + (rotationFilter.enabled
+           ? '平均回転数'+rotationFilter.threshold+'G以上のデータがある候補がありません（内蔵候補の大半は回転数データ未収集です）。'
+           : '該当する候補がありません。')
+        + '</div>';
       return;
     }
     candidateListEl.innerHTML = list.map(function(h, idx){
@@ -1330,7 +1400,9 @@
       var srcInfo = CANDIDATE_SOURCE_INFO[h.source] || {cls:"src-other"};
       return '<div class="candidate-item">'
            + '<div><span class="c-name">'+escapeHtml(h.name)+'</span><span class="c-area">'+escapeHtml(h.area)+'</span>'
-           + '<span class="c-source '+srcInfo.cls+'">'+escapeHtml(h.source)+'</span></div>'
+           + '<span class="c-source '+srcInfo.cls+'">'+escapeHtml(h.source)+'</span>'
+           + (typeof h.avgRotation === "number" ? '<span class="c-source src-rotation">平均'+h.avgRotation.toLocaleString()+'G</span>' : '')
+           + '</div>'
            + '<button data-idx="'+idx+'" '+(already?'disabled':'')+'>'+(already?'✓ 登録済み':'＋追加')+'</button>'
            + '</div>';
     }).join("");
@@ -1346,6 +1418,8 @@
           id: "s_" + Date.now() + "_" + Math.floor(Math.random()*1000),
           name: h.name, area: h.area, monthDays: [], weekdays: [],
           dataPublished: !!srcInfo.dataConfirmed, dataUrl: dataUrl,
+          avgRotation: (typeof h.avgRotation === "number") ? h.avgRotation : null,
+          avgRotationNote: h.avgRotationNote || "",
           note: note,
           createdAt: Date.now()
         });
@@ -1360,6 +1434,22 @@
   }
   candidateFilterEl.addEventListener("input", renderCandidateList);
 
+  function saveRotationFilter(){
+    saveJSON(LS_ROTATION_FILTER, rotationFilter);
+    renderStoreList();
+    renderCandidateList();
+    renderCalendar();
+  }
+  rotationFilterEnabledEl.addEventListener("change", function(){
+    rotationFilter.enabled = !!rotationFilterEnabledEl.checked;
+    saveRotationFilter();
+  });
+  rotationThresholdEl.addEventListener("input", function(){
+    var v = parseFloat(rotationThresholdEl.value);
+    rotationFilter.threshold = (isFinite(v) && v >= 0) ? v : 0;
+    saveRotationFilter();
+  });
+
   // ---------- イベントカレンダー ----------
   var STORE_COLOR_PALETTE = ["#f0c14b","#ec4899","#8a5cf6","#34d399","#4fd1c5","#f87171","#60a5fa","#fb923c","#a3e635","#e879f9"];
   var today0 = new Date();
@@ -1372,7 +1462,7 @@
     return y + "-" + ("0"+(m+1)).slice(-2) + "-" + ("0"+d).slice(-2);
   }
   function storesOnDate(dateStr){
-    return stores.filter(function(s){ return matchesEventRule(s, dateStr); });
+    return stores.filter(function(s){ return passesRotationFilter(s) && matchesEventRule(s, dateStr); });
   }
   function recordsOnDate(dateStr){
     return history.filter(function(r){ return r.date === dateStr; });
@@ -1436,10 +1526,14 @@
   }
 
   function renderCalLegend(){
-    var items = stores.map(function(s, idx){
-      return '<div class="item"><span class="swatch" style="background:'+storeColor(idx)+';"></span>'+s.name+'</div>';
+    var items = stores.filter(passesRotationFilter).map(function(s){
+      var idx = stores.indexOf(s);
+      return '<div class="item"><span class="swatch" style="background:'+storeColor(idx)+';"></span>'+escapeHtml(s.name)+'</div>';
     });
     items.push('<div class="item"><span class="swatch log"></span>実戦ログを保存した日</div>');
+    if (rotationFilter.enabled){
+      items.push('<div class="item">🎯 平均'+rotationFilter.threshold+'G以上の店舗のみ表示中</div>');
+    }
     calLegend.innerHTML = items.join("");
   }
 
@@ -1504,6 +1598,9 @@
     var weekdays = readWeekdayCheckboxes(storeWeekdaysEl);
     var dataPublished = !!storeDataPublishedEl.checked;
     var dataUrl = (storeDataUrlEl.value || "").trim();
+    var avgRotationRaw = parseFloat(storeAvgRotationEl.value);
+    var avgRotation = (isFinite(avgRotationRaw) && avgRotationRaw >= 0) ? avgRotationRaw : null;
+    var avgRotationNote = (storeAvgRotationNoteEl.value || "").trim();
     var note = (storeNoteEl.value || "").trim();
 
     if (editingStoreId){
@@ -1511,7 +1608,8 @@
       if (target){
         target.name = name; target.area = area; target.monthDays = monthDays;
         target.weekdays = weekdays; target.dataPublished = dataPublished;
-        target.dataUrl = dataUrl; target.note = note;
+        target.dataUrl = dataUrl; target.avgRotation = avgRotation;
+        target.avgRotationNote = avgRotationNote; target.note = note;
       }
       saveJSON(LS_STORES, stores);
       storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を更新しました。</div>';
@@ -1520,12 +1618,14 @@
       stores.push({
         id: "s_" + Date.now() + "_" + Math.floor(Math.random()*1000),
         name: name, area: area, monthDays: monthDays, weekdays: weekdays,
-        dataPublished: dataPublished, dataUrl: dataUrl, note: note,
+        dataPublished: dataPublished, dataUrl: dataUrl,
+        avgRotation: avgRotation, avgRotationNote: avgRotationNote, note: note,
         createdAt: Date.now()
       });
       saveJSON(LS_STORES, stores);
       storeNameEl.value = ""; storeAreaEl.value = ""; storeMonthDaysEl.value = "";
-      storeDataPublishedEl.checked = false; storeDataUrlEl.value = ""; storeNoteEl.value = "";
+      storeDataPublishedEl.checked = false; storeDataUrlEl.value = "";
+      storeAvgRotationEl.value = ""; storeAvgRotationNoteEl.value = ""; storeNoteEl.value = "";
       renderWeekdayCheckboxes(storeWeekdaysEl, []);
       storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を登録しました。</div>';
     }
@@ -1892,6 +1992,8 @@
 
   // ---------- init ----------
   logDateEl.value = todayStr();
+  rotationFilterEnabledEl.checked = !!rotationFilter.enabled;
+  rotationThresholdEl.value = rotationFilter.threshold;
   populateMachineSelect();
   onMachineChange();
   populateLogFilterMachine();
