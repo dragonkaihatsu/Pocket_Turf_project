@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ジャグラー設定判別アプリ</title>
+<style>
+  :root{
+    --bg: #12141c;
+    --bg-card: #1b1f2b;
+    --bg-card2: #222739;
+    --line: #333a4f;
+    --text: #eef0f6;
+    --text-dim: #9aa1b5;
+    --gold: #f0c14b;
+    --purple: #8a5cf6;
+    --pink: #ec4899;
+    --green: #34d399;
+    --red: #f87171;
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(138,92,246,0.20), transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, rgba(240,193,75,0.12), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family: "Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    line-height:1.6;
+    padding: 18px 16px 60px;
+    min-height:100vh;
+  }
+  .wrap{max-width:760px;margin:0 auto;}
+  header{margin-bottom:18px;}
+  h1{
+    font-size:1.5rem;
+    margin:0 0 4px;
+    background:linear-gradient(90deg,var(--gold),var(--pink) 60%,var(--purple));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    font-weight:800;
+    letter-spacing:.02em;
+  }
+  .sub{color:var(--text-dim);font-size:.85rem;}
+  .card{
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.25);
+  }
+  .card h2{
+    font-size:1rem;
+    margin:0 0 12px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    color:var(--text);
+  }
+  .card h2 .badge{
+    font-size:.68rem;
+    background:var(--bg-card2);
+    border:1px solid var(--line);
+    padding:2px 8px;
+    border-radius:999px;
+    color:var(--text-dim);
+    font-weight:600;
+  }
+  label{display:block;font-size:.8rem;color:var(--text-dim);margin-bottom:4px;}
+  select, input[type=number], input[type=text]{
+    width:100%;
+    background:var(--bg-card2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:10px 12px;
+    border-radius:10px;
+    font-size:1rem;
+    outline:none;
+    -webkit-appearance:none;
+    appearance:none;
+  }
+  select:focus, input:focus{border-color:var(--purple);}
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  .grid.g3{grid-template-columns:1fr 1fr 1fr;}
+  .field{margin-bottom:8px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  button{
+    cursor:pointer;
+    border:none;
+    border-radius:10px;
+    padding:11px 18px;
+    font-size:.95rem;
+    font-weight:700;
+    font-family:inherit;
+  }
+  .btn-main{
+    width:100%;
+    background:linear-gradient(90deg,var(--purple),var(--pink));
+    color:#fff;
+    box-shadow:0 6px 18px rgba(138,92,246,.35);
+  }
+  .btn-main:active{transform:translateY(1px);}
+  .btn-ghost{
+    background:var(--bg-card2);
+    color:var(--text);
+    border:1px solid var(--line);
+    font-weight:600;
+    font-size:.82rem;
+    padding:8px 12px;
+  }
+  .btn-ghost:hover{border-color:var(--purple);}
+  .btn-danger{color:var(--red);}
+  .stat-table{width:100%;border-collapse:collapse;font-size:.9rem;}
+  .stat-table td{padding:7px 4px;border-bottom:1px solid var(--line);}
+  .stat-table td:first-child{color:var(--text-dim);}
+  .stat-table td:last-child{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;}
+  .verdict{
+    text-align:center;
+    padding:14px 10px;
+    border-radius:12px;
+    background:var(--bg-card2);
+    margin-bottom:14px;
+    border:1px solid var(--line);
+  }
+  .verdict .top{font-size:.78rem;color:var(--text-dim);margin-bottom:4px;}
+  .verdict .main{font-size:1.5rem;font-weight:800;color:var(--gold);}
+  .verdict .sub2{font-size:.78rem;color:var(--text-dim);margin-top:6px;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+  .bar-label{width:52px;flex-shrink:0;font-weight:700;font-size:.85rem;text-align:right;}
+  .bar-track{
+    flex:1;
+    background:var(--bg-card2);
+    border-radius:8px;
+    height:22px;
+    position:relative;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .bar-fill{
+    height:100%;
+    border-radius:8px 0 0 8px;
+    transition:width .5s ease;
+  }
+  .bar-pct{width:54px;flex-shrink:0;text-align:right;font-size:.85rem;font-variant-numeric:tabular-nums;font-weight:700;}
+  .band-summary{
+    display:flex;
+    gap:10px;
+    margin-top:6px;
+  }
+  .band-summary .box{
+    flex:1;
+    background:var(--bg-card2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px;
+    text-align:center;
+  }
+  .band-summary .box .label{font-size:.72rem;color:var(--text-dim);}
+  .band-summary .box .val{font-size:1.1rem;font-weight:800;margin-top:2px;}
+  table.spec{width:100%;border-collapse:collapse;font-size:.82rem;}
+  table.spec th, table.spec td{padding:6px 4px;text-align:center;border-bottom:1px solid var(--line);}
+  table.spec th{color:var(--text-dim);font-weight:600;}
+  table.spec td:first-child, table.spec th:first-child{text-align:left;}
+  details summary{cursor:pointer;font-weight:700;font-size:.9rem;color:var(--text-dim);list-style:none;display:flex;align-items:center;gap:6px;}
+  details summary::-webkit-details-marker{display:none;}
+  details summary::before{content:"▸";display:inline-block;transition:transform .2s;}
+  details[open] summary::before{transform:rotate(90deg);}
+  details[open] summary{color:var(--text);}
+  .edit-table{width:100%;border-collapse:collapse;margin:10px 0;font-size:.85rem;}
+  .edit-table th,.edit-table td{padding:4px;text-align:center;}
+  .edit-table input{padding:6px 4px;text-align:center;font-size:.85rem;}
+  .edit-table th{color:var(--text-dim);font-weight:600;font-size:.75rem;}
+  .note{font-size:.76rem;color:var(--text-dim);margin-top:8px;}
+  .footer-note{
+    font-size:.74rem;
+    color:var(--text-dim);
+    text-align:center;
+    margin-top:22px;
+    padding:0 8px;
+  }
+  .msg{
+    font-size:.82rem;
+    padding:8px 10px;
+    border-radius:8px;
+    margin-top:8px;
+  }
+  .msg.ok{background:rgba(52,211,153,.12);color:var(--green);}
+  .msg.err{background:rgba(248,113,113,.12);color:var(--red);}
+  .actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .machine-select-row{display:flex;gap:8px;align-items:flex-end;}
+  .machine-select-row .field{flex:1;margin-bottom:0;}
+  h3.sub-title{font-size:.85rem;margin:14px 0 6px;color:var(--text-dim);}
+  @media (max-width:420px){
+    .grid.g3{grid-template-columns:1fr;}
+    .bar-label{width:42px;font-size:.78rem;}
+    .verdict .main{font-size:1.25rem;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🍒 ジャグラー設定判別アプリ 🍇</h1>
+    <div class="sub">BIG/REG回数から設定1〜6の期待度を統計的に推定します</div>
+  </header>
+
+  <!-- 機種選択 -->
+  <div class="card">
+    <h2>🎰 機種選択 <span class="badge">MACHINE</span></h2>
+    <div class="machine-select-row">
+      <div class="field">
+        <label for="machineSelect">機種</label>
+        <select id="machineSelect"></select>
+      </div>
+      <button class="btn-ghost" id="addMachineBtn">＋機種追加</button>
+    </div>
+  </div>
+
+  <!-- データ入力 -->
+  <div class="card">
+    <h2>📝 実戦データ入力 <span class="badge">INPUT</span></h2>
+    <div class="grid g3">
+      <div class="field">
+        <label for="games">総ゲーム数</label>
+        <input type="number" id="games" inputmode="numeric" min="1" placeholder="例: 6000">
+      </div>
+      <div class="field">
+        <label for="bigs">BIG回数</label>
+        <input type="number" id="bigs" inputmode="numeric" min="0" placeholder="例: 25">
+      </div>
+      <div class="field">
+        <label for="regs">REG回数</label>
+        <input type="number" id="regs" inputmode="numeric" min="0" placeholder="例: 22">
+      </div>
+    </div>
+    <button class="btn-main" id="calcBtn" style="margin-top:6px;">設定を判別する</button>
+    <div id="inputMsg"></div>
+  </div>
+
+  <!-- 結果 -->
+  <div id="resultArea" style="display:none;">
+
+    <div class="card">
+      <h2>📊 実戦データまとめ <span class="badge">STATS</span></h2>
+      <table class="stat-table" id="statTable"></table>
+    </div>
+
+    <div class="card">
+      <h2>🔮 設定判別結果（推定確率） <span class="badge">ESTIMATE</span></h2>
+      <div class="verdict">
+        <div class="top">最も可能性が高いのは</div>
+        <div class="main" id="verdictMain">-</div>
+        <div class="sub2" id="verdictSub">-</div>
+      </div>
+      <div id="barChart"></div>
+      <div class="band-summary">
+        <div class="box">
+          <div class="label">高設定 (4〜6) 期待度</div>
+          <div class="val" id="highBand" style="color:var(--gold)">-</div>
+        </div>
+        <div class="box">
+          <div class="label">低設定 (1〜3) 期待度</div>
+          <div class="val" id="lowBand" style="color:var(--text-dim)">-</div>
+        </div>
+      </div>
+      <div class="note">
+        ※ 各設定の理論BIG/REG確率をもとに、観測データが得られる尤度をベイズ的に正規化した推定値です（事前分布は均等仮定）。
+        試行回数が少ないと推定は大きく揺れます。目安として3000G以上のデータ収集を推奨します。
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📐 設定別 理論値 <span class="badge">SPEC</span></h2>
+      <div style="overflow-x:auto;">
+        <table class="spec" id="specTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 確率データ編集 -->
+  <div class="card">
+    <details id="editDetails">
+      <summary>⚙️ 確率データを編集・追加する</summary>
+      <div class="note" style="margin-top:10px;">
+        内蔵データは公開情報をもとにした参考値です。実際のスペックはメーカー公式資料や実機の説明書でご確認のうえ、
+        必要に応じて下記で分母（例: 1/273.1なら「273.1」）を書き換えてください。変更内容はこの端末内にのみ保存されます。
+      </div>
+      <h3 class="sub-title">「<span id="editingMachineName">-</span>」の確率データ</h3>
+      <table class="edit-table" id="editTable"></table>
+      <div class="actions-row">
+        <button class="btn-ghost" id="saveEditBtn">この機種の変更を保存</button>
+        <button class="btn-ghost btn-danger" id="resetEditBtn">初期値に戻す</button>
+        <button class="btn-ghost btn-danger" id="deleteMachineBtn" style="display:none;">この機種を削除</button>
+      </div>
+      <div id="editMsg"></div>
+    </details>
+  </div>
+
+  <div class="footer-note">
+    本アプリの確率データはインターネット上の公開情報を参考にした概算値であり、正確性を保証するものではありません。<br>
+    設定判別結果はあくまで統計的な目安であり、実際の設定を確定するものではありません。遊技は自己責任・節度を持って行ってください。
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- 内蔵機種データ（公開情報を基にした参考値。分母表記） ----------
+  var DEFAULT_MACHINES = {
+    "myjuggler5": { name: "マイジャグラーⅤ/Ⅵ", settings: [
+      {big:273.1, reg:409.6}, {big:270.8, reg:385.5}, {big:266.4, reg:336.1},
+      {big:254.0, reg:290.0}, {big:240.1, reg:268.6}, {big:229.1, reg:229.1}
+    ]},
+    "aimjuggler_ex": { name: "アイムジャグラーEX/ネオアイムジャグラー", settings: [
+      {big:273.1, reg:439.8}, {big:269.7, reg:399.6}, {big:269.7, reg:331.0},
+      {big:259.0, reg:315.1}, {big:259.0, reg:255.0}, {big:255.0, reg:255.0}
+    ]},
+    "funky_juggler2": { name: "ファンキージャグラー2", settings: [
+      {big:266.4, reg:439.8}, {big:259.0, reg:407.1}, {big:256.0, reg:366.1},
+      {big:249.2, reg:322.8}, {big:240.1, reg:299.3}, {big:219.9, reg:262.1}
+    ]},
+    "happy_juggler8": { name: "ハッピージャグラーⅤⅢ", settings: [
+      {big:273.1, reg:397.2}, {big:270.8, reg:362.1}, {big:263.2, reg:332.7},
+      {big:254.0, reg:300.6}, {big:239.2, reg:273.1}, {big:226.0, reg:256.0}
+    ]},
+    "gogo_juggler3": { name: "ゴーゴージャグラー3", settings: [
+      {big:259.0, reg:354.2}, {big:258.0, reg:332.7}, {big:257.0, reg:306.2},
+      {big:254.0, reg:268.6}, {big:247.3, reg:247.3}, {big:234.9, reg:234.9}
+    ]},
+    "juggler_girls_ss": { name: "ジャグラーガールズSS", settings: [
+      {big:273.1, reg:381.0}, {big:270.8, reg:350.5}, {big:260.1, reg:316.6},
+      {big:250.1, reg:281.3}, {big:243.6, reg:270.8}, {big:226.0, reg:252.1}
+    ]},
+    "mr_juggler": { name: "ミスタージャグラー", settings: [
+      {big:268.6, reg:374.5}, {big:267.5, reg:354.2}, {big:260.1, reg:331.0},
+      {big:249.2, reg:291.3}, {big:240.9, reg:257.0}, {big:237.4, reg:237.4}
+    ]},
+    "ultra_miracle_juggler": { name: "ウルトラミラクルジャグラー", settings: [
+      {big:267.5, reg:425.6}, {big:261.1, reg:402.1}, {big:256.0, reg:350.5},
+      {big:242.7, reg:322.8}, {big:233.2, reg:297.9}, {big:216.3, reg:277.7}
+    ]}
+  };
+
+  var LS_OVERRIDE = "juggler_app_overrides_v1";
+  var LS_CUSTOM = "juggler_app_custom_machines_v1";
+  var LS_LAST_MACHINE = "juggler_app_last_machine_v1";
+
+  function loadJSON(key, fallback){
+    try{
+      var v = localStorage.getItem(key);
+      return v ? JSON.parse(v) : fallback;
+    }catch(e){ return fallback; }
+  }
+  function saveJSON(key, val){
+    try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+  }
+
+  var overrides = loadJSON(LS_OVERRIDE, {});      // { machineId: settings[] }
+  var customMachines = loadJSON(LS_CUSTOM, {});    // { id: {name, settings[]} }
+
+  function allMachineIds(){
+    return Object.keys(DEFAULT_MACHINES).concat(Object.keys(customMachines));
+  }
+  function isCustom(id){ return !!customMachines[id]; }
+  function machineName(id){
+    if (customMachines[id]) return customMachines[id].name;
+    if (DEFAULT_MACHINES[id]) return DEFAULT_MACHINES[id].name;
+    return id;
+  }
+  function machineSettings(id){
+    if (overrides[id]) return overrides[id];
+    if (customMachines[id]) return customMachines[id].settings;
+    if (DEFAULT_MACHINES[id]) return DEFAULT_MACHINES[id].settings;
+    return null;
+  }
+  function defaultSettings(id){
+    if (DEFAULT_MACHINES[id]) return DEFAULT_MACHINES[id].settings;
+    return null;
+  }
+
+  // ---------- DOM ----------
+  var machineSelect = document.getElementById("machineSelect");
+  var gamesEl = document.getElementById("games");
+  var bigsEl = document.getElementById("bigs");
+  var regsEl = document.getElementById("regs");
+  var calcBtn = document.getElementById("calcBtn");
+  var inputMsg = document.getElementById("inputMsg");
+  var resultArea = document.getElementById("resultArea");
+  var statTable = document.getElementById("statTable");
+  var verdictMain = document.getElementById("verdictMain");
+  var verdictSub = document.getElementById("verdictSub");
+  var barChart = document.getElementById("barChart");
+  var highBand = document.getElementById("highBand");
+  var lowBand = document.getElementById("lowBand");
+  var specTable = document.getElementById("specTable");
+  var editTable = document.getElementById("editTable");
+  var editingMachineName = document.getElementById("editingMachineName");
+  var saveEditBtn = document.getElementById("saveEditBtn");
+  var resetEditBtn = document.getElementById("resetEditBtn");
+  var deleteMachineBtn = document.getElementById("deleteMachineBtn");
+  var editMsg = document.getElementById("editMsg");
+  var addMachineBtn = document.getElementById("addMachineBtn");
+
+  var SETTING_COLORS = ["#7d8299","#8a93b8","#34d399","#4fd1c5","#f0c14b","#ec4899"];
+
+  function populateMachineSelect(){
+    var prev = machineSelect.value;
+    machineSelect.innerHTML = "";
+    var defGroup = document.createElement("optgroup");
+    defGroup.label = "標準機種";
+    Object.keys(DEFAULT_MACHINES).forEach(function(id){
+      var opt = document.createElement("option");
+      opt.value = id; opt.textContent = machineName(id);
+      defGroup.appendChild(opt);
+    });
+    machineSelect.appendChild(defGroup);
+
+    var customIds = Object.keys(customMachines);
+    if (customIds.length){
+      var cGroup = document.createElement("optgroup");
+      cGroup.label = "追加した機種";
+      customIds.forEach(function(id){
+        var opt = document.createElement("option");
+        opt.value = id; opt.textContent = machineName(id);
+        cGroup.appendChild(opt);
+      });
+      machineSelect.appendChild(cGroup);
+    }
+
+    var last = loadJSON(LS_LAST_MACHINE, null);
+    var target = prev && allMachineIds().indexOf(prev) !== -1 ? prev
+               : (last && allMachineIds().indexOf(last) !== -1 ? last : allMachineIds()[0]);
+    machineSelect.value = target;
+  }
+
+  function currentMachineId(){ return machineSelect.value; }
+
+  // ---------- 統計計算 ----------
+  function fmtDenom(x){
+    if (!isFinite(x)) return "―";
+    return "1/" + x.toFixed(1);
+  }
+  function fmtPct(x){
+    return (x*100).toFixed(1) + "%";
+  }
+
+  function computeStats(n, kb, kr){
+    var total = kb + kr;
+    return {
+      n:n, kb:kb, kr:kr, total:total,
+      bigDenom: kb>0 ? n/kb : Infinity,
+      regDenom: kr>0 ? n/kr : Infinity,
+      totalDenom: total>0 ? n/total : Infinity,
+      brRatio: kr>0 ? kb/kr : (kb>0 ? Infinity : NaN)
+    };
+  }
+
+  // 多項分布の対数尤度でベイズ推定（事前分布は均等）
+  function estimateSettings(n, kb, kr, settings){
+    var kNone = n - kb - kr;
+    var logLs = settings.map(function(s){
+      var pBig = 1/s.big, pReg = 1/s.reg;
+      var pNone = 1 - pBig - pReg;
+      if (pNone <= 0) pNone = 1e-9;
+      var ll = 0;
+      if (kb > 0) ll += kb * Math.log(pBig);
+      if (kr > 0) ll += kr * Math.log(pReg);
+      if (kNone > 0) ll += kNone * Math.log(pNone);
+      return ll;
+    });
+    var maxLL = Math.max.apply(null, logLs);
+    var exps = logLs.map(function(l){ return Math.exp(l - maxLL); });
+    var sum = exps.reduce(function(a,b){ return a+b; }, 0);
+    return exps.map(function(e){ return e/sum; });
+  }
+
+  function runCalc(){
+    inputMsg.innerHTML = "";
+    var n = parseInt(gamesEl.value, 10);
+    var kb = parseInt(bigsEl.value, 10);
+    var kr = parseInt(regsEl.value, 10);
+
+    if (!n || n <= 0 || isNaN(kb) || isNaN(kr) || kb < 0 || kr < 0){
+      inputMsg.innerHTML = '<div class="msg err">総ゲーム数・BIG回数・REG回数を正しく入力してください。</div>';
+      resultArea.style.display = "none";
+      return;
+    }
+    if (kb + kr > n){
+      inputMsg.innerHTML = '<div class="msg err">BIG回数＋REG回数が総ゲーム数を超えています。入力を見直してください。</div>';
+      resultArea.style.display = "none";
+      return;
+    }
+
+    var mId = currentMachineId();
+    var settings = machineSettings(mId);
+    if (!settings){
+      inputMsg.innerHTML = '<div class="msg err">機種データが見つかりません。</div>';
+      return;
+    }
+
+    var stats = computeStats(n, kb, kr);
+    var posterior = estimateSettings(n, kb, kr, settings);
+
+    renderStats(stats);
+    renderVerdict(posterior);
+    renderBars(posterior);
+    renderBand(posterior);
+    renderSpec(settings, stats);
+
+    resultArea.style.display = "block";
+    if (n >= 3000){
+      inputMsg.innerHTML = '';
+    } else {
+      inputMsg.innerHTML = '<div class="msg ok">計算しました（※ ' + n + 'Gはサンプルがやや少なめです。参考程度にご覧ください）</div>';
+    }
+  }
+
+  function renderStats(s){
+    var rows = [
+      ["総ゲーム数", s.n.toLocaleString() + " G"],
+      ["BIG回数", s.kb + " 回　(" + fmtDenom(s.bigDenom) + ")"],
+      ["REG回数", s.kr + " 回　(" + fmtDenom(s.regDenom) + ")"],
+      ["合成確率", fmtDenom(s.totalDenom)],
+      ["BIG:REG比率", isFinite(s.brRatio) ? (s.brRatio.toFixed(2) + " : 1") : "―"]
+    ];
+    statTable.innerHTML = rows.map(function(r){
+      return "<tr><td>"+r[0]+"</td><td>"+r[1]+"</td></tr>";
+    }).join("");
+  }
+
+  function renderVerdict(posterior){
+    var best = 0;
+    for (var i=1;i<6;i++) if (posterior[i] > posterior[best]) best = i;
+    verdictMain.textContent = "設定 " + (best+1);
+    verdictMain.style.color = SETTING_COLORS[best];
+    verdictSub.textContent = "推定確率 " + fmtPct(posterior[best]) + "（他設定との相対尤度による推定）";
+  }
+
+  function renderBars(posterior){
+    var html = "";
+    for (var s=5; s>=0; s--){
+      var pct = posterior[s]*100;
+      html += '<div class="bar-row">'
+            + '<div class="bar-label">設定'+(s+1)+'</div>'
+            + '<div class="bar-track"><div class="bar-fill" style="width:'+pct.toFixed(1)+'%;background:'+SETTING_COLORS[s]+';"></div></div>'
+            + '<div class="bar-pct">'+pct.toFixed(1)+'%</div>'
+            + '</div>';
+    }
+    barChart.innerHTML = html;
+  }
+
+  function renderBand(posterior){
+    var high = posterior[3]+posterior[4]+posterior[5];
+    var low = posterior[0]+posterior[1]+posterior[2];
+    highBand.textContent = fmtPct(high);
+    lowBand.textContent = fmtPct(low);
+  }
+
+  function renderSpec(settings, stats){
+    var head = "<tr><th>設定</th><th>BIG確率</th><th>REG確率</th><th>合成確率</th><th>期待BIG回数</th><th>期待REG回数</th></tr>";
+    var body = settings.map(function(s, idx){
+      var pBig = 1/s.big, pReg = 1/s.reg;
+      var totalDenom = 1/(pBig+pReg);
+      var expBig = stats.n * pBig;
+      var expReg = stats.n * pReg;
+      return "<tr><td style='color:"+SETTING_COLORS[idx]+";font-weight:700;'>設定"+(idx+1)+"</td>"
+           + "<td>"+fmtDenom(s.big)+"</td>"
+           + "<td>"+fmtDenom(s.reg)+"</td>"
+           + "<td>"+fmtDenom(totalDenom)+"</td>"
+           + "<td>"+expBig.toFixed(1)+"</td>"
+           + "<td>"+expReg.toFixed(1)+"</td></tr>";
+    }).join("");
+    specTable.innerHTML = head + body;
+  }
+
+  // ---------- 編集フォーム ----------
+  function renderEditTable(){
+    var mId = currentMachineId();
+    editingMachineName.textContent = machineName(mId);
+    var settings = machineSettings(mId);
+    var head = "<tr><th>設定</th><th>BIG分母</th><th>REG分母</th></tr>";
+    var body = settings.map(function(s, idx){
+      return "<tr><td style='color:"+SETTING_COLORS[idx]+";font-weight:700;'>設定"+(idx+1)+"</td>"
+           + "<td><input type='number' step='0.1' min='1' data-idx='"+idx+"' data-field='big' value='"+s.big+"'></td>"
+           + "<td><input type='number' step='0.1' min='1' data-idx='"+idx+"' data-field='reg' value='"+s.reg+"'></td></tr>";
+    }).join("");
+    editTable.innerHTML = head + body;
+    deleteMachineBtn.style.display = isCustom(mId) ? "inline-block" : "none";
+    resetEditBtn.style.display = isCustom(mId) ? "none" : "inline-block";
+    editMsg.innerHTML = "";
+  }
+
+  function readEditTable(){
+    var inputs = editTable.querySelectorAll("input");
+    var settings = [0,1,2,3,4,5].map(function(){ return {big:0, reg:0}; });
+    inputs.forEach(function(inp){
+      var idx = parseInt(inp.getAttribute("data-idx"), 10);
+      var field = inp.getAttribute("data-field");
+      var v = parseFloat(inp.value);
+      settings[idx][field] = (isFinite(v) && v > 0) ? v : 0;
+    });
+    return settings;
+  }
+
+  function validateSettings(settings){
+    for (var i=0;i<6;i++){
+      if (!(settings[i].big > 0) || !(settings[i].reg > 0)) return false;
+    }
+    return true;
+  }
+
+  saveEditBtn.addEventListener("click", function(){
+    var mId = currentMachineId();
+    var settings = readEditTable();
+    if (!validateSettings(settings)){
+      editMsg.innerHTML = '<div class="msg err">すべての設定でBIG分母・REG分母を1以上の数値で入力してください。</div>';
+      return;
+    }
+    if (isCustom(mId)){
+      customMachines[mId].settings = settings;
+      saveJSON(LS_CUSTOM, customMachines);
+    } else {
+      overrides[mId] = settings;
+      saveJSON(LS_OVERRIDE, overrides);
+    }
+    editMsg.innerHTML = '<div class="msg ok">保存しました。</div>';
+  });
+
+  resetEditBtn.addEventListener("click", function(){
+    var mId = currentMachineId();
+    if (isCustom(mId)) return;
+    delete overrides[mId];
+    saveJSON(LS_OVERRIDE, overrides);
+    renderEditTable();
+    editMsg.innerHTML = '<div class="msg ok">初期値に戻しました。</div>';
+  });
+
+  deleteMachineBtn.addEventListener("click", function(){
+    var mId = currentMachineId();
+    if (!isCustom(mId)) return;
+    if (!confirm('「'+machineName(mId)+'」を削除します。よろしいですか？')) return;
+    delete customMachines[mId];
+    saveJSON(LS_CUSTOM, customMachines);
+    populateMachineSelect();
+    onMachineChange();
+  });
+
+  addMachineBtn.addEventListener("click", function(){
+    var name = prompt("追加する機種名を入力してください（例: マイジャグラーⅤ 二号機）");
+    if (!name) return;
+    name = name.trim();
+    if (!name) return;
+    var id = "custom_" + Date.now();
+    customMachines[id] = {
+      name: name,
+      settings: [
+        {big:270, reg:400}, {big:265, reg:370}, {big:260, reg:340},
+        {big:250, reg:300}, {big:240, reg:270}, {big:225, reg:240}
+      ]
+    };
+    saveJSON(LS_CUSTOM, customMachines);
+    populateMachineSelect();
+    machineSelect.value = id;
+    onMachineChange();
+    document.getElementById("editDetails").open = true;
+    editingMachineName.scrollIntoView({behavior:"smooth", block:"center"});
+  });
+
+  function onMachineChange(){
+    saveJSON(LS_LAST_MACHINE, currentMachineId());
+    renderEditTable();
+    resultArea.style.display = "none";
+    inputMsg.innerHTML = "";
+  }
+
+  machineSelect.addEventListener("change", onMachineChange);
+  calcBtn.addEventListener("click", runCalc);
+  [gamesEl, bigsEl, regsEl].forEach(function(el){
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter") runCalc();
+    });
+  });
+
+  // ---------- init ----------
+  populateMachineSelect();
+  onMachineChange();
+})();
+</script>
+</body>
+</html>
