@@ -310,6 +310,13 @@
   .candidate-item:last-child{border-bottom:none;}
   .candidate-item .c-name{font-weight:600;}
   .candidate-item .c-area{color:var(--text-dim);font-size:.72rem;margin-left:6px;}
+  .candidate-item .c-source{
+    display:inline-block;font-size:.62rem;font-weight:700;
+    padding:1px 6px;border-radius:6px;margin-left:6px;vertical-align:middle;
+  }
+  .c-source.src-pworld{color:var(--gold);background:rgba(240,193,75,.14);}
+  .c-source.src-anaslo{color:#60a5fa;background:rgba(96,165,250,.14);}
+  .c-source.src-minpachi{color:var(--text-dim);background:rgba(154,161,181,.14);}
   .candidate-item button{
     flex-shrink:0;padding:5px 10px;font-size:.72rem;
     background:var(--bg-card2);border:1px solid var(--line);color:var(--text);
@@ -423,11 +430,19 @@
       （イベント日情報の自動取得はできません）。
     </div>
 
-    <h3 class="sub-title">📍 候補: 東京都のデータ公開ホール（P-WORLD掲載）</h3>
+    <h3 class="sub-title">📍 候補: 東京都のホール（P-WORLD / アナスロ / みんパチ掲載）</h3>
     <div class="note" style="margin-top:0;">
-      P-WORLDの「出玉情報公開店」検索（東京都）に掲載されている実在ホールの候補リストです
-      （2026年9月時点・全店舗ではありません）。タップすると下のフォームに店名を読み込みます。
-      イベント日パターンは含まれていないため、分かる範囲でご自身で入力してください。
+      3つの外部サイトに掲載されている実在ホールの候補リストです（2026年9月時点の抜粋・
+      全店舗ではありません）。タップすると下のフォームに店名・エリアを読み込みます。
+      出典によって確からしさが異なります:
+      <span class="c-source src-pworld" style="margin-left:0;">P-WORLD</span>・
+      <span class="c-source src-anaslo">アナスロ</span>
+      は台データ（差枚等）が実際に閲覧できることを個別確認済みのホールのみ収録し、登録時に
+      「自店データ公開」が自動でONになります。
+      <span class="c-source src-minpachi">みんパチ</span>
+      は口コミ・換金率・イベント情報中心のサイトで、台データ公開の有無はホールごとに未確認のため
+      OFFのまま登録されます（確認できたらチェックしてください）。
+      イベント日パターンはいずれの出典にも含まれていないため、分かる範囲でご自身で入力してください。
     </div>
     <input type="text" id="candidateFilter" placeholder="店名・エリアで絞り込み（例: 新宿区）" style="margin:8px 0;">
     <div class="candidate-list" id="candidateList"></div>
@@ -990,60 +1005,153 @@
   // ---------- チェーン店・イベント日管理 ----------
   var WEEKDAY_CHECK_ORDER = [1,2,3,4,5,6,0]; // 月火水木金土日（getDay()基準）
 
-  // 東京都・P-WORLD「出玉情報公開店」掲載ホールの参考候補リスト（2026年9月時点・抜粋）
-  // 出典: https://www.p-world.co.jp/_machine/kensaku.cgi?is_new_ver=1&dir=tokyo&is_dedama=1
+  // 東京都のデータ公開ホール・参考候補リスト（2026年9月時点・抜粋、全店舗ではありません）
+  // 出典:
+  //   P-WORLD … 「出玉情報公開店」検索（東京都）https://www.p-world.co.jp/_machine/kensaku.cgi?is_new_ver=1&dir=tokyo&is_dedama=1
+  //   アナスロ … ホールごとの「データ一覧」ページが存在することを個別に確認 https://ana-slo.com/
+  //   みんパチ … エリア別のホール掲載ページ https://minpachi.com/category/tokyo/
+  // 出典による違い:
+  //   P-WORLD・アナスロは台データ（差枚等）が実際に閲覧できることを個別確認したホールのみ収録
+  //   みんパチは口コミ・換金率・イベント情報中心のホール掲載サイトで、台データ公開の有無は
+  //   ホールごとに未確認（登録後、自分で確認したら「自店データ公開」にチェックしてください）
   // イベント日パターンは含まれていません（ホールごとに個別確認のうえ登録してください）
   var TOKYO_DATA_HALLS = [
-    {name:"キコーナ 新宿三丁目店", area:"新宿区"},
-    {name:"エスパス日拓高田馬場本店", area:"新宿区"},
-    {name:"BIGディッパー門前仲町店", area:"江東区"},
-    {name:"BIGディッパー新橋１号店", area:"港区"},
-    {name:"ジアス南大沢", area:"八王子市"},
-    {name:"フルハウス 中延店", area:"品川区"},
-    {name:"キコーナ蒲田店", area:"大田区"},
-    {name:"パーラースーパーセブン学芸大学店", area:"目黒区"},
-    {name:"オリエンタルパサージュ自由が丘", area:"目黒区"},
-    {name:"グランド ラ・カータ 1111瑞穂店", area:"西多摩郡瑞穂町"},
-    {name:"エスパス日拓渋谷駅前新館", area:"渋谷区"},
-    {name:"マルホン", area:"墨田区"},
-    {name:"エスパス日拓上野新館", area:"台東区"},
-    {name:"グランドシップ", area:"江東区"},
-    {name:"スーパーセブン西八王子店", area:"八王子市"},
-    {name:"EXA FIRST", area:"板橋区"},
-    {name:"門前仲町スターダスト", area:"江東区"},
-    {name:"グランドホール西高島平店", area:"板橋区"},
-    {name:"パーラースーパーセブン新高円寺店", area:"杉並区"},
-    {name:"ニュー太平", area:"豊島区"},
-    {name:"エスパス日拓西武新宿駅前", area:"新宿区"},
-    {name:"BIGディッパー新橋２号店", area:"港区"},
-    {name:"パーラースーパーセブン新中野店", area:"中野区"},
-    {name:"ジュラク３", area:"北区"},
-    {name:"ニュー今津屋入谷店", area:"足立区"},
-    {name:"キコーナ府中店", area:"府中市"},
-    {name:"ジャラン浅草店", area:"台東区"},
-    {name:"成増会館", area:"板橋区"},
-    {name:"メッセ竹の塚店", area:"足立区"},
-    {name:"ジャラン谷在家店", area:"足立区"},
-    {name:"シード上板橋店", area:"板橋区"},
-    {name:"メッセ南千住店", area:"荒川区"},
-    {name:"キコーナ 平井店", area:"江戸川区"},
-    {name:"ルミナス日暮里店", area:"荒川区"},
-    {name:"ジュラク２", area:"北区"},
-    {name:"メッセ奥戸店", area:"葛飾区"},
-    {name:"メッセ荻窪店本館", area:"杉並区"},
-    {name:"エスパス日拓上野本館", area:"台東区"},
-    {name:"キューデン東口店", area:"足立区"},
-    {name:"ジュラク王子店", area:"北区"},
-    {name:"ビッグアップル．秋葉原店", area:"千代田区"},
-    {name:"アイランド秋葉原店", area:"千代田区"},
-    {name:"メッセ武蔵境店", area:"武蔵野市"},
-    {name:"メッセ吉祥寺店本館", area:"武蔵野市"},
-    {name:"ウインベル・イースト・スロット", area:"荒川区"},
-    {name:"メッセ扇店", area:"足立区"},
-    {name:"メッセ西葛西店", area:"江戸川区"},
-    {name:"ニュー今津屋", area:"江戸川区"},
-    {name:"ベルシティ/ザシティ篠崎店", area:"江戸川区"},
-    {name:"メッセ西荻窪店", area:"杉並区"}
+    {name:"キコーナ 新宿三丁目店", area:"新宿区", source:"P-WORLD", dataUrl:""},
+    {name:"エスパス日拓高田馬場本店", area:"新宿区", source:"P-WORLD", dataUrl:""},
+    {name:"BIGディッパー門前仲町店", area:"江東区", source:"P-WORLD", dataUrl:""},
+    {name:"BIGディッパー新橋１号店", area:"港区", source:"P-WORLD", dataUrl:""},
+    {name:"ジアス南大沢", area:"八王子市", source:"P-WORLD", dataUrl:""},
+    {name:"フルハウス 中延店", area:"品川区", source:"P-WORLD", dataUrl:""},
+    {name:"キコーナ蒲田店", area:"大田区", source:"P-WORLD", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%AD%E3%82%B3%E3%83%BC%E3%83%8A%E8%92%B2%E7%94%B0%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"パーラースーパーセブン学芸大学店", area:"目黒区", source:"P-WORLD", dataUrl:""},
+    {name:"オリエンタルパサージュ自由が丘", area:"目黒区", source:"P-WORLD", dataUrl:""},
+    {name:"グランド ラ・カータ 1111瑞穂店", area:"西多摩郡瑞穂町", source:"P-WORLD", dataUrl:""},
+    {name:"エスパス日拓渋谷駅前新館", area:"渋谷区", source:"P-WORLD", dataUrl:""},
+    {name:"マルホン", area:"墨田区", source:"P-WORLD", dataUrl:""},
+    {name:"エスパス日拓上野新館", area:"台東区", source:"P-WORLD", dataUrl:""},
+    {name:"グランドシップ", area:"江東区", source:"P-WORLD", dataUrl:""},
+    {name:"スーパーセブン西八王子店", area:"八王子市", source:"P-WORLD", dataUrl:""},
+    {name:"EXA FIRST", area:"板橋区", source:"P-WORLD", dataUrl:""},
+    {name:"門前仲町スターダスト", area:"江東区", source:"P-WORLD", dataUrl:""},
+    {name:"グランドホール西高島平店", area:"板橋区", source:"P-WORLD", dataUrl:""},
+    {name:"パーラースーパーセブン新高円寺店", area:"杉並区", source:"P-WORLD", dataUrl:""},
+    {name:"ニュー太平", area:"豊島区", source:"P-WORLD", dataUrl:""},
+    {name:"エスパス日拓西武新宿駅前", area:"新宿区", source:"P-WORLD", dataUrl:""},
+    {name:"BIGディッパー新橋２号店", area:"港区", source:"P-WORLD", dataUrl:""},
+    {name:"パーラースーパーセブン新中野店", area:"中野区", source:"P-WORLD", dataUrl:""},
+    {name:"ジュラク３", area:"北区", source:"P-WORLD", dataUrl:""},
+    {name:"ニュー今津屋入谷店", area:"足立区", source:"P-WORLD", dataUrl:""},
+    {name:"キコーナ府中店", area:"府中市", source:"P-WORLD", dataUrl:""},
+    {name:"ジャラン浅草店", area:"台東区", source:"P-WORLD", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%B8%E3%83%A3%E3%83%A9%E3%83%B3%E6%B5%85%E8%8D%89%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"成増会館", area:"板橋区", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ竹の塚店", area:"足立区", source:"P-WORLD", dataUrl:""},
+    {name:"ジャラン谷在家店", area:"足立区", source:"P-WORLD", dataUrl:""},
+    {name:"シード上板橋店", area:"板橋区", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ南千住店", area:"荒川区", source:"P-WORLD", dataUrl:""},
+    {name:"キコーナ 平井店", area:"江戸川区", source:"P-WORLD", dataUrl:""},
+    {name:"ルミナス日暮里店", area:"荒川区", source:"P-WORLD", dataUrl:""},
+    {name:"ジュラク２", area:"北区", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ奥戸店", area:"葛飾区", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ荻窪店本館", area:"杉並区", source:"P-WORLD", dataUrl:""},
+    {name:"エスパス日拓上野本館", area:"台東区", source:"P-WORLD", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%A8%E3%82%B9%E3%83%91%E3%82%B9%E6%97%A5%E6%8B%93%E4%B8%8A%E9%87%8E%E6%9C%AC%E9%A4%A8-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"キューデン東口店", area:"足立区", source:"P-WORLD", dataUrl:""},
+    {name:"ジュラク王子店", area:"北区", source:"P-WORLD", dataUrl:""},
+    {name:"ビッグアップル．秋葉原店", area:"千代田区", source:"P-WORLD", dataUrl:""},
+    {name:"アイランド秋葉原店", area:"千代田区", source:"P-WORLD", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%A2%E3%82%A4%E3%83%A9%E3%83%B3%E3%83%89%E7%A7%8B%E8%91%89%E5%8E%9F%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"メッセ武蔵境店", area:"武蔵野市", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ吉祥寺店本館", area:"武蔵野市", source:"P-WORLD", dataUrl:""},
+    {name:"ウインベル・イースト・スロット", area:"荒川区", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ扇店", area:"足立区", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ西葛西店", area:"江戸川区", source:"P-WORLD", dataUrl:""},
+    {name:"ニュー今津屋", area:"江戸川区", source:"P-WORLD", dataUrl:""},
+    {name:"ベルシティ/ザシティ篠崎店", area:"江戸川区", source:"P-WORLD", dataUrl:""},
+    {name:"メッセ西荻窪店", area:"杉並区", source:"P-WORLD", dataUrl:""},
+    {name:"エクスアリーナ東京", area:"新宿区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%A8%E3%82%AF%E3%82%B9%E3%82%A2%E3%83%AA%E3%83%BC%E3%83%8A%E6%9D%B1%E4%BA%AC-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"TOYO HALL", area:"新宿区", source:"アナスロ", dataUrl:""},
+    {name:"マルハン蒲田駅東店", area:"大田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%9E%E3%83%AB%E3%83%8F%E3%83%B3%E8%92%B2%E7%94%B0%E9%A7%85%E6%9D%B1%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"マルハン新宿東宝ビル店", area:"新宿区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%9E%E3%83%AB%E3%83%8F%E3%83%B3%E6%96%B0%E5%AE%BF%E6%9D%B1%E5%AE%9D%E3%83%93%E3%83%AB%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"エスパス日拓新宿歌舞伎町店", area:"新宿区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%A8%E3%82%B9%E3%83%91%E3%82%B9%E6%97%A5%E6%8B%93%E6%96%B0%E5%AE%BF%E6%AD%8C%E8%88%9E%E4%BC%8E%E7%94%BA%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"ピーアーク三田", area:"港区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%94%E3%83%BC%E3%82%A2%E3%83%BC%E3%82%AF%E4%B8%89%E7%94%B0-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"楽園池袋店", area:"豊島区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E6%A5%BD%E5%9C%92%E6%B1%A0%E8%A2%8B%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"ウエスタン葛西店", area:"江戸川区", source:"アナスロ", dataUrl:""},
+    {name:"パラッツォ葛西店", area:"江戸川区", source:"アナスロ", dataUrl:""},
+    {name:"楽園渋谷駅前店", area:"渋谷区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E6%A5%BD%E5%9C%92%E6%B8%8B%E8%B0%B7%E9%A7%85%E5%89%8D%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"エスパス日拓渋谷本館", area:"渋谷区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%A8%E3%82%B9%E3%83%91%E3%82%B9%E6%97%A5%E6%8B%93%E6%B8%8B%E8%B0%B7%E6%9C%AC%E9%A4%A8-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"スマートプレゴ池袋", area:"豊島区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%B9%E3%83%9E%E3%83%BC%E3%83%88%E3%83%97%E3%83%AC%E3%82%B4%E6%B1%A0%E8%A2%8B-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"マルハン池袋店", area:"豊島区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%9E%E3%83%AB%E3%83%8F%E3%83%B3%E6%B1%A0%E8%A2%8B%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"マルハン池袋 SLOT BASE", area:"豊島区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%9E%E3%83%AB%E3%83%8F%E3%83%B3%E6%B1%A0%E8%A2%8B-slot-base-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"TOHO池袋店", area:"豊島区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/toho%E6%B1%A0%E8%A2%8B%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"みとや錦糸町北口店", area:"墨田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%81%BF%E3%81%A8%E3%82%84%E9%8C%A6%E7%B3%B8%E7%94%BA%E5%8C%97%E5%8F%A3%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"大井ニュー東京東口店", area:"品川区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E5%A4%A7%E4%BA%95%E3%83%8B%E3%83%A5%E3%83%BC%E6%9D%B1%E4%BA%AC%E6%9D%B1%E5%8F%A3%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"BIGディッパー大井町店", area:"品川区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/big%E3%83%87%E3%82%A3%E3%83%83%E3%83%91%E3%83%BC%E5%A4%A7%E4%BA%95%E7%94%BA%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"メガガイア蒲田", area:"大田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%83%A1%E3%82%AC%E3%82%AC%E3%82%A4%E3%82%A2%E8%92%B2%E7%94%B0-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"楽園蒲田店", area:"大田区", source:"アナスロ", dataUrl:""},
+    {name:"みとやジャックポット錦糸町", area:"墨田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%81%BF%E3%81%A8%E3%82%84%E3%82%B8%E3%83%A3%E3%83%83%E3%82%AF%E3%83%9D%E3%83%83%E3%83%88%E9%8C%A6%E7%B3%B8%E7%94%BA-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"スーパーDステーション錦糸町店", area:"墨田区", source:"アナスロ", dataUrl:"https://ana-slo.com/%E3%83%9B%E3%83%BC%E3%83%AB%E3%83%87%E3%83%BC%E3%82%BF/%E6%9D%B1%E4%BA%AC%E9%83%BD/%E3%82%B9%E3%83%BC%E3%83%91%E3%83%BCd%E3%82%B9%E3%83%86%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E9%8C%A6%E7%B3%B8%E7%94%BA%E5%BA%97-%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/"},
+    {name:"みとや水道橋", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"みとや神田西口店", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"エスパス日拓秋葉原駅前店", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"コーシン神田店", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"サイバーパチンコ秋葉原昭和通り口店", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"ジャンボ", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"有楽町DUO", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"有楽町ウノ", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"秋葉原UNO", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"飯田橋プレサス", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"AION秋葉原", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"みとや神田北口店", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"ガイア神田東口店", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"スロットWAVE", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"人生劇場", area:"千代田区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA/"},
+    {name:"AION西葛西店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"THE CITY/BELLE CITY 篠崎店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ひっぽ", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"アトラス２", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ウエスタン一之江店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ウエスタン環七南葛西店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ウエスタン西葛西店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"オックス本一色", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"カイノスネオス", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ガイア瑞江2", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ガイア瑞江店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"クロノス", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"サンパレス環七大杉店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ニュースター", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"パーラーコア21", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"パーラー将軍葛西店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ベルシティザシティ篠崎南口0", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ベルシティザシティ篠崎南口1店", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"メッセ西葛西", area:"江戸川区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B1%9F%E6%88%B8%E5%B7%9D%E5%8C%BA/"},
+    {name:"ZENT新大久保店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"エスパス日拓新大久保駅前店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"カレイド", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"パーラークラウン中井店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"ベガスベガス新宿東南口店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"四谷タイガー", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"国際センター", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"新宿アラジン", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"MIYOSHI344", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"TOYO104高田馬場4丁目店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"エスパス日拓新大久保低貸専門店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"エスパス日拓高田馬場２", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"オアシス飯田橋店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"ガイア新宿西口店", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"グランパ大久保", area:"新宿区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%96%B0%E5%AE%BF%E5%8C%BA-tokyo/"},
+    {name:"エスパス日拓赤坂見附駅前店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"スーパーハリウッド品川", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"新橋UNO", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"麻布ニューマツヤ", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"アルファファイブ田町店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"エスタディオ新橋店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"キングイーグルズ田町店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"ゴリMAX品川港南口店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"ゴードン品川店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"シルバースター新橋", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"バンカー麻布十番店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"ミナミ六本木店", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"新橋トップス", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"芝浦エイト", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
+    {name:"TOP", area:"港区", source:"みんパチ", dataUrl:"https://minpachi.com/category/tokyo/%E6%B8%AF%E5%8C%BA/"},
   ];
   var PWORLD_TOKYO_DEDAMA_URL = "https://www.p-world.co.jp/_machine/kensaku.cgi?is_new_ver=1&dir=tokyo&is_dedama=1";
 
@@ -1200,6 +1308,12 @@
     });
   }
 
+  var CANDIDATE_SOURCE_INFO = {
+    "P-WORLD": {cls:"src-pworld", note:"P-WORLD「出玉情報公開店」(東京都)に掲載", dataConfirmed:true},
+    "アナスロ": {cls:"src-anaslo", note:"アナスロでホールごとの「データ一覧」ページを確認", dataConfirmed:true},
+    "みんパチ": {cls:"src-minpachi", note:"みんパチ（口コミ・換金率・イベント情報サイト）に掲載。台データを自店で公開しているかは未確認", dataConfirmed:false}
+  };
+
   function renderCandidateList(){
     var filter = (candidateFilterEl.value || "").trim().toLowerCase();
     var registeredNames = stores.map(function(s){ return s.name; });
@@ -1211,22 +1325,28 @@
       candidateListEl.innerHTML = '<div class="empty-note">該当する候補がありません。</div>';
       return;
     }
-    candidateListEl.innerHTML = list.map(function(h){
+    candidateListEl.innerHTML = list.map(function(h, idx){
       var already = registeredNames.indexOf(h.name) !== -1;
+      var srcInfo = CANDIDATE_SOURCE_INFO[h.source] || {cls:"src-other"};
       return '<div class="candidate-item">'
-           + '<div><span class="c-name">'+escapeHtml(h.name)+'</span><span class="c-area">'+escapeHtml(h.area)+'</span></div>'
-           + '<button data-cname="'+escapeHtml(h.name)+'" data-carea="'+escapeHtml(h.area)+'" '+(already?'disabled':'')+'>'+(already?'✓ 登録済み':'＋追加')+'</button>'
+           + '<div><span class="c-name">'+escapeHtml(h.name)+'</span><span class="c-area">'+escapeHtml(h.area)+'</span>'
+           + '<span class="c-source '+srcInfo.cls+'">'+escapeHtml(h.source)+'</span></div>'
+           + '<button data-idx="'+idx+'" '+(already?'disabled':'')+'>'+(already?'✓ 登録済み':'＋追加')+'</button>'
            + '</div>';
     }).join("");
     candidateListEl.querySelectorAll("button:not(:disabled)").forEach(function(btn){
       btn.addEventListener("click", function(){
-        var name = btn.getAttribute("data-cname");
-        var area = btn.getAttribute("data-carea");
+        var h = list[parseInt(btn.getAttribute("data-idx"), 10)];
+        var srcInfo = CANDIDATE_SOURCE_INFO[h.source] || {note:h.source+"に掲載", dataConfirmed:false};
+        var dataUrl = h.dataUrl || (h.source === "P-WORLD" ? PWORLD_TOKYO_DEDAMA_URL : "");
+        var note = srcInfo.note + "（"+todayStr()+"時点の参考情報）。"
+                 + (srcInfo.dataConfirmed ? "" : "確認できたら「自店データ公開」にチェックしてください。")
+                 + "イベント日パターンは分かれば編集してください。";
         stores.push({
           id: "s_" + Date.now() + "_" + Math.floor(Math.random()*1000),
-          name: name, area: area, monthDays: [], weekdays: [],
-          dataPublished: true, dataUrl: PWORLD_TOKYO_DEDAMA_URL,
-          note: "P-WORLD「出玉情報公開店」(東京都)に掲載（"+todayStr()+"時点の参考情報）。イベント日パターンは分かれば編集してください。",
+          name: h.name, area: h.area, monthDays: [], weekdays: [],
+          dataPublished: !!srcInfo.dataConfirmed, dataUrl: dataUrl,
+          note: note,
           createdAt: Date.now()
         });
         saveJSON(LS_STORES, stores);
@@ -1234,7 +1354,7 @@
         populateStoreDatalist();
         renderCalendar();
         renderCandidateList();
-        storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を登録しました。イベント日が分かれば「登録済みの店舗」の✎から編集してください。</div>';
+        storeMsg.innerHTML = '<div class="msg ok">「'+h.name+'」を登録しました。イベント日が分かれば「登録済みの店舗」の✎から編集してください。</div>';
       });
     });
   }
