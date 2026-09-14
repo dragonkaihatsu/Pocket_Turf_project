@@ -288,14 +288,53 @@
   .store-item .name{font-weight:700;margin-bottom:2px;}
   .store-item .pattern{color:var(--text-dim);font-size:.78rem;}
   .store-item .note-txt{color:var(--text-dim);font-size:.76rem;margin-top:2px;font-style:italic;}
-  .upcoming-row{
-    display:flex;align-items:baseline;gap:10px;
-    padding:6px 4px;border-bottom:1px solid var(--line);font-size:.82rem;
-  }
-  .upcoming-row:last-child{border-bottom:none;}
-  .upcoming-row .u-date{width:110px;flex-shrink:0;font-weight:700;color:var(--gold);}
-  .upcoming-row .u-stores{color:var(--text);}
   #autoEventHint{color:var(--green);}
+
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;}
+  .cal-nav button{padding:8px 14px;font-size:1rem;}
+  .cal-title{font-weight:800;font-size:1.02rem;}
+  .cal-today-btn{margin:8px 0 10px;}
+  .cal-grid{
+    display:grid;grid-template-columns:repeat(7,1fr);gap:4px;
+  }
+  .cal-day-head{
+    text-align:center;font-size:.7rem;color:var(--text-dim);font-weight:700;
+    padding-bottom:4px;
+  }
+  .cal-day-head.sun{color:var(--red);}
+  .cal-day-head.sat{color:#7dd3fc;}
+  .cal-cell{
+    aspect-ratio:1/1;
+    background:var(--bg-card2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    gap:2px;padding:3px 1px;
+    cursor:pointer;
+    font-size:.72rem;
+  }
+  .cal-cell.out-month{opacity:.32;}
+  .cal-cell.today{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
+  .cal-cell.selected{border-color:var(--purple);background:rgba(138,92,246,.18);}
+  .cal-daynum{font-weight:700;display:flex;align-items:center;gap:3px;}
+  .cal-log-mark{width:5px;height:5px;border-radius:50%;background:var(--green);display:inline-block;}
+  .cal-dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;max-width:100%;}
+  .cal-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .cal-more{font-size:.58rem;color:var(--text-dim);}
+  .cal-legend{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:12px;font-size:.76rem;}
+  .cal-legend .item{display:flex;align-items:center;gap:5px;color:var(--text-dim);}
+  .cal-legend .swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .cal-legend .swatch.log{background:var(--green);}
+  .cal-detail{
+    margin-top:12px;padding:12px;background:var(--bg-card2);
+    border:1px solid var(--line);border-radius:10px;font-size:.84rem;
+  }
+  .cal-detail .cd-date{font-weight:800;margin-bottom:6px;}
+  .cal-detail .cd-store-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+  .cal-detail .cd-log-row{
+    margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);
+    font-size:.78rem;color:var(--text-dim);
+  }
 
   @media (max-width:420px){
     .grid.g3{grid-template-columns:1fr;}
@@ -303,8 +342,8 @@
     .verdict .main{font-size:1.25rem;}
     .stat-mini-grid{grid-template-columns:1fr 1fr;}
     .compare-grid{grid-template-columns:1fr;}
-    .upcoming-row{flex-direction:column;gap:2px;}
-    .upcoming-row .u-date{width:auto;}
+    .cal-daynum{font-size:.68rem;}
+    .cal-dot{width:5px;height:5px;}
   }
 </style>
 </head>
@@ -376,8 +415,16 @@
     <h3 class="sub-title">登録済みの店舗</h3>
     <div id="storeList"><div class="empty-note">まだ登録がありません。</div></div>
 
-    <h3 class="sub-title">今後30日のイベント日（登録ルールから自動算出）</h3>
-    <div id="upcomingEvents"><div class="empty-note">店舗を登録すると表示されます。</div></div>
+    <h3 class="sub-title">📅 イベントカレンダー（登録ルールから自動作成）</h3>
+    <div class="cal-nav">
+      <button class="btn-ghost" id="calPrevBtn">◀ 前月</button>
+      <div class="cal-title" id="calTitle">-</div>
+      <button class="btn-ghost" id="calNextBtn">翌月 ▶</button>
+    </div>
+    <button class="btn-ghost cal-today-btn" id="calTodayBtn">今月に戻る</button>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend" id="calLegend"></div>
+    <div class="cal-detail" id="calDetail">日付をタップすると、その日にイベント日となる店舗や記録済みのログが表示されます。</div>
   </div>
 
   <!-- データ入力 -->
@@ -640,7 +687,13 @@
   var addStoreBtn = document.getElementById("addStoreBtn");
   var storeMsg = document.getElementById("storeMsg");
   var storeListEl = document.getElementById("storeList");
-  var upcomingEventsEl = document.getElementById("upcomingEvents");
+  var calPrevBtn = document.getElementById("calPrevBtn");
+  var calNextBtn = document.getElementById("calNextBtn");
+  var calTodayBtn = document.getElementById("calTodayBtn");
+  var calTitle = document.getElementById("calTitle");
+  var calGrid = document.getElementById("calGrid");
+  var calLegend = document.getElementById("calLegend");
+  var calDetail = document.getElementById("calDetail");
   var saveLogBtn = document.getElementById("saveLogBtn");
   var saveLogMsg = document.getElementById("saveLogMsg");
   var logFilterMachine = document.getElementById("logFilterMachine");
@@ -971,7 +1024,7 @@
         saveJSON(LS_STORES, stores);
         renderStoreList();
         populateStoreDatalist();
-        renderUpcomingEvents();
+        renderCalendar();
       });
       item.appendChild(body);
       item.appendChild(delBtn);
@@ -979,33 +1032,136 @@
     });
   }
 
-  function renderUpcomingEvents(){
-    if (!stores.length){
-      upcomingEventsEl.innerHTML = '<div class="empty-note">店舗を登録すると表示されます。</div>';
-      return;
-    }
-    var rows = [];
-    var base = new Date();
-    base.setHours(0,0,0,0);
-    for (var i=0;i<30;i++){
-      var d = new Date(base.getTime());
-      d.setDate(d.getDate() + i);
-      var m = ("0"+(d.getMonth()+1)).slice(-2);
-      var day = ("0"+d.getDate()).slice(-2);
-      var dateStr = d.getFullYear() + "-" + m + "-" + day;
-      var matched = stores.filter(function(s){ return matchesEventRule(s, dateStr); });
-      if (matched.length){
-        rows.push({date: dateStr, wd: WEEKDAY_LABELS[d.getDay()], names: matched.map(function(s){ return s.name; })});
-      }
-    }
-    if (!rows.length){
-      upcomingEventsEl.innerHTML = '<div class="empty-note">今後30日以内に、登録ルールに一致するイベント日はありません。</div>';
-      return;
-    }
-    upcomingEventsEl.innerHTML = rows.map(function(r){
-      return '<div class="upcoming-row"><div class="u-date">'+r.date+'('+r.wd+')</div><div class="u-stores">'+r.names.join('、')+'</div></div>';
-    }).join("");
+  // ---------- イベントカレンダー ----------
+  var STORE_COLOR_PALETTE = ["#f0c14b","#ec4899","#8a5cf6","#34d399","#4fd1c5","#f87171","#60a5fa","#fb923c","#a3e635","#e879f9"];
+  var today0 = new Date();
+  var calYear = today0.getFullYear();
+  var calMonth = today0.getMonth(); // 0-11
+  var calSelectedDate = null;
+
+  function storeColor(idx){ return STORE_COLOR_PALETTE[idx % STORE_COLOR_PALETTE.length]; }
+  function toDateStr(y, m, d){
+    return y + "-" + ("0"+(m+1)).slice(-2) + "-" + ("0"+d).slice(-2);
   }
+  function storesOnDate(dateStr){
+    return stores.filter(function(s){ return matchesEventRule(s, dateStr); });
+  }
+  function recordsOnDate(dateStr){
+    return history.filter(function(r){ return r.date === dateStr; });
+  }
+
+  function renderCalendar(){
+    calTitle.textContent = calYear + "年 " + (calMonth+1) + "月";
+
+    var firstWeekday = new Date(calYear, calMonth, 1).getDay();
+    var daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+
+    var cells = [];
+    for (var i=0;i<firstWeekday;i++){
+      var back = new Date(calYear, calMonth, 1 - (firstWeekday - i));
+      cells.push({y:back.getFullYear(), m:back.getMonth(), d:back.getDate(), outMonth:true});
+    }
+    for (var d=1; d<=daysInMonth; d++){
+      cells.push({y:calYear, m:calMonth, d:d, outMonth:false});
+    }
+    while (cells.length % 7 !== 0){
+      var last = cells[cells.length-1];
+      var fwd = new Date(last.y, last.m, last.d + 1);
+      cells.push({y:fwd.getFullYear(), m:fwd.getMonth(), d:fwd.getDate(), outMonth:true});
+    }
+
+    var todayStr_ = todayStr();
+    var wdHeads = ["日","月","火","水","木","金","土"];
+    var html = wdHeads.map(function(w, idx){
+      var cls = "cal-day-head" + (idx===0?" sun":"") + (idx===6?" sat":"");
+      return '<div class="'+cls+'">'+w+'</div>';
+    }).join("");
+
+    cells.forEach(function(c){
+      var dateStr = toDateStr(c.y, c.m, c.d);
+      var matched = storesOnDate(dateStr);
+      var hasLog = recordsOnDate(dateStr).length > 0;
+      var classes = ["cal-cell"];
+      if (c.outMonth) classes.push("out-month");
+      if (dateStr === todayStr_) classes.push("today");
+      if (dateStr === calSelectedDate) classes.push("selected");
+
+      var dotsHtml = "";
+      if (matched.length){
+        var shown = matched.slice(0,4).map(function(s){
+          var idx = stores.indexOf(s);
+          return '<span class="cal-dot" style="background:'+storeColor(idx)+';"></span>';
+        }).join("");
+        var more = matched.length > 4 ? '<span class="cal-more">+'+(matched.length-4)+'</span>' : '';
+        dotsHtml = '<div class="cal-dots">'+shown+more+'</div>';
+      }
+
+      html += '<div class="'+classes.join(" ")+'" data-date="'+dateStr+'">'
+            + '<div class="cal-daynum">'+c.d+(hasLog?'<span class="cal-log-mark"></span>':'')+'</div>'
+            + dotsHtml
+            + '</div>';
+    });
+
+    calGrid.innerHTML = html;
+    renderCalLegend();
+    renderCalDetail();
+  }
+
+  function renderCalLegend(){
+    var items = stores.map(function(s, idx){
+      return '<div class="item"><span class="swatch" style="background:'+storeColor(idx)+';"></span>'+s.name+'</div>';
+    });
+    items.push('<div class="item"><span class="swatch log"></span>実戦ログを保存した日</div>');
+    calLegend.innerHTML = items.join("");
+  }
+
+  function renderCalDetail(){
+    if (!calSelectedDate){
+      calDetail.innerHTML = "日付をタップすると、その日にイベント日となる店舗や記録済みのログが表示されます。";
+      return;
+    }
+    var wd = weekdayLabel(calSelectedDate);
+    var matched = storesOnDate(calSelectedDate);
+    var recs = recordsOnDate(calSelectedDate);
+
+    var html = '<div class="cd-date">'+calSelectedDate+(wd?'('+wd+')':'')+'</div>';
+    if (matched.length){
+      matched.forEach(function(s){
+        var idx = stores.indexOf(s);
+        html += '<div class="cd-store-row"><span class="swatch" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+storeColor(idx)+';"></span>'
+              + '<span>'+s.name+'（'+patternText(s)+'）</span></div>';
+      });
+    } else {
+      html += '<div class="note" style="margin:0 0 4px;">登録ルールに一致する店舗はありません。</div>';
+    }
+    if (recs.length){
+      html += '<div class="cd-log-row">この日の保存済みログ: ' + recs.map(function(r){
+        return r.machineName + ' 設定'+r.best+'推定('+fmtPct(r.highBand)+')' + (r.hall ? '｜'+r.hall : '');
+      }).join('、') + '</div>';
+    }
+    calDetail.innerHTML = html;
+  }
+
+  calGrid.addEventListener("click", function(e){
+    var cell = e.target.closest(".cal-cell");
+    if (!cell) return;
+    var date = cell.getAttribute("data-date");
+    calSelectedDate = (calSelectedDate === date) ? null : date;
+    renderCalendar();
+  });
+  calPrevBtn.addEventListener("click", function(){
+    calMonth--; if (calMonth < 0){ calMonth = 11; calYear--; }
+    renderCalendar();
+  });
+  calNextBtn.addEventListener("click", function(){
+    calMonth++; if (calMonth > 11){ calMonth = 0; calYear++; }
+    renderCalendar();
+  });
+  calTodayBtn.addEventListener("click", function(){
+    var t = new Date();
+    calYear = t.getFullYear(); calMonth = t.getMonth();
+    renderCalendar();
+  });
 
   renderWeekdayCheckboxes(storeWeekdaysEl, []);
 
@@ -1029,7 +1185,7 @@
     storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を登録しました。</div>';
     renderStoreList();
     populateStoreDatalist();
-    renderUpcomingEvents();
+    renderCalendar();
   });
 
   function refreshAutoEventHint(){
@@ -1089,6 +1245,7 @@
     logFilterMachine.value = rec.machineId;
     populateLogFilterLabel();
     renderLogStats();
+    renderCalendar();
   });
 
   function populateLogFilterMachine(){
@@ -1252,6 +1409,7 @@
         populateLogFilterMachine();
         populateLogFilterLabel();
         renderLogStats();
+        renderCalendar();
       });
     });
   }
@@ -1272,6 +1430,7 @@
     populateLogFilterMachine();
     populateLogFilterLabel();
     renderLogStats();
+    renderCalendar();
   });
 
   // ---------- 編集フォーム ----------
@@ -1393,7 +1552,7 @@
   renderLogStats();
   renderStoreList();
   populateStoreDatalist();
-  renderUpcomingEvents();
+  renderCalendar();
 })();
 </script>
 </body>
