@@ -1,5 +1,6 @@
 """買い目をそのまま書き写せるテキスト様式のテスト。"""
 import sys
+import re
 import unittest
 from types import SimpleNamespace
 from pathlib import Path
@@ -11,7 +12,8 @@ from keiba.expectation import Expectation
 from keiba.marks import assign_marks
 from keiba.models import Horse
 from keiba.scoring import score_race
-from keiba.textreport import alt_order_note, format_day, format_race
+from keiba.textreport import (alt_order_note, format_day, format_race,
+                              grounds_lines, umaban_label)
 
 
 def _field(n=8):
@@ -38,17 +40,26 @@ class TestTextReport(unittest.TestCase):
         self.assertIn("◎", self.text)
 
     def test_lists_five_and_six_horse_candidates(self):
-        """5頭・6頭の候補を馬番の並びで出す。"""
+        """5頭・6頭の候補を、馬番＋馬名の頭で出す（投票履歴と照合するため）。"""
         self.assertIn("  5頭  ", self.text)
         self.assertIn("  6頭  ", self.text)
-        top = [m.score.horse.umaban for m in self.marked[:6]]
-        self.assertIn("-".join(str(u) for u in top[:5]), self.text)
-        self.assertIn("-".join(str(u) for u in top), self.text)
+        top = [m.score.horse for m in self.marked[:6]]
+        for n in (5, 6):
+            want = "-".join(umaban_label(h.umaban, h.name) for h in top[:n])
+            self.assertIn(want, self.text)
 
     def test_candidates_follow_score_order(self):
         five = next(l for l in self.text.splitlines() if l.strip().startswith("5頭"))
-        nums = [int(x) for x in five.split()[1].split("-")]
+        nums = [int(re.match(r"\d+", x).group())
+                for x in five.split()[1].split("-")]
         self.assertEqual(nums, [m.score.horse.umaban for m in self.marked[:5]])
+
+    def test_tickets_carry_the_horse_name(self):
+        """「1-2」では投票履歴と突き合わせられない（9/13の精算で決めた方針）。"""
+        row = next(l for l in self.text.splitlines() if l.startswith("★"))
+        combos = self.text.splitlines()[self.text.splitlines().index(row) + 1]
+        first = self.marked[0].score.horse
+        self.assertIn(umaban_label(first.umaban, first.name), combos)
 
     def test_marks_exactly_one_recommended_bet(self):
         # 見出しの「★=推奨」ではなく、買い目の行だけを数える
@@ -138,3 +149,31 @@ class TestAltOrderNote(unittest.TestCase):
         self.assertIn("馬場が良", alt_order_note(self.scores(omoi), "稍重", 8))
         # いま良で採点しているなら、対置するのは非良（稍重と表示する）
         self.assertIn("馬場が稍重", alt_order_note(self.scores(omoi), "良", 8))
+
+
+class TestGrounds(unittest.TestCase):
+    """根拠は全頭ぶん出すが、1頭2行に収める（長いと読まれない）。"""
+
+    def setUp(self):
+        base = TestTextReport("test_shows_score_order_with_ranks")
+        base.setUp()
+        self.scores, self.marked = base.scores, base.marked
+        self.lines = grounds_lines(self.marked, self.scores, baba="良")
+
+    def test_two_lines_per_horse_plus_header_and_one_common_note(self):
+        n = len(self.scores)
+        self.assertEqual(len(self.lines), 1 + 2 * n + 1, "\n".join(self.lines))
+
+    def test_every_runner_appears_with_number_and_name(self):
+        for s in self.scores:
+            self.assertIn(f"{s.horse.umaban}{s.horse.name}", "\n".join(self.lines))
+
+    def test_common_facts_are_stated_once_not_per_horse(self):
+        """採点対象外・全馬0点はレースに1回だけ（全頭に書くと根拠が埋もれる）。"""
+        body = "\n".join(self.lines)
+        self.assertEqual(body.count("採点対象外"), 1)
+        self.assertIn("載っていない項目は0点", self.lines[0])
+
+    def test_zero_point_items_are_not_listed_per_horse(self):
+        for line in self.lines:
+            self.assertNotIn("該当なし", line)

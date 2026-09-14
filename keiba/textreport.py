@@ -8,6 +8,8 @@ HTMLは内訳を追うのには向くが、馬券を買う場では長い。こ�
 """
 from __future__ import annotations
 
+import re
+
 from .betting import BettingPlan
 from .boxes import build_options
 from .expectation import Expectation
@@ -41,6 +43,118 @@ def umaban_label(umaban: int, name: str | None, chars: int = NAME_CHARS) -> str:
 def ticket_label(combo, names: dict[int, str], chars: int = NAME_CHARS) -> str:
     """買い目1点を「2テラメ-11ヨウシ」の形にする。馬番の昇順で並べる。"""
     return "-".join(umaban_label(u, names.get(u), chars) for u in sorted(combo))
+
+
+def ticket_lines(combos, names: dict[int, str], per_line: int = 4,
+                 indent: str = "    ") -> list[str]:
+    """買い目を「1イベン-2ブルー」の形で、折り返しながら並べる。
+
+    馬番だけの「1-2」は、投票画面や投票履歴と突き合わせるときに
+    馬柱を開き直すことになる（CLAUDE.md 9/13の精算で決めた方針）。
+    名前を付けると1点が長くなるので、15点のような幅では行を折る。
+    """
+    items = [ticket_label(c, names) for c in combos]
+    return [indent + "  ".join(items[i:i + per_line])
+            for i in range(0, len(items), per_line)]
+
+
+# 内訳を短く出すための道具。**長い注記をそのまま全頭ぶん並べると、
+# 根拠が読まれなくなる**（本人の指示・2026-09-14「根拠の部分は縮めてください」）。
+# 点の付いた項目だけを1行にまとめ、全馬に共通する事情はレースごとに1回書く
+_SHORT = 14          # 補正の理由に添える文字数（騎手名・産駒名で足りる長さ）
+_ABBR = {"基礎能力": "能力", "前走内容": "前走", "コース適性": "コース",
+         "距離・展開・脚質": "距離脚質", "騎手補正": "騎手",
+         "乗り替わり補正": "乗替", "血統補正": "血統", "枠順補正": "枠順",
+         "前走不利補正": "前走不利", "高齢馬補正": "高齢",
+         "初コース・ぶっつけペナルティ": "初コース"}
+
+
+def _why(note: str) -> str:
+    """注記から、誰・何による補正かだけを取り出す（「松山」「◯◯産駒」）。"""
+    head = re.split(r"[:：（(]", note, maxsplit=1)[0].strip()
+    return head[:_SHORT]
+
+
+def _zenso(note: str) -> str:
+    """「前走1着（3歳1勝クラス）」→「1着/3歳1勝クラス」。格は昇級の手がかり。"""
+    m = re.match(r"前走(\d+着)(?:（(.+?)）)?", note)
+    if not m:
+        return _why(note)
+    race = m.group(2) or ""
+    return m.group(1) + (f"/{race}" if race and "不明" not in race else "")
+
+
+def _ground_line(sc: HorseScore) -> str:
+    """点の付いた項目だけを1行に畳む。載っていない項目は0点という約束。"""
+    parts = []
+    for it in sc.all_items():
+        if not it.scored or not it.points:
+            continue
+        lbl = _ABBR.get(it.label, it.label)
+        if it.label == "前走内容":
+            parts.append(f"{lbl}{it.points:.1f}({_zenso(it.note)})")
+        elif it.label in ("基礎能力", "コース適性", "距離・展開・脚質"):
+            parts.append(f"{lbl}{it.points:.1f}")
+        else:
+            parts.append(f"{lbl}{it.points:+.1f}({_why(it.note)})")
+    line = "      " + " ".join(parts)
+    if sc.baba_note and sc.baba_note != "特記事項なし":
+        line += f"  ※{sc.baba_note}"
+    return line
+
+
+def grounds_lines(marked: list[MarkedHorse], scores: list[HorseScore],
+                  baba: str = "良") -> list[str]:
+    """スコアの根拠を馬ごとに出す（印の付かない馬も含めた全頭・1頭2行）。
+
+    画像の一覧は「おさらい」として点数だけを見せる様式なので、
+    **根拠はこちら（テキスト）に置く**のが本人の指示した分担である
+    （2026-09-14「根拠となる情報は文章にして出す」）。CLAUDE.mdの
+    「スコア算出根拠（内訳）は必ず馬ごとに表示し、ブラックボックス化しない」
+    をテキスト側で満たす箇所にあたる。
+
+    全頭に共通する事情（採点対象外・全馬0点の補正・全馬中立の項目）は
+    **レースごとに1回だけ**書く。全頭ぶん繰り返すと根拠が埋もれる。
+    """
+    if not scores:
+        return ["【根拠】出走馬なし"]
+    key = (lambda s: s.total_yoi) if baba == "良" else (lambda s: s.total_omoi)
+    mark_of = {m.score.horse.umaban: m.mark for m in marked}
+    out = [f"【根拠】スコアの内訳（全頭・満点{scores[0].max_base:.0f}点／"
+           "載っていない項目は0点）"]
+    for i, sc in enumerate(sorted(scores, key=key, reverse=True), start=1):
+        h = sc.horse
+        ninki = f"{h.ninki}人気{h.tansho_odds:.1f}倍" if h.ninki and h.tansho_odds \
+            else (f"{h.ninki}人気" if h.ninki else "人気不明")
+        out.append(f"{i:>2} {mark_of.get(h.umaban, '  ')} {h.umaban}{h.name}  "
+                   f"良{sc.total_yoi:.1f}/重{sc.total_omoi:.1f}  "
+                   f"{h.kyakushitsu or '脚質不明'}  {ninki}")
+        out.append(_ground_line(sc))
+    if note := _common_note(scores):
+        out.append(f"   ※{note}")
+    return out
+
+
+def _common_note(scores: list[HorseScore]) -> str:
+    """全馬に共通する事情を1文にする（採点対象外・全馬0点・全馬同点の項目）。"""
+    labels = [i.label for i in scores[0].all_items()]
+    skipped = scores[0].skipped_items
+    zero, flat = [], []
+    for lbl in labels:
+        if lbl in skipped:
+            continue
+        pts = [i.points for s in scores for i in s.all_items() if i.label == lbl]
+        if all(p == 0 for p in pts):
+            zero.append(_ABBR.get(lbl, lbl))
+        elif len(set(pts)) == 1:
+            flat.append(f"{_ABBR.get(lbl, lbl)}は全馬{pts[0]:.1f}点")
+    bits = []
+    if skipped:
+        bits.append(f"{'・'.join(skipped)}は採点対象外")
+    if zero:
+        bits.append(f"{'・'.join(zero)}は全馬0点")
+    bits += flat
+    return "／".join(bits)
 
 
 def alt_order_note(scores: list[HorseScore], baba: str, n_show: int) -> str | None:
@@ -115,6 +229,7 @@ def format_race(
     records: dict[str, list[dict]] | None = None,
     venue: str | None = None,
     as_of: str | None = None,
+    breakdown: bool = True,
 ) -> str:
     """1レース分をテキストにする。
 
@@ -217,11 +332,14 @@ def format_race(
             out.append("【コース特性】全キャリアから。その馬の中での対比（点数には未反映）")
             out.extend(lines)
 
+    names = {s.horse.umaban: s.horse.name for s in scores}
     out.append("")
-    out.append("【候補】スコア順に並べた馬番")
+    out.append("【候補】スコア順に並べた馬（馬番＋馬名の頭）")
     for w in (3, 4, 5, 6):
         if len(order) >= w:
-            out.append(f"  {w}頭  " + "-".join(str(u) for u in order[:w]))
+            out.append(f"  {w}頭  "
+                       + "-".join(umaban_label(u, names.get(u))
+                                  for u in order[:w]))
 
     out.append("")
     out.append("【買い目】★=推奨")
@@ -234,7 +352,11 @@ def format_race(
         stat = (f"的中{st['的中率']:.0%} 回収{st['回収率']:.0%} 黒字{st['黒字確率']:.0%}"
                 if st else "実測データなし")
         out.append(f"{head}{o.kind} {o.width}頭BOX {o.points:>2}点  {stat}")
-        out.append(f"    " + " ".join(f"{a}-{b}" for a, b in o.combos))
+        out.extend(ticket_lines(o.combos, names))
+
+    if breakdown:
+        out.append("")
+        out.extend(grounds_lines(marked, scores, baba))
     return "\n".join(out)
 
 
