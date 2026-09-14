@@ -129,12 +129,20 @@ def load(directory: str, races: str) -> dict[str, list[dict]]:
                 "field": len(rows), "ninki": int(nk) if nk.isdigit() else None,
                 "agari_rank": agari_rank.get(ub), "pos4": pos4.get(int(ub)),
                 "kyaku": e.get("kyaku", ""), "interval": e.get("interval"),
+                "斤量": _f(r.get("斤量")), "着差": (r.get("着差") or "").strip(),
                 "pace": pace.get(stem),
                 "tate": (taire.get(stem) or {}).get("縦長"),
                 "tan": pay_t.get(int(ub), 0), "fuku": pay_f.get(int(ub), 0)})
     for v in by_horse.values():
         v.sort(key=lambda x: x["date"])
     return by_horse
+
+
+def _f(s):
+    try:
+        return float((s or "").strip())
+    except ValueError:
+        return None
 
 
 def to_o(s):
