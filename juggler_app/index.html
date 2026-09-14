@@ -286,8 +286,36 @@
     padding:10px 12px;margin-bottom:8px;font-size:.85rem;
   }
   .store-item .name{font-weight:700;margin-bottom:2px;}
+  .store-item .area-txt{color:var(--text-dim);font-size:.72rem;}
   .store-item .pattern{color:var(--text-dim);font-size:.78rem;}
   .store-item .note-txt{color:var(--text-dim);font-size:.76rem;margin-top:2px;font-style:italic;}
+  .store-item .data-badge{
+    display:inline-block;font-size:.66rem;font-weight:700;
+    color:var(--green);background:rgba(52,211,153,.12);
+    border-radius:6px;padding:1px 6px;margin-top:3px;
+  }
+  .store-item .data-link{font-size:.72rem;color:var(--purple);word-break:break-all;}
+  .store-item .btns{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
+  .edit-row-btn{background:none;border:none;color:var(--text-dim);font-size:.9rem;padding:2px 6px;cursor:pointer;}
+  .edit-row-btn:hover{color:var(--purple);}
+
+  .candidate-list{
+    max-height:260px;overflow-y:auto;
+    border:1px solid var(--line);border-radius:10px;
+  }
+  .candidate-item{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:8px 10px;border-bottom:1px solid var(--line);font-size:.8rem;
+  }
+  .candidate-item:last-child{border-bottom:none;}
+  .candidate-item .c-name{font-weight:600;}
+  .candidate-item .c-area{color:var(--text-dim);font-size:.72rem;margin-left:6px;}
+  .candidate-item button{
+    flex-shrink:0;padding:5px 10px;font-size:.72rem;
+    background:var(--bg-card2);border:1px solid var(--line);color:var(--text);
+  }
+  .candidate-item button:disabled{color:var(--text-dim);border-color:var(--line);opacity:.6;cursor:default;}
+  .candidate-item button:not(:disabled):hover{border-color:var(--purple);color:var(--purple);}
   #autoEventHint{color:var(--green);}
 
   .cal-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;}
@@ -386,30 +414,57 @@
 
   <!-- チェーン店・イベント日管理 -->
   <div class="card">
-    <h2>🏬 チェーン店・イベント日管理 <span class="badge">STORE</span></h2>
+    <h2>🏬 チェーン店・イベント日管理 <span class="badge">東京都</span></h2>
     <div class="note" style="margin-top:0;margin-bottom:10px;">
+      対象は<b>東京都・自店データ（差枚等）を公開しているホール</b>に絞っています。
       よく行くホール・チェーン店の「毎月◯日」「毎週◯曜日」のイベント日パターンを登録しておくと、
-      下の実戦データ入力で該当日を選ぶと「イベント日」に自動チェックが入り、稼働ログの集計にも
-      反映されます。イベント日は各ホールの公式サイト・SNS等の告知をもとに登録してください
-      （自動取得はできません）。
+      下の実戦データ入力で該当日を選んだ際に「イベント日」へ自動チェックが入り、稼働ログの集計にも
+      反映されます。イベント日そのものは各ホールの公式サイト・SNS等の告知をもとに登録してください
+      （イベント日情報の自動取得はできません）。
     </div>
+
+    <h3 class="sub-title">📍 候補: 東京都のデータ公開ホール（P-WORLD掲載）</h3>
+    <div class="note" style="margin-top:0;">
+      P-WORLDの「出玉情報公開店」検索（東京都）に掲載されている実在ホールの候補リストです
+      （2026年9月時点・全店舗ではありません）。タップすると下のフォームに店名を読み込みます。
+      イベント日パターンは含まれていないため、分かる範囲でご自身で入力してください。
+    </div>
+    <input type="text" id="candidateFilter" placeholder="店名・エリアで絞り込み（例: 新宿区）" style="margin:8px 0;">
+    <div class="candidate-list" id="candidateList"></div>
+
+    <h3 class="sub-title" style="margin-top:16px;">✏️ 店舗を登録・編集</h3>
     <div class="grid">
       <div class="field">
         <label for="storeName">店舗名・チェーン名</label>
         <input type="text" id="storeName" placeholder="例: ○○会館△△店">
       </div>
       <div class="field">
-        <label for="storeMonthDays">毎月のイベント日（カンマ区切り）</label>
-        <input type="text" id="storeMonthDays" placeholder="例: 1,11,21,22">
+        <label for="storeArea">エリア（市区町村・任意）</label>
+        <input type="text" id="storeArea" placeholder="例: 新宿区">
       </div>
+    </div>
+    <div class="field">
+      <label for="storeMonthDays">毎月のイベント日（カンマ区切り）</label>
+      <input type="text" id="storeMonthDays" placeholder="例: 1,11,21,22">
     </div>
     <label>毎週のイベント曜日</label>
     <div class="weekday-check-row" id="storeWeekdays"></div>
+    <div class="chk-row">
+      <input type="checkbox" id="storeDataPublished">
+      <label for="storeDataPublished">自店データ（差枚・スランプグラフ等）を公開している店舗</label>
+    </div>
+    <div class="field" style="margin-top:8px;">
+      <label for="storeDataUrl">データ確認先（URL・任意）</label>
+      <input type="text" id="storeDataUrl" placeholder="例: https://...">
+    </div>
     <div class="field" style="margin-top:8px;">
       <label for="storeNote">備考（パターン化できない場合など・任意）</label>
       <input type="text" id="storeNote" placeholder="例: 第2日曜・SNSで要確認">
     </div>
-    <button class="btn-ghost" id="addStoreBtn" style="margin-top:8px;">＋この店舗を登録</button>
+    <div class="actions-row">
+      <button class="btn-ghost" id="addStoreBtn">＋この店舗を登録</button>
+      <button class="btn-ghost btn-danger" id="cancelEditStoreBtn" style="display:none;">編集をキャンセル</button>
+    </div>
     <div id="storeMsg"></div>
 
     <h3 class="sub-title">登録済みの店舗</h3>
@@ -681,12 +736,18 @@
   var autoEventHint = document.getElementById("autoEventHint");
   var storeDatalist = document.getElementById("storeDatalist");
   var storeNameEl = document.getElementById("storeName");
+  var storeAreaEl = document.getElementById("storeArea");
   var storeMonthDaysEl = document.getElementById("storeMonthDays");
   var storeWeekdaysEl = document.getElementById("storeWeekdays");
+  var storeDataPublishedEl = document.getElementById("storeDataPublished");
+  var storeDataUrlEl = document.getElementById("storeDataUrl");
   var storeNoteEl = document.getElementById("storeNote");
   var addStoreBtn = document.getElementById("addStoreBtn");
+  var cancelEditStoreBtn = document.getElementById("cancelEditStoreBtn");
   var storeMsg = document.getElementById("storeMsg");
   var storeListEl = document.getElementById("storeList");
+  var candidateFilterEl = document.getElementById("candidateFilter");
+  var candidateListEl = document.getElementById("candidateList");
   var calPrevBtn = document.getElementById("calPrevBtn");
   var calNextBtn = document.getElementById("calNextBtn");
   var calTodayBtn = document.getElementById("calTodayBtn");
@@ -929,6 +990,63 @@
   // ---------- チェーン店・イベント日管理 ----------
   var WEEKDAY_CHECK_ORDER = [1,2,3,4,5,6,0]; // 月火水木金土日（getDay()基準）
 
+  // 東京都・P-WORLD「出玉情報公開店」掲載ホールの参考候補リスト（2026年9月時点・抜粋）
+  // 出典: https://www.p-world.co.jp/_machine/kensaku.cgi?is_new_ver=1&dir=tokyo&is_dedama=1
+  // イベント日パターンは含まれていません（ホールごとに個別確認のうえ登録してください）
+  var TOKYO_DATA_HALLS = [
+    {name:"キコーナ 新宿三丁目店", area:"新宿区"},
+    {name:"エスパス日拓高田馬場本店", area:"新宿区"},
+    {name:"BIGディッパー門前仲町店", area:"江東区"},
+    {name:"BIGディッパー新橋１号店", area:"港区"},
+    {name:"ジアス南大沢", area:"八王子市"},
+    {name:"フルハウス 中延店", area:"品川区"},
+    {name:"キコーナ蒲田店", area:"大田区"},
+    {name:"パーラースーパーセブン学芸大学店", area:"目黒区"},
+    {name:"オリエンタルパサージュ自由が丘", area:"目黒区"},
+    {name:"グランド ラ・カータ 1111瑞穂店", area:"西多摩郡瑞穂町"},
+    {name:"エスパス日拓渋谷駅前新館", area:"渋谷区"},
+    {name:"マルホン", area:"墨田区"},
+    {name:"エスパス日拓上野新館", area:"台東区"},
+    {name:"グランドシップ", area:"江東区"},
+    {name:"スーパーセブン西八王子店", area:"八王子市"},
+    {name:"EXA FIRST", area:"板橋区"},
+    {name:"門前仲町スターダスト", area:"江東区"},
+    {name:"グランドホール西高島平店", area:"板橋区"},
+    {name:"パーラースーパーセブン新高円寺店", area:"杉並区"},
+    {name:"ニュー太平", area:"豊島区"},
+    {name:"エスパス日拓西武新宿駅前", area:"新宿区"},
+    {name:"BIGディッパー新橋２号店", area:"港区"},
+    {name:"パーラースーパーセブン新中野店", area:"中野区"},
+    {name:"ジュラク３", area:"北区"},
+    {name:"ニュー今津屋入谷店", area:"足立区"},
+    {name:"キコーナ府中店", area:"府中市"},
+    {name:"ジャラン浅草店", area:"台東区"},
+    {name:"成増会館", area:"板橋区"},
+    {name:"メッセ竹の塚店", area:"足立区"},
+    {name:"ジャラン谷在家店", area:"足立区"},
+    {name:"シード上板橋店", area:"板橋区"},
+    {name:"メッセ南千住店", area:"荒川区"},
+    {name:"キコーナ 平井店", area:"江戸川区"},
+    {name:"ルミナス日暮里店", area:"荒川区"},
+    {name:"ジュラク２", area:"北区"},
+    {name:"メッセ奥戸店", area:"葛飾区"},
+    {name:"メッセ荻窪店本館", area:"杉並区"},
+    {name:"エスパス日拓上野本館", area:"台東区"},
+    {name:"キューデン東口店", area:"足立区"},
+    {name:"ジュラク王子店", area:"北区"},
+    {name:"ビッグアップル．秋葉原店", area:"千代田区"},
+    {name:"アイランド秋葉原店", area:"千代田区"},
+    {name:"メッセ武蔵境店", area:"武蔵野市"},
+    {name:"メッセ吉祥寺店本館", area:"武蔵野市"},
+    {name:"ウインベル・イースト・スロット", area:"荒川区"},
+    {name:"メッセ扇店", area:"足立区"},
+    {name:"メッセ西葛西店", area:"江戸川区"},
+    {name:"ニュー今津屋", area:"江戸川区"},
+    {name:"ベルシティ/ザシティ篠崎店", area:"江戸川区"},
+    {name:"メッセ西荻窪店", area:"杉並区"}
+  ];
+  var PWORLD_TOKYO_DEDAMA_URL = "https://www.p-world.co.jp/_machine/kensaku.cgi?is_new_ver=1&dir=tokyo&is_dedama=1";
+
   function renderWeekdayCheckboxes(container, checkedDays){
     container.innerHTML = "";
     WEEKDAY_CHECK_ORDER.forEach(function(day){
@@ -1001,6 +1119,43 @@
     });
   }
 
+  var editingStoreId = null;
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function enterStoreEditMode(store){
+    editingStoreId = store.id;
+    storeNameEl.value = store.name;
+    storeAreaEl.value = store.area || "";
+    storeMonthDaysEl.value = (store.monthDays || []).join(",");
+    renderWeekdayCheckboxes(storeWeekdaysEl, store.weekdays || []);
+    storeDataPublishedEl.checked = !!store.dataPublished;
+    storeDataUrlEl.value = store.dataUrl || "";
+    storeNoteEl.value = store.note || "";
+    addStoreBtn.textContent = "この内容で更新する";
+    cancelEditStoreBtn.style.display = "inline-block";
+    storeMsg.innerHTML = "";
+    storeNameEl.scrollIntoView({behavior:"smooth", block:"center"});
+  }
+
+  function exitStoreEditMode(){
+    editingStoreId = null;
+    storeNameEl.value = ""; storeAreaEl.value = ""; storeMonthDaysEl.value = "";
+    storeDataPublishedEl.checked = false; storeDataUrlEl.value = ""; storeNoteEl.value = "";
+    renderWeekdayCheckboxes(storeWeekdaysEl, []);
+    addStoreBtn.textContent = "＋この店舗を登録";
+    cancelEditStoreBtn.style.display = "none";
+  }
+
+  cancelEditStoreBtn.addEventListener("click", function(){
+    exitStoreEditMode();
+    storeMsg.innerHTML = "";
+  });
+
   function renderStoreList(){
     if (!stores.length){
       storeListEl.innerHTML = '<div class="empty-note">まだ登録がありません。</div>';
@@ -1011,9 +1166,18 @@
       var item = document.createElement("div");
       item.className = "store-item";
       var body = document.createElement("div");
-      body.innerHTML = '<div class="name">'+s.name+'</div>'
+      body.innerHTML = '<div class="name">'+escapeHtml(s.name)+(s.area?' <span class="area-txt">（'+escapeHtml(s.area)+'）</span>':'')+'</div>'
                       + '<div class="pattern">'+patternText(s)+'</div>'
-                      + (s.note ? '<div class="note-txt">'+s.note+'</div>' : '');
+                      + (s.dataPublished ? '<div class="data-badge">データ公開店</div>' : '')
+                      + (s.dataUrl ? '<div class="data-link"><a href="'+escapeHtml(s.dataUrl)+'" target="_blank" rel="noopener">'+escapeHtml(s.dataUrl)+'</a></div>' : '')
+                      + (s.note ? '<div class="note-txt">'+escapeHtml(s.note)+'</div>' : '');
+      var btns = document.createElement("div");
+      btns.className = "btns";
+      var editBtn = document.createElement("button");
+      editBtn.className = "edit-row-btn";
+      editBtn.textContent = "✎";
+      editBtn.title = "編集";
+      editBtn.addEventListener("click", function(){ enterStoreEditMode(s); });
       var delBtn = document.createElement("button");
       delBtn.className = "del-row-btn";
       delBtn.textContent = "✕";
@@ -1022,15 +1186,59 @@
         if (!confirm('「'+s.name+'」を削除します。よろしいですか？')) return;
         stores = stores.filter(function(x){ return x.id !== s.id; });
         saveJSON(LS_STORES, stores);
+        if (editingStoreId === s.id) exitStoreEditMode();
         renderStoreList();
         populateStoreDatalist();
         renderCalendar();
+        renderCandidateList();
       });
+      btns.appendChild(editBtn);
+      btns.appendChild(delBtn);
       item.appendChild(body);
-      item.appendChild(delBtn);
+      item.appendChild(btns);
       storeListEl.appendChild(item);
     });
   }
+
+  function renderCandidateList(){
+    var filter = (candidateFilterEl.value || "").trim().toLowerCase();
+    var registeredNames = stores.map(function(s){ return s.name; });
+    var list = TOKYO_DATA_HALLS.filter(function(h){
+      if (!filter) return true;
+      return h.name.toLowerCase().indexOf(filter) !== -1 || h.area.toLowerCase().indexOf(filter) !== -1;
+    });
+    if (!list.length){
+      candidateListEl.innerHTML = '<div class="empty-note">該当する候補がありません。</div>';
+      return;
+    }
+    candidateListEl.innerHTML = list.map(function(h){
+      var already = registeredNames.indexOf(h.name) !== -1;
+      return '<div class="candidate-item">'
+           + '<div><span class="c-name">'+escapeHtml(h.name)+'</span><span class="c-area">'+escapeHtml(h.area)+'</span></div>'
+           + '<button data-cname="'+escapeHtml(h.name)+'" data-carea="'+escapeHtml(h.area)+'" '+(already?'disabled':'')+'>'+(already?'✓ 登録済み':'＋追加')+'</button>'
+           + '</div>';
+    }).join("");
+    candidateListEl.querySelectorAll("button:not(:disabled)").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var name = btn.getAttribute("data-cname");
+        var area = btn.getAttribute("data-carea");
+        stores.push({
+          id: "s_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+          name: name, area: area, monthDays: [], weekdays: [],
+          dataPublished: true, dataUrl: PWORLD_TOKYO_DEDAMA_URL,
+          note: "P-WORLD「出玉情報公開店」(東京都)に掲載（"+todayStr()+"時点の参考情報）。イベント日パターンは分かれば編集してください。",
+          createdAt: Date.now()
+        });
+        saveJSON(LS_STORES, stores);
+        renderStoreList();
+        populateStoreDatalist();
+        renderCalendar();
+        renderCandidateList();
+        storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を登録しました。イベント日が分かれば「登録済みの店舗」の✎から編集してください。</div>';
+      });
+    });
+  }
+  candidateFilterEl.addEventListener("input", renderCandidateList);
 
   // ---------- イベントカレンダー ----------
   var STORE_COLOR_PALETTE = ["#f0c14b","#ec4899","#8a5cf6","#34d399","#4fd1c5","#f87171","#60a5fa","#fb923c","#a3e635","#e879f9"];
@@ -1171,21 +1379,40 @@
       storeMsg.innerHTML = '<div class="msg err">店舗名・チェーン名を入力してください。</div>';
       return;
     }
+    var area = (storeAreaEl.value || "").trim();
     var monthDays = parseMonthDays(storeMonthDaysEl.value);
     var weekdays = readWeekdayCheckboxes(storeWeekdaysEl);
+    var dataPublished = !!storeDataPublishedEl.checked;
+    var dataUrl = (storeDataUrlEl.value || "").trim();
     var note = (storeNoteEl.value || "").trim();
-    stores.push({
-      id: "s_" + Date.now() + "_" + Math.floor(Math.random()*1000),
-      name: name, monthDays: monthDays, weekdays: weekdays, note: note,
-      createdAt: Date.now()
-    });
-    saveJSON(LS_STORES, stores);
-    storeNameEl.value = ""; storeMonthDaysEl.value = ""; storeNoteEl.value = "";
-    renderWeekdayCheckboxes(storeWeekdaysEl, []);
-    storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を登録しました。</div>';
+
+    if (editingStoreId){
+      var target = stores.filter(function(s){ return s.id === editingStoreId; })[0];
+      if (target){
+        target.name = name; target.area = area; target.monthDays = monthDays;
+        target.weekdays = weekdays; target.dataPublished = dataPublished;
+        target.dataUrl = dataUrl; target.note = note;
+      }
+      saveJSON(LS_STORES, stores);
+      storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を更新しました。</div>';
+      exitStoreEditMode();
+    } else {
+      stores.push({
+        id: "s_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+        name: name, area: area, monthDays: monthDays, weekdays: weekdays,
+        dataPublished: dataPublished, dataUrl: dataUrl, note: note,
+        createdAt: Date.now()
+      });
+      saveJSON(LS_STORES, stores);
+      storeNameEl.value = ""; storeAreaEl.value = ""; storeMonthDaysEl.value = "";
+      storeDataPublishedEl.checked = false; storeDataUrlEl.value = ""; storeNoteEl.value = "";
+      renderWeekdayCheckboxes(storeWeekdaysEl, []);
+      storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を登録しました。</div>';
+    }
     renderStoreList();
     populateStoreDatalist();
     renderCalendar();
+    renderCandidateList();
   });
 
   function refreshAutoEventHint(){
@@ -1553,6 +1780,7 @@
   renderStoreList();
   populateStoreDatalist();
   renderCalendar();
+  renderCandidateList();
 })();
 </script>
 </body>
