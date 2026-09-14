@@ -198,10 +198,86 @@
   .machine-select-row{display:flex;gap:8px;align-items:flex-end;}
   .machine-select-row .field{flex:1;margin-bottom:0;}
   h3.sub-title{font-size:.85rem;margin:14px 0 6px;color:var(--text-dim);}
+
+  .rank-list{list-style:none;margin:0;padding:0;}
+  .rank-list li{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:8px 4px;border-bottom:1px solid var(--line);
+    font-size:.88rem;
+  }
+  .rank-list li:last-child{border-bottom:none;}
+  .rank-num{
+    width:26px;height:26px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:.8rem;color:#12141c;
+    background:var(--text-dim);
+    margin-top:1px;
+  }
+  .rank-list li:nth-child(1) .rank-num{background:var(--gold);}
+  .rank-list li:nth-child(2) .rank-num{background:#d7dae6;}
+  .rank-list li:nth-child(3) .rank-num{background:#e3a86b;}
+  .rank-body{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px;}
+  .rank-name{font-weight:700;}
+  .rank-reason{color:var(--text-dim);font-size:.76rem;}
+  .quick-top3{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .quick-top3 button{
+    flex:1;min-width:100px;
+    background:var(--bg-card2);
+    border:1px solid var(--line);
+    color:var(--text);
+    font-size:.78rem;
+    font-weight:700;
+    padding:9px 6px;
+    border-radius:10px;
+  }
+  .quick-top3 button.active{
+    border-color:var(--gold);
+    background:rgba(240,193,75,.12);
+    color:var(--gold);
+  }
+  .log-fields{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+  .chk-row{display:flex;align-items:center;gap:8px;margin-top:6px;}
+  .chk-row input[type=checkbox]{width:auto;accent-color:var(--purple);}
+  .chk-row label{margin:0;color:var(--text);font-size:.85rem;}
+  .btn-save-log{
+    width:100%;margin-top:10px;
+    background:var(--bg-card2);
+    border:1px solid var(--gold);
+    color:var(--gold);
+    font-weight:700;
+  }
+  .filter-row{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;}
+  .filter-row .field{flex:1;min-width:140px;margin-bottom:0;}
+  .stat-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+  .stat-mini-grid .box{
+    background:var(--bg-card2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 6px;text-align:center;
+  }
+  .stat-mini-grid .box .label{font-size:.68rem;color:var(--text-dim);}
+  .stat-mini-grid .box .val{font-size:1.05rem;font-weight:800;margin-top:2px;}
+  .weekday-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.82rem;}
+  .weekday-row .wd-label{width:28px;flex-shrink:0;font-weight:700;color:var(--text-dim);}
+  .weekday-row .wd-track{flex:1;background:var(--bg-card2);border-radius:6px;height:14px;overflow:hidden;border:1px solid var(--line);}
+  .weekday-row .wd-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--gold));}
+  .weekday-row .wd-pct{width:80px;flex-shrink:0;text-align:right;color:var(--text-dim);font-variant-numeric:tabular-nums;}
+  .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .compare-grid .box{background:var(--bg-card2);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center;}
+  .compare-grid .box .label{font-size:.72rem;color:var(--text-dim);}
+  .compare-grid .box .val{font-size:1.2rem;font-weight:800;margin-top:2px;color:var(--gold);}
+  .compare-grid .box .n{font-size:.68rem;color:var(--text-dim);margin-top:2px;}
+  table.log-table{width:100%;border-collapse:collapse;font-size:.78rem;}
+  table.log-table th, table.log-table td{padding:6px 4px;text-align:center;border-bottom:1px solid var(--line);}
+  table.log-table th{color:var(--text-dim);font-weight:600;font-size:.7rem;}
+  table.log-table td:first-child, table.log-table th:first-child{text-align:left;}
+  .del-row-btn{background:none;border:none;color:var(--red);font-size:.9rem;padding:2px 6px;cursor:pointer;}
+  .empty-note{color:var(--text-dim);font-size:.82rem;text-align:center;padding:14px 4px;}
+
   @media (max-width:420px){
     .grid.g3{grid-template-columns:1fr;}
     .bar-label{width:42px;font-size:.78rem;}
     .verdict .main{font-size:1.25rem;}
+    .stat-mini-grid{grid-template-columns:1fr 1fr;}
+    .compare-grid{grid-template-columns:1fr;}
   }
 </style>
 </head>
@@ -212,12 +288,30 @@
     <div class="sub">BIG/REG回数から設定1〜6の期待度を統計的に推定します</div>
   </header>
 
+  <!-- 人気ランキング -->
+  <div class="card">
+    <h2>🏆 ジャグラーシリーズ 人気ランキング <span class="badge">2026年版</span></h2>
+    <ol class="rank-list">
+      <li><span class="rank-num">1</span><span class="rank-body"><span class="rank-name">マイジャグラーⅤ/Ⅵ</span><span class="rank-reason">設置規模・稼働・設定6出玉率でトップクラス</span></span></li>
+      <li><span class="rank-num">2</span><span class="rank-body"><span class="rank-name">アイムジャグラーEX/ネオアイムジャグラーEX</span><span class="rank-reason">導入店舗数が多く初心者にも打ちやすい定番機</span></span></li>
+      <li><span class="rank-num">3</span><span class="rank-body"><span class="rank-name">ゴーゴージャグラー3</span><span class="rank-reason">ボーナス合成確率が軽く遊びやすさが魅力</span></span></li>
+      <li><span class="rank-num">4</span><span class="rank-body"><span class="rank-name">ファンキージャグラー2</span><span class="rank-reason">BIG確率の高さと派手な告知演出</span></span></li>
+      <li><span class="rank-num">5</span><span class="rank-body"><span class="rank-name">ハッピージャグラーⅤⅢ</span><span class="rank-reason">高設定域のスペックと多彩な打ち方</span></span></li>
+    </ol>
+    <div class="note">
+      複数のスロット情報サイト（設置台数・導入率・プレイヤー人気の記事）を突き合わせた参考ランキングです。
+      本アプリでは特に人気上位3機種（マイジャグラーⅤ・アイムジャグラーEX・ゴーゴージャグラー3）を優先的に整備しています。
+      店舗や時期によって実際の人気・設置状況は変動します。
+    </div>
+  </div>
+
   <!-- 機種選択 -->
   <div class="card">
     <h2>🎰 機種選択 <span class="badge">MACHINE</span></h2>
+    <div class="quick-top3" id="quickTop3"></div>
     <div class="machine-select-row">
       <div class="field">
-        <label for="machineSelect">機種</label>
+        <label for="machineSelect">機種（すべて）</label>
         <select id="machineSelect"></select>
       </div>
       <button class="btn-ghost" id="addMachineBtn">＋機種追加</button>
@@ -243,6 +337,24 @@
     </div>
     <button class="btn-main" id="calcBtn" style="margin-top:6px;">設定を判別する</button>
     <div id="inputMsg"></div>
+
+    <details class="log-fields">
+      <summary>📅 記録用の詳細情報（任意・統計に使えます）</summary>
+      <div class="grid" style="margin-top:10px;">
+        <div class="field">
+          <label for="logDate">日付</label>
+          <input type="text" id="logDate" placeholder="YYYY-MM-DD">
+        </div>
+        <div class="field">
+          <label for="logLabel">台番号・メモ</label>
+          <input type="text" id="logLabel" placeholder="例: 1234番 / ○○ホール">
+        </div>
+      </div>
+      <div class="chk-row">
+        <input type="checkbox" id="logEvent">
+        <label for="logEvent">この日はイベント日・企画日だった</label>
+      </div>
+    </details>
   </div>
 
   <!-- 結果 -->
@@ -275,6 +387,8 @@
         ※ 各設定の理論BIG/REG確率をもとに、観測データが得られる尤度をベイズ的に正規化した推定値です（事前分布は均等仮定）。
         試行回数が少ないと推定は大きく揺れます。目安として3000G以上のデータ収集を推奨します。
       </div>
+      <button class="btn-save-log" id="saveLogBtn">📌 この結果をログに保存する</button>
+      <div id="saveLogMsg"></div>
     </div>
 
     <div class="card">
@@ -282,6 +396,34 @@
       <div style="overflow-x:auto;">
         <table class="spec" id="specTable"></table>
       </div>
+    </div>
+  </div>
+
+  <!-- 稼働ログ・統計 -->
+  <div class="card">
+    <h2>📈 稼働ログ・統計 <span class="badge">LOG</span></h2>
+    <div class="note" style="margin-top:0;margin-bottom:12px;">
+      「ログに保存」した実戦データを蓄積し、曜日別・イベント日別などで「高設定が出やすい傾向」を
+      集計します。これは<b>あなた自身が入力したデータから逆算した推定の集計</b>であり、
+      ホールが実際にどの設定を投入したかという事実データではありません。参考情報としてご利用ください。
+    </div>
+    <div class="filter-row">
+      <div class="field">
+        <label for="logFilterMachine">対象機種</label>
+        <select id="logFilterMachine"></select>
+      </div>
+      <div class="field">
+        <label for="logFilterLabel">台番号・メモで絞り込み</label>
+        <select id="logFilterLabel"></select>
+      </div>
+    </div>
+
+    <div id="logStatsBody">
+      <div class="empty-note">まだ記録がありません。上の「設定を判別する」→「この結果をログに保存する」から記録を追加できます。</div>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn-ghost btn-danger" id="clearLogBtn">表示中の記録をすべて削除</button>
     </div>
   </div>
 
@@ -316,14 +458,20 @@
 
   // ---------- 内蔵機種データ（公開情報を基にした参考値。分母表記） ----------
   var DEFAULT_MACHINES = {
-    "myjuggler5": { name: "マイジャグラーⅤ/Ⅵ", settings: [
+    // 人気ランキング TOP3（優先整備対象）
+    "myjuggler5": { name: "マイジャグラーⅤ/Ⅵ", rank:1, settings: [
       {big:273.1, reg:409.6}, {big:270.8, reg:385.5}, {big:266.4, reg:336.1},
       {big:254.0, reg:290.0}, {big:240.1, reg:268.6}, {big:229.1, reg:229.1}
     ]},
-    "aimjuggler_ex": { name: "アイムジャグラーEX/ネオアイムジャグラー", settings: [
+    "aimjuggler_ex": { name: "アイムジャグラーEX/ネオアイムジャグラー", rank:2, settings: [
       {big:273.1, reg:439.8}, {big:269.7, reg:399.6}, {big:269.7, reg:331.0},
       {big:259.0, reg:315.1}, {big:259.0, reg:255.0}, {big:255.0, reg:255.0}
     ]},
+    "gogo_juggler3": { name: "ゴーゴージャグラー3", rank:3, settings: [
+      {big:259.0, reg:354.2}, {big:258.0, reg:332.7}, {big:257.0, reg:306.2},
+      {big:254.0, reg:268.6}, {big:247.3, reg:247.3}, {big:234.9, reg:234.9}
+    ]},
+    // その他の機種
     "funky_juggler2": { name: "ファンキージャグラー2", settings: [
       {big:266.4, reg:439.8}, {big:259.0, reg:407.1}, {big:256.0, reg:366.1},
       {big:249.2, reg:322.8}, {big:240.1, reg:299.3}, {big:219.9, reg:262.1}
@@ -331,10 +479,6 @@
     "happy_juggler8": { name: "ハッピージャグラーⅤⅢ", settings: [
       {big:273.1, reg:397.2}, {big:270.8, reg:362.1}, {big:263.2, reg:332.7},
       {big:254.0, reg:300.6}, {big:239.2, reg:273.1}, {big:226.0, reg:256.0}
-    ]},
-    "gogo_juggler3": { name: "ゴーゴージャグラー3", settings: [
-      {big:259.0, reg:354.2}, {big:258.0, reg:332.7}, {big:257.0, reg:306.2},
-      {big:254.0, reg:268.6}, {big:247.3, reg:247.3}, {big:234.9, reg:234.9}
     ]},
     "juggler_girls_ss": { name: "ジャグラーガールズSS", settings: [
       {big:273.1, reg:381.0}, {big:270.8, reg:350.5}, {big:260.1, reg:316.6},
@@ -349,10 +493,12 @@
       {big:242.7, reg:322.8}, {big:233.2, reg:297.9}, {big:216.3, reg:277.7}
     ]}
   };
+  var TOP3_IDS = ["myjuggler5", "aimjuggler_ex", "gogo_juggler3"];
 
   var LS_OVERRIDE = "juggler_app_overrides_v1";
   var LS_CUSTOM = "juggler_app_custom_machines_v1";
   var LS_LAST_MACHINE = "juggler_app_last_machine_v1";
+  var LS_HISTORY = "juggler_app_history_v1";
 
   function loadJSON(key, fallback){
     try{
@@ -366,6 +512,7 @@
 
   var overrides = loadJSON(LS_OVERRIDE, {});      // { machineId: settings[] }
   var customMachines = loadJSON(LS_CUSTOM, {});    // { id: {name, settings[]} }
+  var history = loadJSON(LS_HISTORY, []);          // [{id,date,machineId,label,isEvent,n,kb,kr,posterior,highBand,lowBand,best,savedAt}]
 
   function allMachineIds(){
     return Object.keys(DEFAULT_MACHINES).concat(Object.keys(customMachines));
@@ -409,8 +556,20 @@
   var deleteMachineBtn = document.getElementById("deleteMachineBtn");
   var editMsg = document.getElementById("editMsg");
   var addMachineBtn = document.getElementById("addMachineBtn");
+  var quickTop3 = document.getElementById("quickTop3");
+  var logDateEl = document.getElementById("logDate");
+  var logLabelEl = document.getElementById("logLabel");
+  var logEventEl = document.getElementById("logEvent");
+  var saveLogBtn = document.getElementById("saveLogBtn");
+  var saveLogMsg = document.getElementById("saveLogMsg");
+  var logFilterMachine = document.getElementById("logFilterMachine");
+  var logFilterLabel = document.getElementById("logFilterLabel");
+  var logStatsBody = document.getElementById("logStatsBody");
+  var clearLogBtn = document.getElementById("clearLogBtn");
 
   var SETTING_COLORS = ["#7d8299","#8a93b8","#34d399","#4fd1c5","#f0c14b","#ec4899"];
+  var WEEKDAY_LABELS = ["日","月","火","水","木","金","土"];
+  var lastResult = null; // 直近の計算結果（ログ保存用）
 
   function populateMachineSelect(){
     var prev = machineSelect.value;
@@ -440,6 +599,31 @@
     var target = prev && allMachineIds().indexOf(prev) !== -1 ? prev
                : (last && allMachineIds().indexOf(last) !== -1 ? last : allMachineIds()[0]);
     machineSelect.value = target;
+    renderQuickTop3();
+    populateLogFilterMachine();
+  }
+
+  function renderQuickTop3(){
+    quickTop3.innerHTML = "";
+    TOP3_IDS.forEach(function(id, idx){
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "① ② ③".split(" ")[idx] + " " + machineName(id).split("/")[0];
+      btn.addEventListener("click", function(){
+        machineSelect.value = id;
+        onMachineChange();
+      });
+      quickTop3.appendChild(btn);
+    });
+    updateQuickTop3Active();
+  }
+
+  function updateQuickTop3Active(){
+    var cur = currentMachineId();
+    var btns = quickTop3.querySelectorAll("button");
+    btns.forEach(function(btn, idx){
+      btn.classList.toggle("active", TOP3_IDS[idx] === cur);
+    });
   }
 
   function currentMachineId(){ return machineSelect.value; }
@@ -516,6 +700,18 @@
     renderBand(posterior);
     renderSpec(settings, stats);
 
+    var best = 0;
+    for (var i=1;i<6;i++) if (posterior[i] > posterior[best]) best = i;
+    lastResult = {
+      machineId: mId,
+      n:n, kb:kb, kr:kr,
+      posterior: posterior,
+      best: best+1,
+      highBand: posterior[3]+posterior[4]+posterior[5],
+      lowBand: posterior[0]+posterior[1]+posterior[2]
+    };
+    saveLogMsg.innerHTML = "";
+
     resultArea.style.display = "block";
     if (n >= 3000){
       inputMsg.innerHTML = '';
@@ -581,6 +777,211 @@
     }).join("");
     specTable.innerHTML = head + body;
   }
+
+  // ---------- 稼働ログ・統計 ----------
+  function todayStr(){
+    var d = new Date();
+    var m = ("0"+(d.getMonth()+1)).slice(-2);
+    var day = ("0"+d.getDate()).slice(-2);
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+
+  function weekdayLabel(dateStr){
+    var d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return null;
+    return WEEKDAY_LABELS[d.getDay()];
+  }
+
+  saveLogBtn.addEventListener("click", function(){
+    if (!lastResult){
+      saveLogMsg.innerHTML = '<div class="msg err">先に「設定を判別する」で計算してください。</div>';
+      return;
+    }
+    var date = (logDateEl.value || "").trim() || todayStr();
+    if (isNaN(new Date(date + "T00:00:00").getTime())){
+      saveLogMsg.innerHTML = '<div class="msg err">日付はYYYY-MM-DD形式で入力してください。</div>';
+      return;
+    }
+    var rec = {
+      id: "h_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+      date: date,
+      machineId: lastResult.machineId,
+      machineName: machineName(lastResult.machineId),
+      label: (logLabelEl.value || "").trim(),
+      isEvent: !!logEventEl.checked,
+      n: lastResult.n, kb: lastResult.kb, kr: lastResult.kr,
+      posterior: lastResult.posterior,
+      best: lastResult.best,
+      highBand: lastResult.highBand,
+      lowBand: lastResult.lowBand,
+      savedAt: Date.now()
+    };
+    history.push(rec);
+    saveJSON(LS_HISTORY, history);
+    saveLogMsg.innerHTML = '<div class="msg ok">記録を保存しました（下の「稼働ログ・統計」に反映されます）</div>';
+    populateLogFilterMachine();
+    logFilterMachine.value = rec.machineId;
+    populateLogFilterLabel();
+    renderLogStats();
+  });
+
+  function populateLogFilterMachine(){
+    var prev = logFilterMachine.value;
+    logFilterMachine.innerHTML = "";
+    var ids = allMachineIds().filter(function(id){
+      return history.some(function(r){ return r.machineId === id; });
+    });
+    if (!ids.length){
+      var opt = document.createElement("option");
+      opt.value = ""; opt.textContent = "（記録なし）";
+      logFilterMachine.appendChild(opt);
+      logFilterMachine.disabled = true;
+      return;
+    }
+    logFilterMachine.disabled = false;
+    ids.forEach(function(id){
+      var opt = document.createElement("option");
+      opt.value = id; opt.textContent = machineName(id);
+      logFilterMachine.appendChild(opt);
+    });
+    var target = prev && ids.indexOf(prev) !== -1 ? prev
+               : (ids.indexOf(currentMachineId()) !== -1 ? currentMachineId() : ids[0]);
+    logFilterMachine.value = target;
+  }
+
+  function populateLogFilterLabel(){
+    var mId = logFilterMachine.value;
+    var prev = logFilterLabel.value;
+    logFilterLabel.innerHTML = "";
+    var optAll = document.createElement("option");
+    optAll.value = "__all__"; optAll.textContent = "すべて";
+    logFilterLabel.appendChild(optAll);
+
+    var labels = [];
+    history.forEach(function(r){
+      if (r.machineId === mId && r.label && labels.indexOf(r.label) === -1) labels.push(r.label);
+    });
+    labels.sort();
+    labels.forEach(function(l){
+      var opt = document.createElement("option");
+      opt.value = l; opt.textContent = l;
+      logFilterLabel.appendChild(opt);
+    });
+    logFilterLabel.value = (prev && (prev === "__all__" || labels.indexOf(prev) !== -1)) ? prev : "__all__";
+  }
+
+  function filteredHistory(){
+    var mId = logFilterMachine.value;
+    var lbl = logFilterLabel.value;
+    return history.filter(function(r){
+      if (r.machineId !== mId) return false;
+      if (lbl !== "__all__" && r.label !== lbl) return false;
+      return true;
+    });
+  }
+
+  function renderLogStats(){
+    var recs = filteredHistory().slice().sort(function(a,b){ return a.date < b.date ? 1 : -1; });
+    if (!recs.length){
+      logStatsBody.innerHTML = '<div class="empty-note">この絞り込み条件の記録はまだありません。</div>';
+      return;
+    }
+
+    var avgHigh = recs.reduce(function(s,r){ return s+r.highBand; },0) / recs.length;
+    var avgLow = recs.reduce(function(s,r){ return s+r.lowBand; },0) / recs.length;
+
+    var html = "";
+    html += '<div class="stat-mini-grid">'
+          + '<div class="box"><div class="label">記録件数</div><div class="val">'+recs.length+' 件</div></div>'
+          + '<div class="box"><div class="label">平均 高設定(4〜6)期待度</div><div class="val" style="color:var(--gold)">'+fmtPct(avgHigh)+'</div></div>'
+          + '<div class="box"><div class="label">平均 低設定(1〜3)期待度</div><div class="val">'+fmtPct(avgLow)+'</div></div>'
+          + '</div>';
+
+    // 曜日別
+    var byWd = {};
+    recs.forEach(function(r){
+      var wd = weekdayLabel(r.date);
+      if (!wd) return;
+      if (!byWd[wd]) byWd[wd] = [];
+      byWd[wd].push(r.highBand);
+    });
+    var wdOrder = ["月","火","水","木","金","土","日"];
+    var hasWdData = wdOrder.some(function(wd){ return byWd[wd] && byWd[wd].length; });
+    if (hasWdData){
+      html += '<h3 class="sub-title">曜日別 平均・高設定(4〜6)期待度</h3>';
+      wdOrder.forEach(function(wd){
+        var arr = byWd[wd];
+        if (!arr || !arr.length) return;
+        var avg = arr.reduce(function(a,b){return a+b;},0)/arr.length;
+        html += '<div class="weekday-row">'
+              + '<div class="wd-label">'+wd+'</div>'
+              + '<div class="wd-track"><div class="wd-fill" style="width:'+(avg*100).toFixed(1)+'%;"></div></div>'
+              + '<div class="wd-pct">'+fmtPct(avg)+' (n='+arr.length+')</div>'
+              + '</div>';
+      });
+      html += '<div class="note">n（記録数）が少ない曜日ほど数値は大きく揺れます。傾向を語るには最低でも同じ曜日で5件以上を目安にしてください。</div>';
+    }
+
+    // イベント日 比較
+    var evArr = recs.filter(function(r){ return r.isEvent; }).map(function(r){ return r.highBand; });
+    var noEvArr = recs.filter(function(r){ return !r.isEvent; }).map(function(r){ return r.highBand; });
+    if (evArr.length && noEvArr.length){
+      var evAvg = evArr.reduce(function(a,b){return a+b;},0)/evArr.length;
+      var noEvAvg = noEvArr.reduce(function(a,b){return a+b;},0)/noEvArr.length;
+      html += '<h3 class="sub-title">イベント日 vs 通常営業日（高設定4〜6期待度の平均）</h3>';
+      html += '<div class="compare-grid">'
+            + '<div class="box"><div class="label">イベント日</div><div class="val">'+fmtPct(evAvg)+'</div><div class="n">n='+evArr.length+'</div></div>'
+            + '<div class="box"><div class="label">通常営業日</div><div class="val" style="color:var(--text)">'+fmtPct(noEvAvg)+'</div><div class="n">n='+noEvArr.length+'</div></div>'
+            + '</div>';
+    }
+
+    // 記録一覧
+    html += '<h3 class="sub-title">記録一覧</h3>';
+    html += '<div style="overflow-x:auto;"><table class="log-table"><tr><th>日付</th><th>台番号/メモ</th><th>企画</th><th>G/BIG/REG</th><th>推定設定</th><th>高設定%</th><th></th></tr>';
+    recs.forEach(function(r){
+      html += '<tr>'
+            + '<td>'+r.date+(weekdayLabel(r.date)?'('+weekdayLabel(r.date)+')':'')+'</td>'
+            + '<td>'+(r.label || '―')+'</td>'
+            + '<td>'+(r.isEvent ? '●' : '')+'</td>'
+            + '<td>'+r.n+'/'+r.kb+'/'+r.kr+'</td>'
+            + '<td style="color:'+SETTING_COLORS[r.best-1]+';font-weight:700;">設定'+r.best+'</td>'
+            + '<td>'+fmtPct(r.highBand)+'</td>'
+            + '<td><button class="del-row-btn" data-id="'+r.id+'" title="削除">✕</button></td>'
+            + '</tr>';
+    });
+    html += '</table></div>';
+
+    logStatsBody.innerHTML = html;
+
+    logStatsBody.querySelectorAll(".del-row-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-id");
+        history = history.filter(function(r){ return r.id !== id; });
+        saveJSON(LS_HISTORY, history);
+        populateLogFilterMachine();
+        populateLogFilterLabel();
+        renderLogStats();
+      });
+    });
+  }
+
+  logFilterMachine.addEventListener("change", function(){
+    populateLogFilterLabel();
+    renderLogStats();
+  });
+  logFilterLabel.addEventListener("change", renderLogStats);
+
+  clearLogBtn.addEventListener("click", function(){
+    var recs = filteredHistory();
+    if (!recs.length) return;
+    if (!confirm('表示中の記録 '+recs.length+' 件をすべて削除します。よろしいですか？')) return;
+    var idsToRemove = recs.map(function(r){ return r.id; });
+    history = history.filter(function(r){ return idsToRemove.indexOf(r.id) === -1; });
+    saveJSON(LS_HISTORY, history);
+    populateLogFilterMachine();
+    populateLogFilterLabel();
+    renderLogStats();
+  });
 
   // ---------- 編集フォーム ----------
   function renderEditTable(){
@@ -680,6 +1081,8 @@
     renderEditTable();
     resultArea.style.display = "none";
     inputMsg.innerHTML = "";
+    lastResult = null;
+    updateQuickTop3Active();
   }
 
   machineSelect.addEventListener("change", onMachineChange);
@@ -691,8 +1094,12 @@
   });
 
   // ---------- init ----------
+  logDateEl.value = todayStr();
   populateMachineSelect();
   onMachineChange();
+  populateLogFilterMachine();
+  populateLogFilterLabel();
+  renderLogStats();
 })();
 </script>
 </body>
