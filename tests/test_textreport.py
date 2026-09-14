@@ -12,6 +12,7 @@ from keiba.expectation import Expectation
 from keiba.marks import assign_marks
 from keiba.models import Horse
 from keiba.scoring import score_race
+from keiba.textreport import MAX_BOX_NAMES as _MAX
 from keiba.textreport import (alt_order_note, format_day, format_race,
                               grounds_lines, umaban_label)
 
@@ -41,8 +42,8 @@ class TestTextReport(unittest.TestCase):
 
     def test_each_width_shows_its_box_members(self):
         """幅ごとの顔ぶれを馬番＋馬名の頭で出す（投票履歴と照合するため）。"""
-        top = [m.score.horse for m in self.marked[:6]]
-        for n in (3, 4, 5, 6):
+        top = [m.score.horse for m in self.marked[:_MAX]]
+        for n in range(3, _MAX + 1):
             want = "-".join(umaban_label(h.umaban, h.name) for h in top[:n])
             self.assertIn(want, self.text)
 
@@ -58,15 +59,24 @@ class TestTextReport(unittest.TestCase):
         pair = (f"{umaban_label(a.umaban, a.name)}-"
                 f"{umaban_label(b.umaban, b.name)}  ")
         self.assertNotIn(pair, self.text)
-        self.assertIn("BOXなので組み合わせは並べない", self.text)
+        self.assertIn("【買い目】", self.text)
+        self.assertNotIn(" ".join(["1-2"]), self.text)   # 馬番だけの点も出さない
 
-    def test_no_reason_or_stats_behind_a_skip(self):
-        """見送りは1行。理由と実測は並べない（本人の指示・2026-09-14）。"""
+    def test_a_skip_is_not_written_at_all(self):
+        """見送り・実測データなしは書かない（本人の指示・2026-09-14）。
+        1点買いの行が無いこと自体が「買う1点は無い」を意味する。"""
+        self.assertNotIn("見送り", self.text)
+        self.assertNotIn("実測データなし", self.text)
+
+    def test_wide_boxes_do_not_list_every_name(self):
+        """6頭ぶん並べると行が横に広がる。顔ぶれは MAX_BOX_NAMES 頭まで。"""
         for line in self.text.splitlines():
-            if "見送り" in line:
-                self.assertEqual(line.strip().count("】"), 1, line)
-                self.assertNotIn("回収", line)
-                self.assertNotIn("推定", line)
+            if "6頭BOX" in line:
+                self.assertIn("上位6頭", line)
+                self.assertLessEqual(len(line), 70, line)
+        top = [m.score.horse for m in self.marked[:_MAX]]
+        want = "-".join(umaban_label(h.umaban, h.name) for h in top)
+        self.assertIn(want, self.text)      # 5頭までは名前が出る
 
     def test_marks_exactly_one_recommended_bet(self):
         # 見出しの「★=推奨」ではなく、買い目の行だけを数える

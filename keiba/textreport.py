@@ -28,6 +28,7 @@ CP932_SUBSTITUTES = {"—": "－"}
 
 
 NAME_CHARS = 3      # 買い目に添える馬名の文字数
+MAX_BOX_NAMES = 5   # 顔ぶれを書く上限（6頭ぶん並べると行が横に広がる）
 
 
 def umaban_label(umaban: int, name: str | None, chars: int = NAME_CHARS) -> str:
@@ -269,31 +270,23 @@ def format_race(
         out.append(f"※ {'・'.join(skipped)}は採点対象外（満点{marked[0].score.max_base:.0f}点）")
 
     # 目玉: ワイド1点。当てにいくのではなく、損を小さく保って回収率を取る。
-    # **見送りのときは1行で済ませる**（本人の指示・2026-09-14
-    # 「5本しかなく見送りなどのコメントはいらない」）。買う条件を満たさない
-    # ことは言うが、その理由と実測を毎レース並べても読まれない
+    # **推奨が出たときだけ書く**（本人の指示・2026-09-14「見送りと
+    # 実測値なしはいらない」）。行が無いこと自体が「買う1点は無い」を
+    # 意味する。条件の中身と実測は `scripts/single.py` / `tanpuku.py` 側に残る
     names = {s.horse.umaban: s.horse.name for s in scores}
     pick = best_single(order, favorite_odds=fav)
-    out.append("")
-    if pick is None:
-        out.append("【ワイド1点】実測データなし")
-    elif pick.recommended:
-        combo = ticket_label(pick.umaban, names)
-        out.append(f"【ワイド1点】★ {combo}  （{pick.label}）")
-        out.append(f"    {pick.stat_text()}")
-    else:
-        out.append("【ワイド1点】見送り")
-
-    # 単複1点。単勝・複勝だけを見て1頭を指名する
     tp = best_tanpuku(order, favorite_odds=fav)
-    if tp is None:
-        out.append("【単複1点】実測データなし")
-    elif tp.recommended:
+    if pick is not None and pick.recommended:
+        out.append("")
+        out.append(f"【ワイド1点】★ {ticket_label(pick.umaban, names)}"
+                   f"  （{pick.label}）")
+        out.append(f"    {pick.stat_text()}")
+    if tp is not None and tp.recommended:
+        if not (pick is not None and pick.recommended):
+            out.append("")
         out.append(f"【単複1点】★ {umaban_label(tp.umaban, names.get(tp.umaban))}"
                    f"  （{tp.label}）")
         out.append(f"    {tp.stat_text()}")
-    else:
-        out.append("【単複1点】見送り")
 
     out.append("")
     out.append("【スコア順】")
@@ -336,9 +329,12 @@ def format_race(
 
     # **BOXなので組み合わせは並べない**（本人の指示・2026-09-14
     # 「買い目は何個も並べなくていい。ボックスで伝わります」）。
-    # 幅ごとの顔ぶれを1行に出すので、以前の【候補】は役目が重なるため畳んだ
+    # 幅ごとの顔ぶれを1行に出すので、以前の【候補】は役目が重なるため畳んだ。
+    # ただし**6頭ぶん並べると行が横に広がる**ので、顔ぶれを書くのは
+    # MAX_BOX_NAMES 頭まで。それより広い幅は「上位n頭」とだけ書く
+    # （並びは上の【スコア順】で読める）
     out.append("")
-    out.append("【買い目】★=推奨。BOXなので組み合わせは並べない")
+    out.append("【買い目】★=推奨（的中率・回収率は実測の参考値）")
     rec = ("ワイド", 3) if plan.wide else ("馬連", 4)
     for o in build_options(order, favorite_odds=fav, recommended=rec):
         if o.width not in (3, 4, 5, 6):
@@ -346,8 +342,9 @@ def format_race(
         head = "★" if o.recommended else "  "
         st = o.stats
         stat = (f"的中{st['的中率']:.0%} 回収{st['回収率']:.0%} 黒字{st['黒字確率']:.0%}"
-                if st else "実測データなし")
-        box = "-".join(umaban_label(u, names.get(u)) for u in order[:o.width])
+                if st else "実測なし")
+        box = ("-".join(umaban_label(u, names.get(u)) for u in order[:o.width])
+               if o.width <= MAX_BOX_NAMES else f"上位{o.width}頭")
         out.append(f"{head}{o.kind} {o.width}頭BOX {o.points:>2}点  "
                    f"{box}  {stat}")
 
