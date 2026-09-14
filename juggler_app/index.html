@@ -272,12 +272,39 @@
   .del-row-btn{background:none;border:none;color:var(--red);font-size:.9rem;padding:2px 6px;cursor:pointer;}
   .empty-note{color:var(--text-dim);font-size:.82rem;text-align:center;padding:14px 4px;}
 
+  .weekday-check-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+  .weekday-check-row label{
+    display:flex;align-items:center;gap:4px;margin:0;
+    background:var(--bg-card2);border:1px solid var(--line);
+    border-radius:8px;padding:6px 9px;font-size:.8rem;color:var(--text);
+    cursor:pointer;
+  }
+  .weekday-check-row input{width:auto;accent-color:var(--purple);}
+  .store-item{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:8px;
+    background:var(--bg-card2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;margin-bottom:8px;font-size:.85rem;
+  }
+  .store-item .name{font-weight:700;margin-bottom:2px;}
+  .store-item .pattern{color:var(--text-dim);font-size:.78rem;}
+  .store-item .note-txt{color:var(--text-dim);font-size:.76rem;margin-top:2px;font-style:italic;}
+  .upcoming-row{
+    display:flex;align-items:baseline;gap:10px;
+    padding:6px 4px;border-bottom:1px solid var(--line);font-size:.82rem;
+  }
+  .upcoming-row:last-child{border-bottom:none;}
+  .upcoming-row .u-date{width:110px;flex-shrink:0;font-weight:700;color:var(--gold);}
+  .upcoming-row .u-stores{color:var(--text);}
+  #autoEventHint{color:var(--green);}
+
   @media (max-width:420px){
     .grid.g3{grid-template-columns:1fr;}
     .bar-label{width:42px;font-size:.78rem;}
     .verdict .main{font-size:1.25rem;}
     .stat-mini-grid{grid-template-columns:1fr 1fr;}
     .compare-grid{grid-template-columns:1fr;}
+    .upcoming-row{flex-direction:column;gap:2px;}
+    .upcoming-row .u-date{width:auto;}
   }
 </style>
 </head>
@@ -318,6 +345,41 @@
     </div>
   </div>
 
+  <!-- チェーン店・イベント日管理 -->
+  <div class="card">
+    <h2>🏬 チェーン店・イベント日管理 <span class="badge">STORE</span></h2>
+    <div class="note" style="margin-top:0;margin-bottom:10px;">
+      よく行くホール・チェーン店の「毎月◯日」「毎週◯曜日」のイベント日パターンを登録しておくと、
+      下の実戦データ入力で該当日を選ぶと「イベント日」に自動チェックが入り、稼働ログの集計にも
+      反映されます。イベント日は各ホールの公式サイト・SNS等の告知をもとに登録してください
+      （自動取得はできません）。
+    </div>
+    <div class="grid">
+      <div class="field">
+        <label for="storeName">店舗名・チェーン名</label>
+        <input type="text" id="storeName" placeholder="例: ○○会館△△店">
+      </div>
+      <div class="field">
+        <label for="storeMonthDays">毎月のイベント日（カンマ区切り）</label>
+        <input type="text" id="storeMonthDays" placeholder="例: 1,11,21,22">
+      </div>
+    </div>
+    <label>毎週のイベント曜日</label>
+    <div class="weekday-check-row" id="storeWeekdays"></div>
+    <div class="field" style="margin-top:8px;">
+      <label for="storeNote">備考（パターン化できない場合など・任意）</label>
+      <input type="text" id="storeNote" placeholder="例: 第2日曜・SNSで要確認">
+    </div>
+    <button class="btn-ghost" id="addStoreBtn" style="margin-top:8px;">＋この店舗を登録</button>
+    <div id="storeMsg"></div>
+
+    <h3 class="sub-title">登録済みの店舗</h3>
+    <div id="storeList"><div class="empty-note">まだ登録がありません。</div></div>
+
+    <h3 class="sub-title">今後30日のイベント日（登録ルールから自動算出）</h3>
+    <div id="upcomingEvents"><div class="empty-note">店舗を登録すると表示されます。</div></div>
+  </div>
+
   <!-- データ入力 -->
   <div class="card">
     <h2>📝 実戦データ入力 <span class="badge">INPUT</span></h2>
@@ -346,14 +408,20 @@
           <input type="text" id="logDate" placeholder="YYYY-MM-DD">
         </div>
         <div class="field">
-          <label for="logLabel">台番号・メモ</label>
-          <input type="text" id="logLabel" placeholder="例: 1234番 / ○○ホール">
+          <label for="logHall">ホール（チェーン店）</label>
+          <input type="text" id="logHall" list="storeDatalist" placeholder="例: ○○会館△△店">
+          <datalist id="storeDatalist"></datalist>
         </div>
+      </div>
+      <div class="field">
+        <label for="logLabel">台番号・メモ</label>
+        <input type="text" id="logLabel" placeholder="例: 1234番">
       </div>
       <div class="chk-row">
         <input type="checkbox" id="logEvent">
         <label for="logEvent">この日はイベント日・企画日だった</label>
       </div>
+      <div class="note" id="autoEventHint" style="display:none;"></div>
     </details>
   </div>
 
@@ -499,6 +567,7 @@
   var LS_CUSTOM = "juggler_app_custom_machines_v1";
   var LS_LAST_MACHINE = "juggler_app_last_machine_v1";
   var LS_HISTORY = "juggler_app_history_v1";
+  var LS_STORES = "juggler_app_stores_v1";
 
   function loadJSON(key, fallback){
     try{
@@ -512,7 +581,8 @@
 
   var overrides = loadJSON(LS_OVERRIDE, {});      // { machineId: settings[] }
   var customMachines = loadJSON(LS_CUSTOM, {});    // { id: {name, settings[]} }
-  var history = loadJSON(LS_HISTORY, []);          // [{id,date,machineId,label,isEvent,n,kb,kr,posterior,highBand,lowBand,best,savedAt}]
+  var history = loadJSON(LS_HISTORY, []);          // [{id,date,machineId,label,hall,isEvent,n,kb,kr,posterior,highBand,lowBand,best,savedAt}]
+  var stores = loadJSON(LS_STORES, []);            // [{id,name,monthDays:[1-31],weekdays:[0-6],note,createdAt}]
 
   function allMachineIds(){
     return Object.keys(DEFAULT_MACHINES).concat(Object.keys(customMachines));
@@ -558,8 +628,19 @@
   var addMachineBtn = document.getElementById("addMachineBtn");
   var quickTop3 = document.getElementById("quickTop3");
   var logDateEl = document.getElementById("logDate");
+  var logHallEl = document.getElementById("logHall");
   var logLabelEl = document.getElementById("logLabel");
   var logEventEl = document.getElementById("logEvent");
+  var autoEventHint = document.getElementById("autoEventHint");
+  var storeDatalist = document.getElementById("storeDatalist");
+  var storeNameEl = document.getElementById("storeName");
+  var storeMonthDaysEl = document.getElementById("storeMonthDays");
+  var storeWeekdaysEl = document.getElementById("storeWeekdays");
+  var storeNoteEl = document.getElementById("storeNote");
+  var addStoreBtn = document.getElementById("addStoreBtn");
+  var storeMsg = document.getElementById("storeMsg");
+  var storeListEl = document.getElementById("storeList");
+  var upcomingEventsEl = document.getElementById("upcomingEvents");
   var saveLogBtn = document.getElementById("saveLogBtn");
   var saveLogMsg = document.getElementById("saveLogMsg");
   var logFilterMachine = document.getElementById("logFilterMachine");
@@ -792,6 +873,190 @@
     return WEEKDAY_LABELS[d.getDay()];
   }
 
+  // ---------- チェーン店・イベント日管理 ----------
+  var WEEKDAY_CHECK_ORDER = [1,2,3,4,5,6,0]; // 月火水木金土日（getDay()基準）
+
+  function renderWeekdayCheckboxes(container, checkedDays){
+    container.innerHTML = "";
+    WEEKDAY_CHECK_ORDER.forEach(function(day){
+      var id = container.id + "_d" + day;
+      var wrap = document.createElement("label");
+      var input = document.createElement("input");
+      input.type = "checkbox";
+      input.id = id;
+      input.setAttribute("data-day", day);
+      if (checkedDays && checkedDays.indexOf(day) !== -1) input.checked = true;
+      wrap.appendChild(input);
+      wrap.appendChild(document.createTextNode(WEEKDAY_LABELS[day] + "曜"));
+      container.appendChild(wrap);
+    });
+  }
+
+  function readWeekdayCheckboxes(container){
+    var result = [];
+    container.querySelectorAll("input[type=checkbox]").forEach(function(inp){
+      if (inp.checked) result.push(parseInt(inp.getAttribute("data-day"), 10));
+    });
+    return result;
+  }
+
+  function parseMonthDays(text){
+    var parts = (text || "").split(",");
+    var days = [];
+    parts.forEach(function(p){
+      var v = parseInt(p.trim(), 10);
+      if (isFinite(v) && v >= 1 && v <= 31 && days.indexOf(v) === -1) days.push(v);
+    });
+    days.sort(function(a,b){ return a-b; });
+    return days;
+  }
+
+  function matchesEventRule(store, dateStr){
+    var d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return false;
+    var day = d.getDate();
+    var dow = d.getDay();
+    if (store.monthDays && store.monthDays.indexOf(day) !== -1) return true;
+    if (store.weekdays && store.weekdays.indexOf(dow) !== -1) return true;
+    return false;
+  }
+
+  function findStoreByName(name){
+    var n = (name || "").trim();
+    if (!n) return null;
+    return stores.filter(function(s){ return s.name === n; })[0] || null;
+  }
+
+  function patternText(store){
+    var parts = [];
+    if (store.monthDays && store.monthDays.length) parts.push("毎月 " + store.monthDays.join("・") + "日");
+    if (store.weekdays && store.weekdays.length){
+      var names = store.weekdays.slice().sort(function(a,b){
+        return WEEKDAY_CHECK_ORDER.indexOf(a) - WEEKDAY_CHECK_ORDER.indexOf(b);
+      }).map(function(d){ return WEEKDAY_LABELS[d]; });
+      parts.push("毎週 " + names.join("・") + "曜");
+    }
+    return parts.length ? parts.join(" / ") : "（日付パターン未登録・備考のみ）";
+  }
+
+  function populateStoreDatalist(){
+    storeDatalist.innerHTML = "";
+    stores.forEach(function(s){
+      var opt = document.createElement("option");
+      opt.value = s.name;
+      storeDatalist.appendChild(opt);
+    });
+  }
+
+  function renderStoreList(){
+    if (!stores.length){
+      storeListEl.innerHTML = '<div class="empty-note">まだ登録がありません。</div>';
+      return;
+    }
+    storeListEl.innerHTML = "";
+    stores.forEach(function(s){
+      var item = document.createElement("div");
+      item.className = "store-item";
+      var body = document.createElement("div");
+      body.innerHTML = '<div class="name">'+s.name+'</div>'
+                      + '<div class="pattern">'+patternText(s)+'</div>'
+                      + (s.note ? '<div class="note-txt">'+s.note+'</div>' : '');
+      var delBtn = document.createElement("button");
+      delBtn.className = "del-row-btn";
+      delBtn.textContent = "✕";
+      delBtn.title = "削除";
+      delBtn.addEventListener("click", function(){
+        if (!confirm('「'+s.name+'」を削除します。よろしいですか？')) return;
+        stores = stores.filter(function(x){ return x.id !== s.id; });
+        saveJSON(LS_STORES, stores);
+        renderStoreList();
+        populateStoreDatalist();
+        renderUpcomingEvents();
+      });
+      item.appendChild(body);
+      item.appendChild(delBtn);
+      storeListEl.appendChild(item);
+    });
+  }
+
+  function renderUpcomingEvents(){
+    if (!stores.length){
+      upcomingEventsEl.innerHTML = '<div class="empty-note">店舗を登録すると表示されます。</div>';
+      return;
+    }
+    var rows = [];
+    var base = new Date();
+    base.setHours(0,0,0,0);
+    for (var i=0;i<30;i++){
+      var d = new Date(base.getTime());
+      d.setDate(d.getDate() + i);
+      var m = ("0"+(d.getMonth()+1)).slice(-2);
+      var day = ("0"+d.getDate()).slice(-2);
+      var dateStr = d.getFullYear() + "-" + m + "-" + day;
+      var matched = stores.filter(function(s){ return matchesEventRule(s, dateStr); });
+      if (matched.length){
+        rows.push({date: dateStr, wd: WEEKDAY_LABELS[d.getDay()], names: matched.map(function(s){ return s.name; })});
+      }
+    }
+    if (!rows.length){
+      upcomingEventsEl.innerHTML = '<div class="empty-note">今後30日以内に、登録ルールに一致するイベント日はありません。</div>';
+      return;
+    }
+    upcomingEventsEl.innerHTML = rows.map(function(r){
+      return '<div class="upcoming-row"><div class="u-date">'+r.date+'('+r.wd+')</div><div class="u-stores">'+r.names.join('、')+'</div></div>';
+    }).join("");
+  }
+
+  renderWeekdayCheckboxes(storeWeekdaysEl, []);
+
+  addStoreBtn.addEventListener("click", function(){
+    var name = (storeNameEl.value || "").trim();
+    if (!name){
+      storeMsg.innerHTML = '<div class="msg err">店舗名・チェーン名を入力してください。</div>';
+      return;
+    }
+    var monthDays = parseMonthDays(storeMonthDaysEl.value);
+    var weekdays = readWeekdayCheckboxes(storeWeekdaysEl);
+    var note = (storeNoteEl.value || "").trim();
+    stores.push({
+      id: "s_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+      name: name, monthDays: monthDays, weekdays: weekdays, note: note,
+      createdAt: Date.now()
+    });
+    saveJSON(LS_STORES, stores);
+    storeNameEl.value = ""; storeMonthDaysEl.value = ""; storeNoteEl.value = "";
+    renderWeekdayCheckboxes(storeWeekdaysEl, []);
+    storeMsg.innerHTML = '<div class="msg ok">「'+name+'」を登録しました。</div>';
+    renderStoreList();
+    populateStoreDatalist();
+    renderUpcomingEvents();
+  });
+
+  function refreshAutoEventHint(){
+    // ホールが登録済み店舗と一致している間だけ、日付を変えるたびにルールで
+    // チェック状態を作り直す（一致する店舗が無ければ、手動でのON/OFFに干渉しない）
+    var date = (logDateEl.value || "").trim();
+    var store = findStoreByName(logHallEl.value);
+    if (!store){
+      autoEventHint.style.display = "none";
+      autoEventHint.textContent = "";
+      return;
+    }
+    var matched = !!(date && matchesEventRule(store, date));
+    logEventEl.checked = matched;
+    if (matched){
+      autoEventHint.style.display = "block";
+      autoEventHint.textContent = "「"+store.name+"」の登録ルールに一致するため、イベント日に自動チェックしました（手動で解除できます）。";
+    } else {
+      autoEventHint.style.display = "block";
+      autoEventHint.textContent = "「"+store.name+"」の登録ルールには一致しない日付です。";
+    }
+  }
+  logHallEl.addEventListener("input", refreshAutoEventHint);
+  logHallEl.addEventListener("change", refreshAutoEventHint);
+  logDateEl.addEventListener("input", refreshAutoEventHint);
+  logDateEl.addEventListener("change", refreshAutoEventHint);
+
   saveLogBtn.addEventListener("click", function(){
     if (!lastResult){
       saveLogMsg.innerHTML = '<div class="msg err">先に「設定を判別する」で計算してください。</div>';
@@ -808,6 +1073,7 @@
       machineId: lastResult.machineId,
       machineName: machineName(lastResult.machineId),
       label: (logLabelEl.value || "").trim(),
+      hall: (logHallEl.value || "").trim(),
       isEvent: !!logEventEl.checked,
       n: lastResult.n, kb: lastResult.kb, kr: lastResult.kr,
       posterior: lastResult.posterior,
@@ -922,6 +1188,30 @@
       html += '<div class="note">n（記録数）が少ない曜日ほど数値は大きく揺れます。傾向を語るには最低でも同じ曜日で5件以上を目安にしてください。</div>';
     }
 
+    // ホール別
+    var byHall = {};
+    recs.forEach(function(r){
+      var h = (r.hall || "").trim();
+      if (!h) return;
+      if (!byHall[h]) byHall[h] = [];
+      byHall[h].push(r.highBand);
+    });
+    var hallNames = Object.keys(byHall);
+    if (hallNames.length){
+      hallNames.sort(function(a,b){ return byHall[b].length - byHall[a].length; });
+      html += '<h3 class="sub-title">ホール別 平均・高設定(4〜6)期待度</h3>';
+      hallNames.forEach(function(h){
+        var arr = byHall[h];
+        var avg = arr.reduce(function(a,b){return a+b;},0)/arr.length;
+        html += '<div class="weekday-row">'
+              + '<div class="wd-label" style="width:auto;max-width:120px;text-align:left;flex-shrink:0;">'+h+'</div>'
+              + '<div class="wd-track"><div class="wd-fill" style="width:'+(avg*100).toFixed(1)+'%;"></div></div>'
+              + '<div class="wd-pct">'+fmtPct(avg)+' (n='+arr.length+')</div>'
+              + '</div>';
+      });
+      html += '<div class="note">チェーン店・店舗ごとに、あなたが入力した実戦データから逆算した平均値です。ホールの実際の設定投入方針を示すものではありません。</div>';
+    }
+
     // イベント日 比較
     var evArr = recs.filter(function(r){ return r.isEvent; }).map(function(r){ return r.highBand; });
     var noEvArr = recs.filter(function(r){ return !r.isEvent; }).map(function(r){ return r.highBand; });
@@ -937,10 +1227,11 @@
 
     // 記録一覧
     html += '<h3 class="sub-title">記録一覧</h3>';
-    html += '<div style="overflow-x:auto;"><table class="log-table"><tr><th>日付</th><th>台番号/メモ</th><th>企画</th><th>G/BIG/REG</th><th>推定設定</th><th>高設定%</th><th></th></tr>';
+    html += '<div style="overflow-x:auto;"><table class="log-table"><tr><th>日付</th><th>ホール</th><th>台番号/メモ</th><th>企画</th><th>G/BIG/REG</th><th>推定設定</th><th>高設定%</th><th></th></tr>';
     recs.forEach(function(r){
       html += '<tr>'
             + '<td>'+r.date+(weekdayLabel(r.date)?'('+weekdayLabel(r.date)+')':'')+'</td>'
+            + '<td>'+(r.hall || '―')+'</td>'
             + '<td>'+(r.label || '―')+'</td>'
             + '<td>'+(r.isEvent ? '●' : '')+'</td>'
             + '<td>'+r.n+'/'+r.kb+'/'+r.kr+'</td>'
@@ -1100,6 +1391,9 @@
   populateLogFilterMachine();
   populateLogFilterLabel();
   renderLogStats();
+  renderStoreList();
+  populateStoreDatalist();
+  renderUpcomingEvents();
 })();
 </script>
 </body>
