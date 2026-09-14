@@ -268,30 +268,32 @@ def format_race(
     if marked and (skipped := marked[0].score.skipped_items):
         out.append(f"※ {'・'.join(skipped)}は採点対象外（満点{marked[0].score.max_base:.0f}点）")
 
-    # 目玉: ワイド1点。当てにいくのではなく、損を小さく保って回収率を取る
+    # 目玉: ワイド1点。当てにいくのではなく、損を小さく保って回収率を取る。
+    # **見送りのときは1行で済ませる**（本人の指示・2026-09-14
+    # 「5本しかなく見送りなどのコメントはいらない」）。買う条件を満たさない
+    # ことは言うが、その理由と実測を毎レース並べても読まれない
+    names = {s.horse.umaban: s.horse.name for s in scores}
     pick = best_single(order, favorite_odds=fav)
     out.append("")
     if pick is None:
-        out.append("【ワイド1点】実測データなし → 判断材料なし")
+        out.append("【ワイド1点】実測データなし")
     elif pick.recommended:
-        out.append(f"【ワイド1点】★ {pick.combo}  （{pick.label}）")
+        combo = ticket_label(pick.umaban, names)
+        out.append(f"【ワイド1点】★ {combo}  （{pick.label}）")
         out.append(f"    {pick.stat_text()}")
     else:
-        out.append(f"【ワイド1点】見送り推奨  参考: {pick.combo}（{pick.label}）")
-        out.append(f"    {pick.reason}")
-        out.append(f"    {pick.stat_text()}")
+        out.append("【ワイド1点】見送り")
 
     # 単複1点。単勝・複勝だけを見て1頭を指名する
     tp = best_tanpuku(order, favorite_odds=fav)
     if tp is None:
-        out.append("【単複1点】実測データなし → 判断材料なし")
+        out.append("【単複1点】実測データなし")
     elif tp.recommended:
-        out.append(f"【単複1点】★ {tp.umaban}番  （{tp.label}）")
+        out.append(f"【単複1点】★ {umaban_label(tp.umaban, names.get(tp.umaban))}"
+                   f"  （{tp.label}）")
         out.append(f"    {tp.stat_text()}")
     else:
-        out.append(f"【単複1点】見送り推奨  参考: {tp.umaban}番（{tp.label}）")
-        out.append(f"    {tp.reason}")
-        out.append(f"    {tp.stat_text()}")
+        out.append("【単複1点】見送り")
 
     out.append("")
     out.append("【スコア順】")
@@ -332,17 +334,11 @@ def format_race(
             out.append("【コース特性】全キャリアから。その馬の中での対比（点数には未反映）")
             out.extend(lines)
 
-    names = {s.horse.umaban: s.horse.name for s in scores}
+    # **BOXなので組み合わせは並べない**（本人の指示・2026-09-14
+    # 「買い目は何個も並べなくていい。ボックスで伝わります」）。
+    # 幅ごとの顔ぶれを1行に出すので、以前の【候補】は役目が重なるため畳んだ
     out.append("")
-    out.append("【候補】スコア順に並べた馬（馬番＋馬名の頭）")
-    for w in (3, 4, 5, 6):
-        if len(order) >= w:
-            out.append(f"  {w}頭  "
-                       + "-".join(umaban_label(u, names.get(u))
-                                  for u in order[:w]))
-
-    out.append("")
-    out.append("【買い目】★=推奨")
+    out.append("【買い目】★=推奨。BOXなので組み合わせは並べない")
     rec = ("ワイド", 3) if plan.wide else ("馬連", 4)
     for o in build_options(order, favorite_odds=fav, recommended=rec):
         if o.width not in (3, 4, 5, 6):
@@ -351,8 +347,9 @@ def format_race(
         st = o.stats
         stat = (f"的中{st['的中率']:.0%} 回収{st['回収率']:.0%} 黒字{st['黒字確率']:.0%}"
                 if st else "実測データなし")
-        out.append(f"{head}{o.kind} {o.width}頭BOX {o.points:>2}点  {stat}")
-        out.extend(ticket_lines(o.combos, names))
+        box = "-".join(umaban_label(u, names.get(u)) for u in order[:o.width])
+        out.append(f"{head}{o.kind} {o.width}頭BOX {o.points:>2}点  "
+                   f"{box}  {stat}")
 
     if breakdown:
         out.append("")

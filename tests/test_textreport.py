@@ -39,27 +39,34 @@ class TestTextReport(unittest.TestCase):
         self.assertGreaterEqual(len(lines), 3)
         self.assertIn("◎", self.text)
 
-    def test_lists_five_and_six_horse_candidates(self):
-        """5頭・6頭の候補を、馬番＋馬名の頭で出す（投票履歴と照合するため）。"""
-        self.assertIn("  5頭  ", self.text)
-        self.assertIn("  6頭  ", self.text)
+    def test_each_width_shows_its_box_members(self):
+        """幅ごとの顔ぶれを馬番＋馬名の頭で出す（投票履歴と照合するため）。"""
         top = [m.score.horse for m in self.marked[:6]]
-        for n in (5, 6):
+        for n in (3, 4, 5, 6):
             want = "-".join(umaban_label(h.umaban, h.name) for h in top[:n])
             self.assertIn(want, self.text)
 
-    def test_candidates_follow_score_order(self):
-        five = next(l for l in self.text.splitlines() if l.strip().startswith("5頭"))
-        nums = [int(re.match(r"\d+", x).group())
-                for x in five.split()[1].split("-")]
-        self.assertEqual(nums, [m.score.horse.umaban for m in self.marked[:5]])
-
-    def test_tickets_carry_the_horse_name(self):
-        """「1-2」では投票履歴と突き合わせられない（9/13の精算で決めた方針）。"""
+    def test_box_members_follow_score_order(self):
         row = next(l for l in self.text.splitlines() if l.startswith("★"))
-        combos = self.text.splitlines()[self.text.splitlines().index(row) + 1]
-        first = self.marked[0].score.horse
-        self.assertIn(umaban_label(first.umaban, first.name), combos)
+        box = next(x for x in row.split() if "-" in x)
+        nums = [int(re.match(r"\d+", u).group()) for u in box.split("-")]
+        self.assertEqual(nums, [m.score.horse.umaban for m in self.marked[:len(nums)]])
+
+    def test_combinations_are_not_enumerated(self):
+        """BOXなので組み合わせは並べない（本人の指示・2026-09-14）。"""
+        a, b = (self.marked[0].score.horse, self.marked[1].score.horse)
+        pair = (f"{umaban_label(a.umaban, a.name)}-"
+                f"{umaban_label(b.umaban, b.name)}  ")
+        self.assertNotIn(pair, self.text)
+        self.assertIn("BOXなので組み合わせは並べない", self.text)
+
+    def test_no_reason_or_stats_behind_a_skip(self):
+        """見送りは1行。理由と実測は並べない（本人の指示・2026-09-14）。"""
+        for line in self.text.splitlines():
+            if "見送り" in line:
+                self.assertEqual(line.strip().count("】"), 1, line)
+                self.assertNotIn("回収", line)
+                self.assertNotIn("推定", line)
 
     def test_marks_exactly_one_recommended_bet(self):
         # 見出しの「★=推奨」ではなく、買い目の行だけを数える

@@ -56,6 +56,10 @@ from .scoring import score_race
 WAKU = frozenset(range(1, 9))
 GROUP = 5          # 何列ごとに朱の縦罫を引くか（紙面と同じ5列）
 MARKS = ("◎", "○", "▲")   # 紙面の「ウマ数字＝推奨馬」に当たる強調
+# 脚質は1文字で入れる（本人の指示・2026-09-14「脚質は要ります」）。
+# 一覧に詰め込む情報は絞る方針だが、脚質は無駄な情報ではない
+# （大井では4角の位置が着順をほぼ支配し、中央でも先行と追込で勝率が3倍違う）
+KYAKUSHITSU = ("逃", "先", "差", "追")
 
 FONTS = (
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
@@ -142,9 +146,10 @@ CSS = """
 }
 .kompi .mk{
   display:block;font-size:.62rem;line-height:1;color:var(--vermilion);
-  font-weight:700;height:.72em;
+  font-weight:700;height:.72em;white-space:nowrap;
 }
 .kompi .mk:empty{visibility:hidden}
+.kompi .mk i{font-style:normal;font-weight:600;color:var(--ink-2);margin-left:1px}
 .kompi td.osusume .v{color:var(--vermilion);font-weight:700}
 .kompi .w1{background:#F7F5EF;color:#23211C}
 .kompi .w2{background:#23211C;color:#F2EDE0}
@@ -186,6 +191,7 @@ class Cell:
     wakuban: int
     value: float
     mark: str
+    kyaku: str = ""      # 逃／先／差／追（読めなければ空）
 
 
 @dataclass
@@ -207,6 +213,12 @@ def _esc(s) -> str:
     return html.escape(str(s))
 
 
+def _kyaku(value: str | None) -> str:
+    """「先行」→「先」。読めない値は空にする（それらしい文字を作らない）。"""
+    head = (value or "").strip()[:1]
+    return head if head in KYAKUSHITSU else ""
+
+
 def race_grid(r: dict, metric: str = "score") -> RaceGrid:
     """1レースを順位順のセルに畳む。並べる軸は `assign_marks` と揃える。"""
     horses = load_horses(r["entries"])
@@ -225,7 +237,8 @@ def race_grid(r: dict, metric: str = "score") -> RaceGrid:
         name=r.get("name", ""), surface=r.get("surface", ""),
         baba=baba, post_time=r.get("post_time", ""),
         cells=[Cell(rank=i, umaban=s.horse.umaban, wakuban=s.horse.wakuban,
-                    value=v, mark=mark_of.get(s.horse.umaban, ""))
+                    value=v, mark=mark_of.get(s.horse.umaban, ""),
+                    kyaku=_kyaku(s.horse.kyakushitsu))
                for i, (s, v) in enumerate(zip(ranked, vals), start=1)],
     )
 
@@ -235,7 +248,8 @@ def _cell(c: Cell, group_edge: bool) -> str:
     cls = "cell osusume" if c.mark in MARKS else "cell"
     return (
         f'<td class="{cls}{" g" if group_edge else ""}">'
-        f'<span class="mk">{_esc(c.mark)}</span>'
+        f'<span class="mk">{_esc(c.mark)}'
+        f'{f"<i>{_esc(c.kyaku)}</i>" if c.kyaku else ""}</span>'
         f'<span class="u w{w}">{c.umaban}</span>'
         f'<span class="v">{c.value:.0f}</span></td>'
     )
@@ -320,7 +334,8 @@ def build_sheet(config: dict, calibration: dict | None = None,
         f'丸数字＝馬番（地色は枠色）、下段＝{_esc(label)}。'
         f'列は左から{_esc("偏差値" if metric == "hensachi" else "スコア")}の高い順で、'
         f'朱の縦罫は5列ごとの区切り。'
-        f'<span style="color:#C0362B;font-weight:700">朱字</span>と上の印は ◎○▲。'
+        f'<span style="color:#C0362B;font-weight:700">朱字</span>と上の印は ◎○▲、'
+        f'その右の小さな字は脚質（逃・先・差・追）。'
         f'{rate}</p>'
     )
     body = (

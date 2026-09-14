@@ -153,6 +153,40 @@ class TestAmebloSafe(unittest.TestCase):
         self.assertLess(len(s.encode("utf-8")), 60_000)
 
 
+class TestKyakushitsu(unittest.TestCase):
+    """脚質は1文字だけ入れる（本人の指示・2026-09-14「脚質は要ります」）。"""
+
+    def test_one_character(self):
+        for src, want in (("先行", "先"), ("逃げ", "逃"), ("差し", "差"),
+                          ("追込", "追")):
+            self.assertEqual(kompi._kyaku(src), want)
+
+    def test_unreadable_value_is_left_blank(self):
+        """それらしい文字を作らない（数字を作らない方針と同じ）。"""
+        for src in ("", None, "—", "不明", "自在"):
+            self.assertEqual(kompi._kyaku(src), "")
+
+    def test_cell_shows_mark_and_kyakushitsu_together(self):
+        c = kompi.Cell(rank=1, umaban=7, wakuban=4, value=60.0,
+                       mark="◎", kyaku="先")
+        td = kompi._cell(c, False)
+        self.assertIn("<span class=\"mk\">◎<i>先</i></span>", td)
+
+    def test_cell_without_kyakushitsu_has_no_empty_tag(self):
+        c = kompi.Cell(rank=9, umaban=7, wakuban=4, value=40.0, mark="")
+        self.assertNotIn("<i>", kompi._cell(c, False))
+
+
+@unittest.skipUnless(ENTRIES.exists(), "出走馬CSVが無い")
+class TestKyakushitsuInGrid(unittest.TestCase):
+    def test_grid_carries_the_kyakushitsu_of_each_horse(self):
+        g = kompi.race_grid(race())
+        horses = {h.umaban: h.kyakushitsu for h in load_horses(str(ENTRIES))}
+        for c in g.cells:
+            self.assertEqual(c.kyaku, kompi._kyaku(horses[c.umaban]))
+        self.assertTrue(any(c.kyaku for c in g.cells))
+
+
 class TestWakuColour(unittest.TestCase):
     def test_every_frame_number_has_a_class(self):
         for w in range(1, 9):
