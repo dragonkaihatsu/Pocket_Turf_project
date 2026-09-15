@@ -194,3 +194,25 @@ class TestGrounds(unittest.TestCase):
     def test_zero_point_items_are_not_listed_per_horse(self):
         for line in self.lines:
             self.assertNotIn("該当なし", line)
+
+
+class TestTrimmed(unittest.TestCase):
+    """出す数字と文を絞る（本人の指示・2026-09-14）。"""
+
+    def setUp(self):
+        base = TestTextReport("test_shows_score_order_with_ranks")
+        base.setUp()
+        self.text = base.text
+        self.day = format_day([self.text], "テスト日")
+
+    def test_no_hit_or_payout_rates(self):
+        """的中率・回収率は書かない（基準が伝わらない数字を並べない）。"""
+        for word in ("的中", "回収", "黒字", "連敗", "最大DD"):
+            self.assertNotIn(word, self.text)
+
+    def test_grounds_are_off_by_default(self):
+        self.assertNotIn("【根拠】", self.text)
+
+    def test_day_ends_with_the_fixed_notice(self):
+        from keiba.notice import MARK_NOTICE
+        self.assertTrue(self.day.rstrip().endswith(MARK_NOTICE), self.day[-120:])

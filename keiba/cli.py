@@ -186,7 +186,7 @@ def cmd_text(args) -> None:
                                   baba=r.get("baba", "良"),
                                   records=records, venue=r.get("venue"),
                                   as_of=args.race_date, n_show=args.marks,
-                                  breakdown=not args.no_breakdown))
+                                  breakdown=args.breakdown))
     text = format_day(blocks, cfg.get("heading", "予想"))
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -353,10 +353,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_text.add_argument("--output", required=True, help="出力テキストパス")
     p_text.add_argument("--records", help="馬別戦績CSV")
     p_text.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
-    p_text.add_argument("--no-breakdown", action="store_true",
-                        help="スコアの根拠（馬ごとの内訳）を省く。既定は付ける"
-                             "（根拠は文章で出し、画像の一覧はおさらいに使う"
-                             "という分担）")
+    p_text.add_argument("--breakdown", action="store_true",
+                        help="スコアの根拠（馬ごとの内訳）を付ける。既定は付けない"
+                             "（説明しすぎない方針。内訳が要るときは daily の"
+                             "カードを見る）")
     p_text.add_argument("--marks", type=int, default=8,
                         help="印を付ける頭数（既定8＝◎○▲+△3+注2）。"
                              "6にすると◎○▲+△3で止まる。標準型の買い目は"

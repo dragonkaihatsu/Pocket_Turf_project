@@ -95,12 +95,17 @@ class TestSheetStructure(unittest.TestCase):
         self.assertNotIn('<td class="rate-lbl"', s)   # CSSの規則は常に載る
         self.assertNotIn("最下段2行", s)
 
-    def test_footer_is_explained_when_present(self):
+    def test_footer_appears_only_with_measurements(self):
         if not CAL.exists():
             self.skipTest("実測表が無い")
-        s = self.sheet()
-        self.assertIn("<tfoot>", s)
-        self.assertIn("最下段2行", s)
+        self.assertIn("<tfoot>", self.sheet())
+
+    def test_legend_is_only_the_fixed_notice(self):
+        """凡例は印の意味と免責だけ。読み方の解説は置かない（説明しすぎない）。"""
+        from keiba.notice import MARK_NOTICE
+        legend = re.search(r'<p class="legend">(.*?)</p>', self.sheet(), re.S)
+        self.assertEqual(legend.group(1), MARK_NOTICE)
+        self.assertNotIn("読み方", self.sheet())
 
     def test_hensachi_metric_changes_the_label(self):
         """見出しの角は列の軸を名乗る（本文の他の「スコア」は対象外）。"""

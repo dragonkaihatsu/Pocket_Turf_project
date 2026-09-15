@@ -48,6 +48,7 @@ from pathlib import Path
 from .hensachi import deviations
 from .marks import assign_marks
 from .models import load_history, load_horses
+from .notice import MARK_NOTICE
 from .scoring import score_race
 
 # JRAの枠色は 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃。**地色はCSSの .w1〜.w8 に
@@ -316,28 +317,11 @@ def build_sheet(config: dict, calibration: dict | None = None,
                      for v, gs in by_venue.items())
     heading = config.get("heading", config.get("title", ""))
     venues = "・".join(by_venue)
-    label = "偏差値" if metric == "hensachi" else "スコア（75点満点）"
-    src = ""
-    if calibration:
-        src = (f'実測は{_esc(calibration.get("対象", ""))} '
-               f'{calibration.get("レース数", 0):,}レース。'
-               f'9列目以降は「9位以下」の一括値（列ごとの値は作らない）。')
 
-    # 実測表が無いときは最下段2行そのものを出さない。
-    # 凡例だけ残すと**存在しない行を説明する文**になるので、一緒に落とす
-    rate = ""
-    if calibration:
-        rate = (f'最下段2行は<b>スコア順位ごとの実測</b>で、その列に置いた馬が'
-                f'実際に何%勝ち／何%馬券圏内に来たか。{src}')
-    legend = (
-        f'<p class="legend"><b>読み方</b>　'
-        f'丸数字＝馬番（地色は枠色）、下段＝{_esc(label)}。'
-        f'列は左から{_esc("偏差値" if metric == "hensachi" else "スコア")}の高い順で、'
-        f'朱の縦罫は5列ごとの区切り。'
-        f'<span style="color:#C0362B;font-weight:700">朱字</span>と上の印は ◎○▲、'
-        f'その右の小さな字は脚質（逃・先・差・追）。'
-        f'{rate}</p>'
-    )
+    # 凡例は**読み方の解説をやめ、印の意味と免責だけ**にした（本人の指示・
+    # 2026-09-14「記事の末尾の言葉はこれにする」「説明しすぎない」）。
+    # 文言は `keiba/notice.py` に1か所だけ置く
+    legend = f'<p class="legend">{_esc(MARK_NOTICE)}</p>'
     body = (
         f'<div class="kompi">'
         f'<div class="mast">'

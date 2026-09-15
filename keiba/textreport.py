@@ -15,6 +15,7 @@ from .boxes import build_options
 from .expectation import Expectation
 from .hensachi import by_umaban, spread_note
 from .marks import MarkedHorse, assign_marks, split_for_total
+from .notice import MARK_NOTICE
 from .scoring import HorseScore
 from .single import best_single
 from .tanpuku import best_tanpuku
@@ -230,7 +231,7 @@ def format_race(
     records: dict[str, list[dict]] | None = None,
     venue: str | None = None,
     as_of: str | None = None,
-    breakdown: bool = True,
+    breakdown: bool = False,
 ) -> str:
     """1レース分をテキストにする。
 
@@ -276,17 +277,17 @@ def format_race(
     names = {s.horse.umaban: s.horse.name for s in scores}
     pick = best_single(order, favorite_odds=fav)
     tp = best_tanpuku(order, favorite_odds=fav)
+    # 実測（回収率・的中率・連敗）も出さない。買い目と同じ理由で、
+    # **基準の伝わらない数字を並べない**。数字は `single_stats.json` /
+    # `tanpuku_stats.json` と各スクリプトの出力に残る
     if pick is not None and pick.recommended:
         out.append("")
-        out.append(f"【ワイド1点】★ {ticket_label(pick.umaban, names)}"
-                   f"  （{pick.label}）")
-        out.append(f"    {pick.stat_text()}")
+        out.append(f"【ワイド1点】★ {ticket_label(pick.umaban, names)}")
     if tp is not None and tp.recommended:
         if not (pick is not None and pick.recommended):
             out.append("")
         out.append(f"【単複1点】★ {umaban_label(tp.umaban, names.get(tp.umaban))}"
-                   f"  （{tp.label}）")
-        out.append(f"    {tp.stat_text()}")
+                   f"（{tp.label}）")
 
     out.append("")
     out.append("【スコア順】")
@@ -332,21 +333,20 @@ def format_race(
     # 幅ごとの顔ぶれを1行に出すので、以前の【候補】は役目が重なるため畳んだ。
     # ただし**6頭ぶん並べると行が横に広がる**ので、顔ぶれを書くのは
     # MAX_BOX_NAMES 頭まで。それより広い幅は「上位n頭」とだけ書く
-    # （並びは上の【スコア順】で読める）
+    # （並びは上の【スコア順】で読める）。
+    # **的中率・回収率は出さない**（本人の指示・2026-09-14「的中回収に
+    # ついてはよくわからない基準だと思うのでかかなくてもいい」）。
+    # 実測そのものは `box_stats.json` と `scripts/boxstats.py` に残る
     out.append("")
-    out.append("【買い目】★=推奨（的中率・回収率は実測の参考値）")
+    out.append("【買い目】★=推奨")
     rec = ("ワイド", 3) if plan.wide else ("馬連", 4)
     for o in build_options(order, favorite_odds=fav, recommended=rec):
         if o.width not in (3, 4, 5, 6):
             continue
         head = "★" if o.recommended else "  "
-        st = o.stats
-        stat = (f"的中{st['的中率']:.0%} 回収{st['回収率']:.0%} 黒字{st['黒字確率']:.0%}"
-                if st else "実測なし")
         box = ("-".join(umaban_label(u, names.get(u)) for u in order[:o.width])
                if o.width <= MAX_BOX_NAMES else f"上位{o.width}頭")
-        out.append(f"{head}{o.kind} {o.width}頭BOX {o.points:>2}点  "
-                   f"{box}  {stat}")
+        out.append(f"{head}{o.kind} {o.width}頭BOX {o.points:>2}点  {box}")
 
     if breakdown:
         out.append("")
@@ -356,4 +356,4 @@ def format_race(
 
 def format_day(blocks: list[str], heading: str) -> str:
     body = "\n\n".join(blocks)
-    return f"{heading}\n\n{body}\n{RULE}\n"
+    return f"{heading}\n\n{body}\n{RULE}\n{MARK_NOTICE}\n"
