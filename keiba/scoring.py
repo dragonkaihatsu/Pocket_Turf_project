@@ -92,7 +92,7 @@ JOCKEY_TIER1_RIDES = 400
 # 勝率でも +3.3p（6.7%対3.4%）で、複勝率・勝率の両方が2025年と2026年で
 # 再現している。母数507に対して見分けられる差は4.0pt（複勝）なので、
 # 観測した6.6ptは母数の裏付けがある
-NORIKAE_KAKUAGE_POINTS = 3.0
+# NORIKAE_KAKUAGE_POINTS は ZENSO_TABLE の下で導出する（この行より後）
 
 # 騎手補正の目安ティア（必要に応じて呼び出し側で差し替え可能）
 DEFAULT_JOCKEY_TIERS: dict[int, tuple[str, ...]] = {
@@ -236,7 +236,30 @@ def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse],
     )
 
 
-ZENSO_TABLE = {1: 20, 2: 17, 3: 14, 4: 11, 5: 9}
+# 前走着順 → 素点。**実測の今走複勝率を線形に写した値**であって、
+# 着順の見た目どおりの並びではない（`scripts/zenso_table.py` が作る）。
+#
+# 中央9-12R・前走ペア23,757組（履歴1-12R→今走9-12R）での今走複勝率:
+#
+#     2着 42.9% > 3着 36.8% > **1着 32.0%** > 4着 29.0% > 5着 23.8%
+#     > 6-9着 17.4% > 10着以下 11.4%
+#
+# **前走1着は2着・3着より低く、4着並みである。** 前走1着馬は昇級初戦に
+# なりやすくクラスの壁に当たるためで、本人が指摘した「昇級戦の壁」が
+# そのまま出ている。1着の95%CI[30.4-33.6]は2着[40.6-45.2]・3着[34.6-39.0]
+# と重ならず、**2025・2026の両年で順序が完全に一致**する。
+#
+# 写像の両端は 3〜20 に固定してあるので**項目の配点20点は変えていない**。
+# 変えたのは順序と間隔だけ（持ち時計指数を入れたときと同じ方針）。
+ZENSO_TABLE = {1: 14.1, 2: 20.0, 3: 16.7, 4: 12.5, 5: 9.7}
+ZENSO_6_9 = 6.2
+ZENSO_10_OVER = 3.0
+
+# 乗り替わり補正の大きさ＝「前走二桁の素点を前走6-9着へ読み替える」差そのもの。
+# **定数で置かず表から導く**（旧実装は 3.0 と直書きで、ZENSO_TABLE を直すと
+# 静かにずれる状態だった。一軍騎手の閾値を2か所に書いた件と同じ失敗）。
+# 実測: 前走二桁×一軍騎手へ乗り替わりの複勝率は前走6-9着とほぼ同じ水準
+NORIKAE_KAKUAGE_POINTS = round(ZENSO_6_9 - ZENSO_10_OVER, 2)
 
 
 def score_zenso_naiyou(horse: Horse) -> ScoreItem:
@@ -247,9 +270,9 @@ def score_zenso_naiyou(horse: Horse) -> ScoreItem:
     if ch in ZENSO_TABLE:
         pts = ZENSO_TABLE[ch]
     elif ch <= 9:
-        pts = 6
+        pts = ZENSO_6_9
     else:
-        pts = 3
+        pts = ZENSO_10_OVER
     return ScoreItem("前走内容", pts, f"前走{ch}着（{horse.zenso_race or '前走レース名不明'}）")
 
 

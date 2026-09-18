@@ -75,14 +75,54 @@ class TestStats(unittest.TestCase):
         self.assertEqual(len(skipped), 1)
 
     def test_mark_tally_matches_actual_finish(self):
-        # サンプルレースの着順は 1着8番 / 2着1番 / 3着3番
-        # 印は ◎1番・○8番・▲3番 なので、◎は2着、○は1着、▲は3着になる
+        """印ごとの着順の数え上げが、実際の印と着順に一致すること。
+
+        **どの馬に◎が付くかを決め打ちしない。** 以前は「印は ◎1番・○8番」と
+        書いていたが、これはスコアリングの出力であって集計ロジックではない。
+        `ZENSO_TABLE` を実測に合わせて直した（前走2着 > 前走1着）ときに
+        ◎が1番→8番へ移り、集計は正しいのにこのテストだけが落ちた。
+        期待値は records から独立に組み立て、tally の結果と突き合わせる。
+        """
         records, _ = self._records()
         by_mark = tally_by_mark(records)
-        self.assertEqual(by_mark["◎"]["2着"], 1)
-        self.assertEqual(by_mark["◎"]["複勝率"], 1.0)
-        self.assertEqual(by_mark["○"]["1着"], 1)
-        self.assertEqual(by_mark["▲"]["3着"], 1)
+
+        want: dict[str, dict[str, int]] = {}
+        for rec in records:
+            for sc in rec.scores:
+                u = sc.horse.umaban
+                pos = rec.position_of(u)
+                if pos is None:
+                    continue
+                d = want.setdefault(rec.mark_of(u), {})
+                key = f"{pos}着" if pos <= 3 else "着外"
+                d[key] = d.get(key, 0) + 1
+
+        for mark, counts in want.items():
+            for key, n in counts.items():
+                if key == "着外":
+                    continue
+                self.assertEqual(by_mark[mark][key], n, f"{mark} の {key}")
+
+        # 複勝率は母数と整合すること（出走0の印は表に並ぶだけなので飛ばす）
+        for mark, row in by_mark.items():
+            if not row["出走"]:
+                continue
+            hit = sum(row.get(f"{i}着", 0) for i in (1, 2, 3))
+            self.assertAlmostEqual(row["複勝率"], hit / row["出走"], places=6,
+                                   msg=f"{mark} の複勝率")
+
+    def test_sample_race_top_pick_wins(self):
+        """このサンプルでは◎が1着になる（`ZENSO_TABLE` を直した効果）。
+
+        前走2着の8番が前走1着の1番を上回り、◎が入れ替わった結果である。
+        1レースの出来事なので手法の裏づけではないが、**表の書き換えで印が
+        実際に動いた**ことの記録として固定しておく。
+        """
+        records, _ = self._records()
+        rec = records[0]
+        top = [s.horse.umaban for s in rec.scores if rec.mark_of(s.horse.umaban) == "◎"]
+        self.assertEqual(len(top), 1)
+        self.assertEqual(rec.position_of(top[0]), 1)
 
     def test_every_runner_is_counted_once(self):
         records, _ = self._records()
