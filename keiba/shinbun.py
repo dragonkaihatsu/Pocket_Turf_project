@@ -37,6 +37,7 @@ import html
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .arare import judge as arare_judge
 from .marks import assign_marks
 from .models import load_history, load_horses
 from .notice import MARK_NOTICE
@@ -105,6 +106,9 @@ CSS = """
   color:var(--ink-2);padding:0 4px;white-space:nowrap}
 .shinbun td.rname{padding:3px 7px;font-size:.78rem;line-height:1.25;min-width:132px}
 .shinbun td.rname u{display:block;text-decoration:none;font-size:.64rem;color:var(--ink-2)}
+/* 荒れそう／堅そう。率は出さない（区分に付いた一般値であって今日の確率ではない） */
+.shinbun td.rname b.ar{font-weight:700;margin-left:6px;padding:0 4px;
+  border-radius:2px;background:#ECEAE4;color:var(--ink)}
 .shinbun td.kyori{text-align:center;font-family:var(--f-num);font-size:.8rem;
   padding:0 5px;white-space:nowrap;line-height:1.2}
 .shinbun td.kyori u{display:block;text-decoration:none;font-size:.62rem;
@@ -185,6 +189,7 @@ class RaceRow:
     surface: str
     baba: str
     post_time: str
+    arare: str
     cells: list[Cell]
     top3: list[int | None] = field(default_factory=list)   # 1-3着の馬番
     payouts: dict[str, str] = field(default_factory=dict)
@@ -268,6 +273,12 @@ def race_row(r: dict) -> RaceRow:
     mark_of = {m.score.horse.umaban: m.mark
                for m in assign_marks(scores, baba=baba)}
 
+    # 荒れそう／堅そう。1番人気オッズ帯 × 上位3人気の支持集中度の2軸
+    # （`keiba/arare.py`）。判定できないレースは空にして作らない
+    fav = next((h for h in horses if h.ninki == 1), None)
+    arare = arare_judge(fav.tansho_odds if fav else None, horses,
+                        venue=r.get("venue")) or ""
+
     chaku, scratched, pay = load_result(r["entries"])
     cells = []
     for i, s in enumerate(ranked, start=1):
@@ -287,7 +298,7 @@ def race_row(r: dict) -> RaceRow:
     return RaceRow(venue=r.get("venue", ""), race_no=r.get("race_no", ""),
                    name=r.get("name", ""), grade=r.get("grade", ""),
                    surface=r.get("surface", ""), baba=baba,
-                   post_time=r.get("post_time", ""), cells=cells,
+                   post_time=r.get("post_time", ""), arare=arare, cells=cells,
                    top3=top3, payouts=pay)
 
 
@@ -348,7 +359,9 @@ def _venue_table(venue: str, rows: list[RaceRow]) -> str:
         tds = [f'<td class="rno">{_esc(r.race_no)}</td>',
                f'<td class="post">{_esc(r.post_time)}</td>',
                f'<td class="rname">{_esc(r.name)}'
-               + (f"<u>{_esc(r.grade)}</u>" if r.grade else "") + "</td>",
+               + (f"<u>{_esc(r.grade)}"
+                  + (f'<b class="ar">{_esc(r.arare)}</b>' if r.arare else "")
+                  + "</u>" if (r.grade or r.arare) else "") + "</td>",
                f'<td class="kyori edge">{_esc(r.surface)}'
                f'<u>{_esc(r.baba)}</u></td>']
         for _, _, lo, hi in GROUPS:

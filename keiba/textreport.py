@@ -15,6 +15,7 @@ from .boxes import build_options
 from .expectation import Expectation
 from .hensachi import by_umaban, spread_note
 from .marks import MarkedHorse, assign_marks, split_for_total
+from .arare import judge as arare_judge
 from .notice import MARK_NOTICE
 from .scoring import HorseScore
 from .single import best_single
@@ -254,8 +255,13 @@ def format_race(
     # 一致・不一致は収集した時点のオッズで決まる。朝と最終で人気が入れ替わる馬が
     # 実際にいる（2026-09-12の中央8レースでは3レースで判定がひっくり返った）ため、
     # どの時点の判定なのかを必ず添える。買い目の型も同じ理由で最終オッズで決める
+    # 荒れそう／堅そうは **1番人気オッズ帯 × 上位3人気の支持集中度** の2軸で
+    # 決める（`keiba/arare.py`）。帯で統制しても残った特徴が集中度だけだった。
+    # 率は出さない（順位・区分に付いた一般値であって今日の確率ではない）
+    arare = arare_judge(fav, [s.horse for s in scores], venue=venue)
     out.append(f"{fav_txt} → 【{plan.strategy}型】"
-               f"  ◎と1番人気: {'一致' if agree else '不一致'}"
+               + (f"・{arare}" if arare else "")
+               + f"  ◎と1番人気: {'一致' if agree else '不一致'}"
                f" ※収集時のオッズ。発走前に最終オッズで再判定")
     out.append(f"レース内{spread_note(devs)}")
 
