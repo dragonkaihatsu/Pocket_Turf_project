@@ -116,17 +116,64 @@ def parse_horse_results(html: str, horse_id: str, name: str = "") -> list[dict]:
     return out
 
 
-def load_records(path: Path | str | None = None) -> dict[str, list[dict]]:
-    """馬ID → 戦績（日付昇順）を読み込む。"""
-    p = Path(path) if path else profile.active().path("horse_records.csv")
+# 戦績は2つの作りのファイルに分かれている。用途が違うので**両方読む**。
+#
+#   horse_records.csv         netkeiba の馬ページを1頭ずつ取った全キャリア。
+#                             1頭あたりは厚い（中央値14走）が、1.5秒間隔で
+#                             取るので頭数は増えない。タイムは持たない
+#   horse_records_corpus.csv  収集済み結果CSVから組み直したもの（通信ゼロ）。
+#                             1頭あたりは薄い（中央値5走）が全頭ぶんあり、
+#                             **タイムを持つ**ので持ち時計指数が作れる
+#
+# 既定が前者だけを指していたため、本番の予想では
+#   持ち時計指数 …… 発火 0%（全馬が上がり3Fの代替に落ちる）
+#   コース適性 …… 馬ごとに点が付くのは3.3%・レース内点差の中央値0.0点
+# という状態だった。CLAUDE.md が「持ち時計で4-5番人気帯を差なし→差ありに
+# した」と記録した成果は、`--records` を明示したときだけ効いていた。
+# エラーは出ず、もっともらしい旧尺度のスコアが静かに出る失敗の仕方で、
+# プロファイル取り違えと同型である。
+CORPUS_NAME = "horse_records_corpus.csv"
+
+
+def _read_records(p: Path) -> list[dict]:
     if not p.exists():
+        return []
+    with open(p, encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
+def load_records(path: Path | str | None = None,
+                 corpus: Path | str | None = None) -> dict[str, list[dict]]:
+    """馬ID → 戦績（日付昇順）を読み込む。
+
+    path を明示しなければプロファイルの `horse_records.csv` と
+    `horse_records_corpus.csv` を**マージ**する。同じ走が両方にある場合は
+    タイムを持つコーパス側を採り、コーパスに無い走（収集範囲外の年・
+    障害・地方）は全キャリア側から補う。
+
+    突き合わせの鍵は (馬名, 日付) にする。**馬IDは一致しない**
+    （全キャリア側は netkeiba の馬ID、コーパス側は馬名を鍵に代用して
+    いるため）。ここを馬IDで突き合わせると重複が一切除かれない。
+    """
+    explicit = path is not None
+    base = Path(path) if explicit else profile.active().path("horse_records.csv")
+    rows = _read_records(base)
+
+    if not explicit:
+        cp = Path(corpus) if corpus else base.with_name(CORPUS_NAME)
+        corpus_rows = _read_records(cp)
+        if corpus_rows:
+            seen = {(r["馬名"], r["日付"]) for r in corpus_rows}
+            rows = corpus_rows + [r for r in rows
+                                  if (r["馬名"], r["日付"]) not in seen]
+
+    if not rows:
         return {}
     by_horse: dict[str, list[dict]] = {}
-    with open(p, encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            by_horse.setdefault(row["馬ID"], []).append(row)
-    for rows in by_horse.values():
-        rows.sort(key=lambda r: r["日付"])
+    for row in rows:
+        by_horse.setdefault(row["馬ID"], []).append(row)
+    for rs in by_horse.values():
+        rs.sort(key=lambda r: r["日付"])
     return by_horse
 
 

@@ -163,5 +163,78 @@ class TestLookaheadGuardInScoring(unittest.TestCase):
         self.assertIn("当地3走", c_after.note)
 
 
+class TestLoadRecordsMergesBothFiles(unittest.TestCase):
+    """既定は全キャリア版とコーパス版の**両方**を読む。
+
+    既定が `horse_records.csv`（netkeiba を1頭ずつ取った220頭）だけを
+    指していたため、本番の予想で持ち時計指数の発火が0%・コース適性の
+    レース内点差が中央値0点になっていた。エラーは出ず旧尺度のスコアが
+    静かに出るので、ここで固定する。
+    """
+
+    COLS_FULL = ("馬ID,馬名,日付,場,R,レース名,頭数,枠番,馬番,オッズ,人気,"
+                 "着順,騎手,斤量,馬場種別,距離,馬場")
+    COLS_CORPUS = COLS_FULL + ",タイム,着差,通過,ペース,上り"
+
+    def _write(self, d: Path) -> None:
+        # 全キャリア版: コーパスの収集範囲外の走（2019年）も持つ
+        (d / "horse_records.csv").write_text(
+            self.COLS_FULL + "\n"
+            "2019104321,テスト馬,2019-05-05,東京,3,3歳未勝利,16,1,1,5.0,2,4,"
+            "テスト,56,芝,1600,良\n"
+            "2019104321,テスト馬,2026-01-10,中山,9,某特別,16,2,3,3.0,1,1,"
+            "テスト,56,芝,1600,良\n",
+            encoding="utf-8")
+        # コーパス版: 同じ走をタイム付きで持つ（重なりはこちらを採る）
+        (d / "horse_records_corpus.csv").write_text(
+            self.COLS_CORPUS + "\n"
+            "テスト馬,テスト馬,2026-01-10,中山,9,某特別,16,2,3,3.0,1,1,"
+            "テスト,56,芝,1600,良,1:33.4,,1-1,34.5-34.9,34.9\n",
+            encoding="utf-8")
+
+    def test_merges_and_prefers_the_row_that_has_a_time(self):
+        import tempfile
+
+        import keiba.profile as profile
+        from keiba.horsedb import load_records
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            self._write(d)
+            orig = profile.Profile.path
+            profile.Profile.path = lambda self, name: d / name
+            try:
+                recs = load_records()
+            finally:
+                profile.Profile.path = orig
+
+        rows = [r for v in recs.values() for r in v]
+        # 2走とも残る（1/10 は重複なので1行だけ）
+        self.assertEqual(len(rows), 2)
+        by_date = {r["日付"]: r for r in rows}
+        # 重なった走はタイムを持つコーパス側
+        self.assertEqual(by_date["2026-01-10"].get("タイム"), "1:33.4")
+        # コーパスに無い走は全キャリア側から残る
+        self.assertIn("2019-05-05", by_date)
+
+    def test_explicit_path_reads_only_that_file(self):
+        """--records を明示したら、そのファイルだけを読む。
+
+        検証スクリプトが素材を絞って測れなくなると独立検証が壊れる。
+        """
+        import tempfile
+
+        from keiba.horsedb import load_records
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            self._write(d)
+            recs = load_records(d / "horse_records.csv")
+
+        rows = [r for v in recs.values() for r in v]
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(r.get("タイム") in (None, "") for r in rows))
+
+
 if __name__ == "__main__":
     unittest.main()
