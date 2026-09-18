@@ -133,6 +133,7 @@ def parse_horse_results(html: str, horse_id: str, name: str = "") -> list[dict]:
 # エラーは出ず、もっともらしい旧尺度のスコアが静かに出る失敗の仕方で、
 # プロファイル取り違えと同型である。
 CORPUS_NAME = "horse_records_corpus.csv"
+CANONICAL_NAME = "horse_records.csv"
 
 
 def _read_records(p: Path) -> list[dict]:
@@ -143,26 +144,32 @@ def _read_records(p: Path) -> list[dict]:
 
 
 def load_records(path: Path | str | None = None,
-                 corpus: Path | str | None = None) -> dict[str, list[dict]]:
+                 merge: bool = True) -> dict[str, list[dict]]:
     """馬ID → 戦績（日付昇順）を読み込む。
 
-    path を明示しなければプロファイルの `horse_records.csv` と
-    `horse_records_corpus.csv` を**マージ**する。同じ走が両方にある場合は
-    タイムを持つコーパス側を採り、コーパスに無い走（収集範囲外の年・
-    障害・地方）は全キャリア側から補う。
+    `horse_records.csv` を指したとき（path を省略した場合も含む）は、同じ
+    ディレクトリの `horse_records_corpus.csv` と**マージする**。この2つは
+    競合する選択肢ではなく、同じ「その馬の戦績」を別の経路で集めたもので、
+    片方だけでは穴が空くため。
 
-    突き合わせの鍵は (馬名, 日付) にする。**馬IDは一致しない**
-    （全キャリア側は netkeiba の馬ID、コーパス側は馬名を鍵に代用して
-    いるため）。ここを馬IDで突き合わせると重複が一切除かれない。
+    **それ以外の名前のパスは、そのファイルだけを読む。** 実験用に絞った
+    戦績（1-8Rだけ、ある年だけ）を渡したときに、黙ってコーパス全体が
+    混ざると絞ったつもりで絞れていない状態になる。帯の絞り込みを
+    `racefiles.py` に集めたときと同じ理由である。
+
+    merge=False で、canonical な名前でもマージしない。
+
+    突き合わせの鍵は (馬名, 日付)。**馬IDでは一致しない**（全キャリア側は
+    netkeiba の馬ID、コーパス側は馬名を鍵に代用している）。馬IDで
+    突き合わせると重複が一切除かれない。
     """
-    explicit = path is not None
-    base = Path(path) if explicit else profile.active().path("horse_records.csv")
+    base = Path(path) if path else profile.active().path(CANONICAL_NAME)
     rows = _read_records(base)
 
-    if not explicit:
-        cp = Path(corpus) if corpus else base.with_name(CORPUS_NAME)
-        corpus_rows = _read_records(cp)
+    if merge and base.name == CANONICAL_NAME:
+        corpus_rows = _read_records(base.with_name(CORPUS_NAME))
         if corpus_rows:
+            # 重なった走はタイムを持つコーパス側を採る
             seen = {(r["馬名"], r["日付"]) for r in corpus_rows}
             rows = corpus_rows + [r for r in rows
                                   if (r["馬名"], r["日付"]) not in seen]

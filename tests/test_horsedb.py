@@ -217,10 +217,12 @@ class TestLoadRecordsMergesBothFiles(unittest.TestCase):
         # コーパスに無い走は全キャリア側から残る
         self.assertIn("2019-05-05", by_date)
 
-    def test_explicit_path_reads_only_that_file(self):
-        """--records を明示したら、そのファイルだけを読む。
+    def test_canonical_path_also_merges(self):
+        """集計スクリプトは事故防止のため --records を必ず明示する。
 
-        検証スクリプトが素材を絞って測れなくなると独立検証が壊れる。
+        そこでマージを「path を省略したときだけ」にすると、予想時と
+        集計時でスコアの素材が食い違う。canonical な名前を指したときは
+        省略時と同じに扱う。
         """
         import tempfile
 
@@ -233,7 +235,44 @@ class TestLoadRecordsMergesBothFiles(unittest.TestCase):
 
         rows = [r for v in recs.values() for r in v]
         self.assertEqual(len(rows), 2)
-        self.assertTrue(all(r.get("タイム") in (None, "") for r in rows))
+        self.assertEqual({r["日付"]: r for r in rows}["2026-01-10"]["タイム"],
+                         "1:33.4")
+
+    def test_other_names_are_taken_literally(self):
+        """別名のパスは、そのファイルだけを読む。
+
+        実験用に絞った戦績を渡したときにコーパス全体が黙って混ざると、
+        絞ったつもりで絞れていない状態になる。
+        """
+        import tempfile
+
+        from keiba.horsedb import load_records
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            self._write(d)
+            (d / "subset.csv").write_text(
+                (d / "horse_records.csv").read_text(encoding="utf-8"),
+                encoding="utf-8")
+            recs = load_records(d / "subset.csv")
+
+        rows = [r for v in recs.values() for r in v]
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(not r.get("タイム") for r in rows))
+
+    def test_merge_can_be_turned_off(self):
+        import tempfile
+
+        from keiba.horsedb import load_records
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            self._write(d)
+            recs = load_records(d / "horse_records.csv", merge=False)
+
+        rows = [r for v in recs.values() for r in v]
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(not r.get("タイム") for r in rows))
 
 
 if __name__ == "__main__":
