@@ -186,6 +186,7 @@ def cmd_text(args) -> None:
                                   baba=r.get("baba", "良"),
                                   records=records, venue=r.get("venue"),
                                   as_of=args.race_date, n_show=args.marks,
+                                  kyori=r.get("kyori"),
                                   breakdown=args.breakdown))
     text = format_day(blocks, cfg.get("heading", "予想"))
     out = Path(args.output)

@@ -111,6 +111,31 @@ class TestTextReport(unittest.TestCase):
         self.assertEqual(day.count("テスト11R"), 2)
 
 
+class TestSankoBlock(unittest.TestCase):
+    """参考注記は、該当が無ければ見出しごと出さない。
+
+    1点買いの★と同じ扱い（行の有無で「該当なし」を伝える）。
+    出しっぱなしにすると、8頭中7頭に付いて判別の役に立たなくなる
+    （実際にそうなった。`keiba/aite.py` の note を条件付きに直した）。
+    """
+
+    def test_no_heading_when_nothing_to_say(self):
+        from keiba.textreport import sanko_lines
+
+        lines = sanko_lines([], [], None, "東京", "芝1600m", "良",
+                            1600, "2026-09-19")
+        self.assertEqual(lines, [])
+
+    def test_race_level_note_alone_is_enough_to_show_the_block(self):
+        from keiba.textreport import sanko_lines
+
+        lines = sanko_lines([], [], None, "中山", "芝1200m", "重",
+                            1200, "2026-09-19")
+        self.assertTrue(lines)
+        self.assertIn("【参考】", lines[1])
+        self.assertTrue(any("内枠" in l for l in lines))
+
+
 if __name__ == "__main__":
     unittest.main()
 

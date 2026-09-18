@@ -13,7 +13,9 @@ import re
 from .betting import BettingPlan
 from .boxes import build_options
 from .expectation import Expectation
+from .aite import note as aite_note
 from .hensachi import by_umaban, spread_note
+from .sanko import course_note, jockey_note, load_jockey_stats
 from .marks import MarkedHorse, assign_marks, split_for_total
 from .arare import judge as arare_judge
 from .notice import MARK_NOTICE
@@ -219,6 +221,54 @@ def _horse_line(rank: int, m: MarkedHorse, exp: Expectation,
             f"{h.kyakushitsu or '—':<3} 1着{win}/着内{place}")
 
 
+def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
+                records: dict[str, list[dict]] | None,
+                venue: str | None, surface: str, baba: str,
+                kyori: int | None, as_of: str | None,
+                n_show: int = 8) -> list[str]:
+    """参考注記（相手関係・騎手の得意条件・レース単位のコース注記）。
+
+    いずれも**スコアには入っていない**（`keiba/sanko.py`）。該当が無ければ
+    見出しごと出さない。行の有無で「該当なし」を伝えるのは、1点買いの
+    ★と同じ扱い（本人の指示「説明しすぎない」）。
+    """
+    sd = "芝" if surface.startswith("芝") else "ダ"
+    race_note = course_note(venue, sd, baba)
+    stats = load_jockey_stats(venue=venue)
+    # 騎手の「得意条件」は全体成績との対比で出すので、比べる相手が要る
+    from .scoring import load_ratings
+    baseline = load_ratings().get("騎手", {})
+
+    idx = None
+    if records:
+        from .aite import Index
+        idx = Index.build(records)
+    today = [s.horse.name for s in scores]
+
+    lines: list[str] = []
+    for i, m in enumerate(marked[:n_show], start=1):
+        h = m.score.horse
+        bits = []
+        if idx is not None and as_of:
+            d = idx.delta(h.name, today, as_of)
+            if n := aite_note(d, h.zenso_chakujun):
+                bits.append(n)
+        if n := jockey_note(h.jockey, stats, venue, sd, kyori,
+                            h.kyakushitsu, h.wakuban, baseline):
+            bits.append(n)
+        if bits:
+            lines.append(f"  {i:>2} {m.mark} {h.umaban:>2} {h.name:<14}"
+                         + "  ".join(bits))
+
+    if not lines and not race_note:
+        return []
+    out = ["", "【参考】スコアには未反映"]
+    if race_note:
+        out.append(f"  ※{race_note}")
+    out.extend(lines)
+    return out
+
+
 def format_race(
     title: str,
     surface: str,
@@ -232,6 +282,7 @@ def format_race(
     records: dict[str, list[dict]] | None = None,
     venue: str | None = None,
     as_of: str | None = None,
+    kyori: int | None = None,
     breakdown: bool = False,
 ) -> str:
     """1レース分をテキストにする。
@@ -333,6 +384,9 @@ def format_race(
             out.append("")
             out.append("【コース特性】全キャリアから。その馬の中での対比（点数には未反映）")
             out.extend(lines)
+
+    out.extend(sanko_lines(marked, scores, records, venue, surface, baba,
+                           kyori, as_of, n_show))
 
     # **BOXなので組み合わせは並べない**（本人の指示・2026-09-14
     # 「買い目は何個も並べなくていい。ボックスで伝わります」）。

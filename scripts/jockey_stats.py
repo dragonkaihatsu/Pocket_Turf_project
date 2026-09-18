@@ -59,26 +59,12 @@ def race_venue(stem: str) -> str | None:
     return m.group(1) if m else None
 
 
-def distance_band(kyori: int) -> str:
-    if kyori <= 1400:
-        return "短距離(~1400)"
-    if kyori <= 1800:
-        return "マイル(1401-1800)"
-    if kyori <= 2200:
-        return "中距離(1801-2200)"
-    return "長距離(2201~)"
-
-
-def waku_band(waku: int) -> str | None:
-    """枠番(1-8)を内・中・外の3帯に分ける。頭数に関わらず枠番は1-8で
-    固定なので、内枠1-2・外枠7-8は頭数の少ない少頭数戦でも意味を持つ。"""
-    if waku in (1, 2):
-        return "内枠(1-2)"
-    if waku in (7, 8):
-        return "外枠(7-8)"
-    if 3 <= waku <= 6:
-        return "中枠(3-6)"
-    return None
+# 距離帯・枠帯の境目は `keiba/sanko.py` を唯一の定義とする。
+# **2か所に書くと、予想時に引く側と集計する側が静かにずれる**
+# （一軍騎手の閾値・horse_records の列で実際に起きた失敗）。
+# 枠番は頭数に関わらず1-8で固定なので、内枠1-2・外枠7-8は
+# 少頭数戦でも意味を持つ。
+from keiba.sanko import distance_band, waku_band  # noqa: E402,F401
 
 
 def load_race_info(path: str) -> dict[str, dict]:
