@@ -158,7 +158,7 @@ def strategies(order: list[int], by_ninki: list[int] | None = None
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", help="対象レース番号で絞る (例: 10-12)")
     ap.add_argument("--ratings",
                     help="使用する補正ファイル。1-9Rだけで作った補正を10-12Rに当てれば"

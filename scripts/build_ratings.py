@@ -116,7 +116,7 @@ def build(directory: Path, wanted: set[int] | None = None) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--out", default="data/ratings.json")
     ap.add_argument("--races", help="対象レース番号で絞る (例: 1-9)")
     args = ap.parse_args()

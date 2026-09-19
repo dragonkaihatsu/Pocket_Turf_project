@@ -72,7 +72,7 @@ def streak_and_dd(pairs):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", default="9-12")
     ap.add_argument("--ratings")
     ap.add_argument("--race-info", default="data/profiles/nar/race_info.csv")

@@ -47,6 +47,7 @@ from pathlib import Path
 
 from .hensachi import deviations
 from .marks import assign_marks
+from .shinbun import config_date, config_venue, load_by_name
 from .models import load_history, load_horses
 from .notice import MARK_NOTICE
 from .scoring import score_race
@@ -220,12 +221,13 @@ def _kyaku(value: str | None) -> str:
     return head if head in KYAKUSHITSU else ""
 
 
-def race_grid(r: dict, metric: str = "score") -> RaceGrid:
+def race_grid(r: dict, metric: str = "score",
+              records=None, as_of=None) -> RaceGrid:
     """1レースを順位順のセルに畳む。並べる軸は `assign_marks` と揃える。"""
     horses = load_horses(r["entries"])
     history = load_history(r["history"]) if r.get("history") else None
     scores = score_race(horses, history, kyori=r.get("kyori"),
-                        venue=r.get("venue"))
+                        records=records, as_of=as_of, venue=r.get("venue"))
     baba = r.get("baba") or "良"
     key = (lambda s: s.total_yoi) if baba == "良" else (lambda s: s.total_omoi)
     ranked = sorted(scores, key=key, reverse=True)
@@ -306,9 +308,12 @@ def _venue_table(venue: str, grids: list[RaceGrid], cal: dict | None,
 
 
 def build_sheet(config: dict, calibration: dict | None = None,
-                metric: str = "score", title: str | None = None) -> str:
+                metric: str = "score", title: str | None = None,
+                records: str | None = None) -> str:
     """設定JSONから紙面1枚を組む。`title` を渡すとArtifact用に<title>を足す。"""
-    grids = [race_grid(r, metric) for r in config["races"]]
+    by_name = load_by_name(records, config_venue(config))
+    as_of = config_date(config)
+    grids = [race_grid(r, metric, by_name, as_of) for r in config["races"]]
     by_venue: dict[str, list[RaceGrid]] = {}
     for g in grids:
         by_venue.setdefault(g.venue or "—", []).append(g)

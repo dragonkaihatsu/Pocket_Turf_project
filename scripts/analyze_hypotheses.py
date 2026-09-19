@@ -130,7 +130,7 @@ def rate_line(label: str, sub: list, width: int = 24) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", default=DEFAULT_RACES,
                     help="対象レース番号（既定9-12）")
     args = ap.parse_args()

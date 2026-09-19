@@ -66,7 +66,7 @@ def main() -> None:
     ap.add_argument("--venue", default="大井")
     ap.add_argument("--races", default="10-12")
     ap.add_argument("--entries-dir", default="data")
-    ap.add_argument("--results-dir", default="data/collected")
+    ap.add_argument("--results-dir", default="data/collected_jra")
     ap.add_argument("--race-info", default="data/race_info.csv")
     args = ap.parse_args()
 

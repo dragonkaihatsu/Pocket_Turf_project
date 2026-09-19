@@ -68,17 +68,30 @@ class RaceRecord:
         return 4 if is_outside_top(self.result, umaban, 3) else None
 
 
-def load_records(config_paths: list[str | Path]) -> tuple[list[RaceRecord], list[str]]:
+def load_records(config_paths: list[str | Path],
+                 horse_records: str | None = None,
+                 ) -> tuple[list[RaceRecord], list[str]]:
     """設定JSONを読み、結果があるレースだけ RaceRecord にする。
     戻り値は (記録, スキップしたレースの説明)。
+
+    **検証も予想と同じスコアで印を付け直さなければ意味がない。**
+    `score_race` に戦績を渡していなかったため、検証だけ旧尺度（上がり3F
+    だけ）で印を作り、実際に公表した印と違う並びを採点していた
+    （2026-09-19に判明。`tests/test_same_score.py` の冒頭を参照）。
     """
+    from .shinbun import config_date, config_venue, load_by_name
+
     records: list[RaceRecord] = []
     skipped: list[str] = []
+    by_name = None
 
     for path in config_paths:
         with open(path, encoding="utf-8-sig") as f:
             config = json.load(f)
         day = config.get("heading") or config.get("title") or str(path)
+        as_of = config_date(config)
+        if by_name is None:
+            by_name = load_by_name(horse_records, config_venue(config))
 
         for raw in config["races"]:
             race = RaceEntry.from_dict(raw)
@@ -89,7 +102,9 @@ def load_records(config_paths: list[str | Path]) -> tuple[list[RaceRecord], list
 
             horses = load_horses(race.entries)
             history = load_history(race.history) if race.history else None
-            scores = score_race(horses, history, kyori=race.kyori)
+            scores = score_race(horses, history, kyori=race.kyori,
+                                records=by_name, as_of=as_of,
+                                venue=race.venue)
             marked = assign_marks(scores, baba=race.baba)
             records.append(
                 RaceRecord(

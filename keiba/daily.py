@@ -241,6 +241,10 @@ class RaceEntry:
     kyori: int
     baba: str
     entries: str
+    # **venue を落としていた**。`score_horse` は「渡さないとコース適性は
+    # 中立になる」と明記してあるのに、`from_dict` が宣言済みフィールドしか
+    # 拾わないため設定JSONの venue が捨てられていた（2026-09-19に判明）
+    venue: str | None = None
     history: str | None = None
     result: str | None = None
     payouts: str | None = None
@@ -393,10 +397,12 @@ def _verdict(race: RaceEntry, marked: list[MarkedHorse], plan: BettingPlan,
     )
 
 
-def _race_section(race: RaceEntry, first: bool) -> tuple[str, str]:
+def _race_section(race: RaceEntry, first: bool,
+                  records=None, as_of=None) -> tuple[str, str]:
     horses = load_horses(race.entries)
     history = load_history(race.history) if race.history else None
-    scores = score_race(horses, history, kyori=race.kyori)
+    scores = score_race(horses, history, kyori=race.kyori, records=records,
+                        as_of=as_of, venue=race.venue)
     marked = assign_marks(scores, baba=race.baba)
     plan = make_betting_plan(marked, baba=race.baba)
     pace = forecast_pace(horses)
@@ -437,11 +443,14 @@ def _race_section(race: RaceEntry, first: bool) -> tuple[str, str]:
     return tab, section
 
 
-def build_daily_page(config: dict) -> str:
+def build_daily_page(config: dict, records: str | None = None) -> str:
     races = [RaceEntry.from_dict(r) for r in config["races"]]
+    # 予想テキストと同じスコアで出す（`keiba/shinbun.py` の冒頭を参照）
+    by_name = load_by_name(records, config_venue(config))
+    as_of = config_date(config)
     tabs, sections = [], []
     for i, r in enumerate(races):
-        t, s = _race_section(r, first=(i == 0))
+        t, s = _race_section(r, first=(i == 0), records=by_name, as_of=as_of)
         tabs.append(t)
         sections.append(s)
 
@@ -460,6 +469,7 @@ def build_daily_page(config: dict) -> str:
     )
 
 
-def build_from_config(config_path: str | Path) -> str:
+def build_from_config(config_path: str | Path,
+                      records: str | None = None) -> str:
     with open(config_path, encoding="utf-8-sig") as f:
-        return build_daily_page(json.load(f))
+        return build_daily_page(json.load(f), records)

@@ -32,12 +32,16 @@ CSSは `.shinbun` の下にスコープする。`--title` のときだけ `<titl
 """
 from __future__ import annotations
 
+import re
+
 import csv
 import html
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .arare import judge as arare_judge
+from . import profile
+from .horsedb import load_records
 from .marks import assign_marks
 from .models import load_history, load_horses
 from .notice import MARK_NOTICE
@@ -262,11 +266,72 @@ def load_result(entries: str) -> tuple[dict[int, int], set[int], dict[str, str]]
     return chaku, scratched, pay
 
 
-def race_row(r: dict) -> RaceRow:
+
+# 予想テキスト（`keiba.cli text`）と**同じスコア**で出すために要るもの。
+#
+# ## 新聞・一覧が旧尺度で出ていた（2026-09-19・本人が画像で気づいた）
+#
+# `score_race` に `records` を渡していなかったため、持ち時計指数が作れず
+# **全馬が上がり3Fの代替に落ちていた**。コース適性・距離適性も中立で、
+# 乗り替わり補正も発火しない。結果、同じ日の同じ設定から
+#
+#   予想テキスト  中山9R  ◎6 ○3 ▲2 △9 …   （持ち時計あり）
+#   新聞・一覧    中山9R  ◎6 ○2 ▲9 △3 …   （上がり3Fだけ）
+#
+# と**2〜4位の並びが違うものが2つ出ていた**。配信の既定は新聞なので、
+# 公表していたのは旧尺度のほうだった。
+#
+# `as_of` も要る。渡さないと戦績の全期間を見てしまい、**当日の結果を
+# 含んだ後知恵のスコア**になる（発走後に作り直したとき静かに変わる）。
+# 設定JSONの heading/title から日付を拾う。
+DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+
+def config_venue(config: dict) -> str | None:
+    """設定JSONの最初のレースの競馬場。プロファイルをここから決める。"""
+    for r in config.get("races", []):
+        if v := r.get("venue"):
+            return v
+    return None
+
+
+def config_date(config: dict) -> str | None:
+    for key in ("heading", "title"):
+        if m := DATE_RE.search(str(config.get(key, ""))):
+            return m.group(1)
+    return None
+
+
+def load_by_name(records: str | None = None,
+                 venue: str | None = None) -> dict[str, list[dict]] | None:
+    """馬名 → 戦績。`keiba.cli` の `_load_horse_records` と同じ形にする。
+
+    **パスは競馬場名から決める。** `profile.active()` に頼ると、
+    `scripts/build_shinbun.py` のような単体スクリプトは `--profile` を
+    受けないので既定（地方）のままになり、**中央のレースに大井の戦績を
+    当てる**（＝戦績が空で持ち時計が作れない）。基準表を `for_venue` で
+    引くようにしたのと同じ理由で、CLAUDE.mdが繰り返し記録している
+    「集計スクリプトがプロファイルを指定していない事故」の型である。
+    """
+    if records is None and venue:
+        records = profile.for_venue(venue).path("horse_records.csv")
+    by_id = load_records(records)
+    if not by_id:
+        return None
+    by_name: dict[str, list[dict]] = {}
+    for rows in by_id.values():
+        if rows and rows[0]["馬名"]:
+            by_name.setdefault(rows[0]["馬名"], []).extend(rows)
+    for rows in by_name.values():
+        rows.sort(key=lambda r: r["日付"])
+    return by_name
+
+
+def race_row(r: dict, records=None, as_of=None) -> RaceRow:
     horses = load_horses(r["entries"])
     history = load_history(r["history"]) if r.get("history") else None
     scores = score_race(horses, history, kyori=r.get("kyori"),
-                        venue=r.get("venue"))
+                        records=records, as_of=as_of, venue=r.get("venue"))
     baba = r.get("baba") or "良"
     key = (lambda s: s.total_yoi) if baba == "良" else (lambda s: s.total_omoi)
     ranked = sorted(scores, key=key, reverse=True)[:MARKS_SHOWN]
@@ -389,8 +454,11 @@ def _venue_table(venue: str, rows: list[RaceRow]) -> str:
             f'<tbody>{"".join(body)}</tbody></table></div>')
 
 
-def build_sheet(config: dict, title: str | None = None) -> str:
-    rows = [race_row(r) for r in config["races"]]
+def build_sheet(config: dict, title: str | None = None,
+                records: str | None = None) -> str:
+    by_name = load_by_name(records, config_venue(config))
+    as_of = config_date(config)
+    rows = [race_row(r, by_name, as_of) for r in config["races"]]
     by_venue: dict[str, list[RaceRow]] = {}
     for r in rows:
         by_venue.setdefault(r.venue or "—", []).append(r)

@@ -127,7 +127,7 @@ def finalize(counter: dict) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", help="対象レース番号 (例: 10-12)")
     ap.add_argument("--out", default="data/calibration.json")
     ap.add_argument("--race-info", help="レース距離の一覧(data/race_info.csv)")

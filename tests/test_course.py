@@ -12,7 +12,9 @@ from keiba.course import (
     winner_corner_distribution,
 )
 
-COLLECTED = Path(__file__).resolve().parent.parent / "data" / "collected"
+# 大井のデータは削除した（2026-09-19・本人の指示）ので、中央のコーパスで
+# 同じロジックを試す。**休眠させるより、別のデータで走らせる**
+COLLECTED = Path(__file__).resolve().parent.parent / "data" / "collected_jra"
 
 
 class TestParsePassingOrder(unittest.TestCase):

@@ -386,7 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
                            choices=sorted(VENUE_CODES) + sorted(JRA_VENUE_CODES) + ["中央"],
                            help="競馬場。中央の場名または「中央」（その日の全場）も指定できる")
     p_collect.add_argument("--races", default="1-12", help="レース番号 (例: 1-12 または 10,11,12)")
-    p_collect.add_argument("--outdir", default="data/collected", help="CSV出力先")
+    p_collect.add_argument("--outdir", default="data/collected_jra", help="CSV出力先")
     p_collect.add_argument("--cache-dir", default="data/raw", help="取得HTMLのキャッシュ先")
     p_collect.add_argument("--interval", type=float, default=1.5, help="リクエスト間隔(秒)")
     p_collect.add_argument("--force", action="store_true",
@@ -419,7 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_horses.set_defaults(func=cmd_horses)
 
     p_course = sub.add_parser("course", help="収集した結果からコース傾向を集計")
-    p_course.add_argument("--dir", default="data/collected", help="収集済みCSVのディレクトリ")
+    p_course.add_argument("--dir", default="data/collected_jra", help="収集済みCSVのディレクトリ")
     p_course.add_argument("--kyori", type=int, help="距離で絞る (例: 1200)")
     p_course.add_argument("--json", help="集計結果をJSONでも書き出す")
     p_course.set_defaults(func=cmd_course)

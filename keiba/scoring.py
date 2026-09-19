@@ -43,9 +43,26 @@ MIN_SELF_STARTS = 3 # 馬自身の戦績を適性判断に使う最低出走数
 KISHU_KETTO_WEIGHT = 0.5
 
 
-def load_ratings(path: Path | str | None = None) -> dict:
-    """実測の騎手・種牡馬成績を読み込む。無ければ空を返す。"""
-    p = Path(path) if path else profile.active().path("ratings.json")
+def load_ratings(path: Path | str | None = None,
+                 venue: str | None = None) -> dict:
+    """実測の騎手・種牡馬・脚質成績を読み込む。無ければ空を返す。
+
+    **パスは競馬場名から決める**（`_base_times` と同じ）。`profile.active()`
+    に頼ると、`--profile` を受けない単体スクリプト（`build_shinbun.py`
+    `build_kompi.py`）では既定のままになり、**中央のレースを大井の脚質・
+    騎手・血統データで採点する**。
+
+    2026-09-19の新聞が実際にこれで出ていた。中山9Rで
+
+        大井の ratings  ◎6 ○2 ▲3 △9 …（良54.56/48.60/47.87/47.57）
+        中央の ratings  ◎6 ○3 ▲2 △9 …（良55.5/49.8/49.6/47.1）
+
+    と並びが変わる。脚質の点数が大井の実測（先行38.0%・追込13.4%）で
+    付くので、7.5点ぶんが別の値になるため。エラーは出ない。
+    """
+    p = Path(path) if path else (
+        profile.for_venue(venue) if venue else profile.active()
+    ).path("ratings.json")
     if not p.exists():
         return {}
     try:
@@ -802,7 +819,9 @@ def score_horse(
                 self_kyori = summarize(past, kyori=kyori)
 
     course_item, has_experience = score_course_tekisei(horse, history, self_course)
-    ratings = load_ratings()
+    # **venue を渡す**。渡さないと既定プロファイル（地方）の実測を
+    # 中央のレースに当てる（上の load_ratings のコメントを参照）
+    ratings = load_ratings(venue=venue)
 
     base_items = [
         score_kiso_nouryoku(horse, field_horses, mochi),

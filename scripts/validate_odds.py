@@ -26,7 +26,7 @@ from keiba.oddsmodel import estimate_umaren, estimate_wide
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="data/collected")
+    ap.add_argument("--dir", default="data/collected_jra")
     ap.add_argument("--races", default="9-12")
     args = ap.parse_args()
 
