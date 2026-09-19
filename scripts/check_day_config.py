@@ -64,6 +64,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import html as htmllib
 import json
 import re
@@ -113,7 +114,13 @@ def strip_tags(s: str) -> str:
 
 
 def parse_list_page(path: Path) -> tuple[dict[tuple[str, str], str], dict[str, str]]:
-    """一覧ページから (競馬場,芝ダ)→馬場 と race_id→条件 を読む。"""
+    """一覧ページから (競馬場,芝ダ)→馬場、race_id→条件、race_id→{頭数,発走} を読む。
+
+    **頭数を照合に入れる理由**（CLAUDE.md 2026-09-13）: 取りこぼしや別レースの
+    混入があれば必ずずれる。安い割に効く。実際、この検算に入れる前は毎回
+    アドホックに正規表現を書いており、**<li> をまたいで隣のレースの「N頭」を
+    拾う誤りを踏んだ**。読み方を1か所に置く。
+    """
     text = path.read_text(encoding="utf-8", errors="replace")
     baba: dict[tuple[str, str], str] = {}
     for block in re.findall(r'<dt class="RaceList_DataHeader">(.*?)</dt>', text, re.S):
@@ -129,11 +136,21 @@ def parse_list_page(path: Path) -> tuple[dict[tuple[str, str], str], dict[str, s
         if d := re.search(r'<span class="Da">ダ[^：]*：\s*([^<\s]+)', block):
             baba[(venue, "ダ")] = BABA.get(d.group(1), d.group(1))
     cond: dict[str, str] = {}
+    extra: dict[str, dict] = {}
     for li in re.split(r"<li\b", text):
-        if m := re.search(r"race_id=(\d{12})", li):
-            if c := re.search(r"(芝|ダ|障)\s*(\d{3,4})m", strip_tags(li)):
-                cond.setdefault(m.group(1), f"{c.group(1)}{c.group(2)}m")
-    return baba, cond
+        if not (m := re.search(r"race_id=(\d{12})", li)):
+            continue
+        # **この <li> の中だけを見る。** 隣のレースの「N頭」を拾うと、
+        # 16頭立てのレースに14頭と出る（実際にアドホックな正規表現で踏んだ）
+        t = re.sub(r"\s+", " ", strip_tags(li))
+        if c := re.search(r"(芝|ダ|障)\s*(\d{3,4})m", t):
+            cond.setdefault(m.group(1), f"{c.group(1)}{c.group(2)}m")
+        e = extra.setdefault(m.group(1), {})
+        if h := re.search(r"(\d+)頭", t):
+            e.setdefault("頭数", int(h.group(1)))
+        if tm := re.search(r"(\d{1,2}:\d{2})", t):
+            e.setdefault("発走", tm.group(1))
+    return baba, cond, extra
 
 
 def fetched_at(path: Path) -> str:
@@ -289,8 +306,9 @@ def main() -> int:
     list_path = cache / f"jra_list_{date.replace('-', '')}.html"
     list_baba: dict[tuple[str, str], str] = {}
     list_cond: dict[str, str] = {}
+    list_extra: dict[str, dict] = {}
     if list_path.exists():
-        list_baba, list_cond = parse_list_page(list_path)
+        list_baba, list_cond, list_extra = parse_list_page(list_path)
         stamp = datetime.fromtimestamp(list_path.stat().st_mtime).strftime("%m/%d %H:%M")
         print(f"照合元: {list_path.name}（取得 {stamp}）")
     else:
@@ -339,6 +357,35 @@ def main() -> int:
             notes.append("? ダなのにコース記号がある")
         print(f"  {r['venue'] + r['race_no']:<10}{r['surface']:<12}{ref:<12}"
               f"{sym:<12}{'・'.join(notes) or 'OK'}")
+    print()
+
+    # 1.5) 頭数と発走時刻（別系統の照合。取りこぼし・別レース混入で必ずずれる）
+    print("■ 頭数・発走時刻（出走馬CSV vs 一覧ページ）")
+    print(f"  {'レース':<10}{'CSV':>5}{'枠番':>5}{'一覧':>6}  "
+          f"{'発走(設定/一覧)':<20}{'判定'}")
+    for r in sorted(races, key=lambda r: (r["venue"], int(r["race_no"][:-1]))):
+        rid = ids.get((r["venue"], int(r["race_no"][:-1]))) or ""
+        e = list_extra.get(rid, {})
+        rows = list(csv.DictReader(open(r["entries"], encoding="utf-8-sig")))
+        n = len(rows)
+        waku = sum(1 for x in rows
+                   if (x.get("枠番") or "").strip() not in ("", "0"))
+        notes = []
+        if e.get("頭数") is not None and e["頭数"] != n:
+            notes.append(f"✗ 一覧ページは{e['頭数']}頭")
+            problems += 1
+        if waku != n:
+            # 枠順確定前の馬柱を拾うと 0 のままになる
+            notes.append(f"✗ 枠番が入っているのは{waku}頭だけ")
+            problems += 1
+        pt = r.get("post_time") or "—"
+        lt = e.get("発走") or "—"
+        if lt != "—" and pt != lt:
+            notes.append("✗ 発走時刻が違う")
+            problems += 1
+        print(f"  {r['venue'] + r['race_no']:<10}{n:>5}{waku:>5}"
+              f"{(e.get('頭数') or '—'):>6}  {pt + ' / ' + lt:<20}"
+              f"{'・'.join(notes) or 'OK'}")
     print()
 
     # 2) 開催区分（競馬場 × 芝ダ）ごとの馬場

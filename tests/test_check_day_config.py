@@ -110,7 +110,7 @@ class TestParseListPage(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.path = Path(self.dir.name) / "jra_list_20260912.html"
         self.path.write_text(self.HTML, encoding="utf-8")
-        self.baba, self.cond = parse_list_page(self.path)
+        self.baba, self.cond, self.extra = parse_list_page(self.path)
 
     def tearDown(self):
         self.dir.cleanup()
@@ -127,6 +127,33 @@ class TestParseListPage(unittest.TestCase):
     def test_レースごとの芝ダ距離を読む(self):
         self.assertEqual(self.cond["202606040309"], "芝1600m")
         self.assertEqual(self.cond["202606040311"], "ダ1200m")
+
+    def test_頭数と発走時刻もレースごとに読む(self):
+        self.assertEqual(self.extra["202606040309"]["頭数"], 16)
+        self.assertEqual(self.extra["202606040311"]["頭数"], 15)
+        self.assertEqual(self.extra["202606040309"]["発走"], "15:00")
+        self.assertEqual(self.extra["202606040311"]["発走"], "16:00")
+
+    def test_隣のレースの頭数を拾わない(self):
+        """**<li> の中だけを見る。**
+
+        アドホックな正規表現で「レース名から600文字以内の N頭」を探すと、
+        隣の <li> の頭数を拾う。実際に2026-09-19の検算でこれを踏み、
+        16頭立てのレースに14頭と出た（8レース中5レースが誤判定）。
+        """
+        html = self.HTML.replace(
+            '<li><a href="?race_id=202606040311">11R ラジオ日本賞 16:00 ダ1200m 15頭</a></li>',
+            '<li><a href="?race_id=202606040310">10R 別のレース 15:30 ダ1800m 8頭</a></li>\n'
+            '<li><a href="?race_id=202606040311">11R ラジオ日本賞 16:00 ダ1200m 15頭</a></li>')
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "jra_list_20260912.html"
+            p.write_text(html, encoding="utf-8")
+            _, _, extra = parse_list_page(p)
+        # 間に8頭のレースを挟んでも、11Rは15頭のまま
+        self.assertEqual(extra["202606040310"]["頭数"], 8)
+        self.assertEqual(extra["202606040311"]["頭数"], 15)
+        self.assertEqual(extra["202606040309"]["頭数"], 16)
 
 
 if __name__ == "__main__":
