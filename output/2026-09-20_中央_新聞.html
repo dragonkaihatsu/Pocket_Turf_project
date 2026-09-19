@@ -1,0 +1,103 @@
+<style>
+.shinbun{
+  --paper:#FFFFFF; --paper-2:#F7F7F5; --rule:#C9C7C1; --rule-2:#8C8A84;
+  --ink:#222220; --ink-2:#6E6C66; --ink-3:#A5A29A;
+  --navy:#1B3A6B; --vermilion:#C0362B; --dotted:#E0A800;
+  --c1:#F9CFE0; --c2:#FBD2A6; --c3:#BFDBF4; --scr:#D9D9D9;
+  --yen:#FFFDE7;
+  --f-disp:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --f-body:"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-num:"Barlow Condensed","Roboto Condensed",Helvetica,Arial,sans-serif;
+  background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-size:14px; line-height:1.5;
+  padding:12px 10px 16px; max-width:100%;
+}
+.shinbun *{box-sizing:border-box}
+
+.shinbun .mast{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;
+  border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:10px}
+.shinbun .mast b{font-family:var(--f-disp);font-weight:900;font-size:1.15rem}
+.shinbun .mast span{font-size:.78rem;color:var(--ink-2);letter-spacing:.04em}
+.shinbun .mast i{margin-left:auto;font-style:normal;font-size:.78rem;color:var(--ink-2)}
+
+.shinbun .scroll{overflow-x:auto}
+.shinbun table{border-collapse:collapse;width:100%;
+  font-variant-numeric:tabular-nums;min-width:820px}
+.shinbun caption{caption-side:top;text-align:left;padding:8px 2px 5px;
+  font-family:var(--f-disp);font-weight:700;font-size:.95rem}
+.shinbun caption em{font-style:normal;font-weight:500;font-size:.74rem;
+  color:var(--ink-2);margin-left:8px}
+.shinbun th,.shinbun td{border:1px solid var(--rule);padding:0}
+.shinbun thead th{background:var(--paper-2);font-family:var(--f-body);
+  font-weight:700;font-size:.72rem;padding:4px 3px;line-height:1.3;color:var(--ink)}
+.shinbun thead th small{display:block;font-weight:400;font-size:.62rem;color:var(--ink-2)}
+.shinbun thead th.grp{background:#ECEAE4}
+
+.shinbun td.rno{background:var(--paper-2);text-align:center;padding:3px 6px;
+  white-space:nowrap;font-family:var(--f-num);font-weight:700;font-size:1rem}
+.shinbun td.post{text-align:center;font-family:var(--f-num);font-size:.8rem;
+  color:var(--ink-2);padding:0 4px;white-space:nowrap}
+.shinbun td.rname{padding:3px 7px;font-size:.78rem;line-height:1.25;min-width:132px}
+.shinbun td.rname u{display:block;text-decoration:none;font-size:.64rem;color:var(--ink-2)}
+/* 荒れそう／堅そう。率は出さない（区分に付いた一般値であって今日の確率ではない） */
+.shinbun td.rname b.ar{font-weight:700;margin-left:6px;padding:0 4px;
+  border-radius:2px;background:#ECEAE4;color:var(--ink)}
+.shinbun td.kyori{text-align:center;font-family:var(--f-num);font-size:.8rem;
+  padding:0 5px;white-space:nowrap;line-height:1.2}
+.shinbun td.kyori u{display:block;text-decoration:none;font-size:.62rem;
+  font-family:var(--f-body);color:var(--ink-2)}
+
+.shinbun td.cell{text-align:center;padding:2px 0 3px;vertical-align:top;
+  position:relative;min-width:31px}
+/* メダルは馬番の丸の背面に重ねる。inset:0 のままだと印の行のぶん下に
+   ずれて、丸と中心が合わない */
+.shinbun td.cell .medal{position:absolute;inset:.7em 0 .15em;display:flex;
+  align-items:center;justify-content:center;font-size:1.35rem;opacity:.55;
+  pointer-events:none;
+  font-family:"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif}
+.shinbun td.cell .mk{display:block;font-size:.6rem;line-height:1;
+  color:var(--vermilion);font-weight:700;height:.7em;white-space:nowrap;position:relative}
+.shinbun td.cell .mk:empty{visibility:hidden}
+.shinbun td.cell .mk i{font-style:normal;font-weight:600;color:var(--ink-2);margin-left:1px}
+.shinbun .u{position:relative;display:inline-flex;align-items:center;
+  justify-content:center;width:20px;height:20px;border-radius:50%;
+  border:1px solid var(--ink);font-family:var(--f-num);font-weight:700;
+  font-size:.84rem;line-height:1}
+/* JRAの枠色 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃。セルごとの inline style に
+   すると1日分で数キロバイト太るので、地色はここに1か所だけ置く */
+.shinbun .w1{background:#F7F5EF;color:#23211C}
+.shinbun .w2{background:#23211C;color:#F2EDE0}
+.shinbun .w3{background:#C0362B;color:#FFFFFF}
+.shinbun .w4{background:#1F5FA8;color:#FFFFFF}
+.shinbun .w5{background:#E4B93C;color:#23211C}
+.shinbun .w6{background:#2E8B57;color:#FFFFFF}
+.shinbun .w7{background:#E07B39;color:#23211C}
+.shinbun .w8{background:#E29AB0;color:#23211C}
+.shinbun .w0{background:#F3EEE1;color:#23211C}
+.shinbun td.p1{background:var(--c1)}
+.shinbun td.p2{background:var(--c2)}
+.shinbun td.p3{background:var(--c3)}
+.shinbun td.scr{background:var(--scr)}
+
+/* 買い目の切れ目。点線＝上位4頭BOX、実線＝上位6頭BOX */
+.shinbun .dot{border-right:2px dashed var(--dotted)}
+.shinbun .sol{border-right:2px solid var(--vermilion)}
+.shinbun .edge{border-right:2px solid var(--rule-2)}
+
+.shinbun td.chaku{text-align:center;font-family:var(--f-num);font-weight:700;
+  font-size:.92rem;padding:2px 0;min-width:28px}
+.shinbun td.yen{text-align:right;font-family:var(--f-num);font-weight:600;
+  font-size:.82rem;padding:2px 6px;background:var(--yen);white-space:nowrap;min-width:56px}
+.shinbun td.none{color:var(--ink-3);text-align:center;font-size:.72rem}
+
+.shinbun .legend{margin:9px 0 0;padding:7px 10px;background:var(--paper-2);
+  border-left:3px solid var(--navy);font-size:.72rem;line-height:1.7;color:var(--ink-2)}
+.shinbun .legend b{color:var(--ink)}
+.shinbun .keys{margin:6px 0 0;font-size:.68rem;color:var(--ink-2);
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.shinbun .keys s{text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.shinbun .keys em{font-style:normal;display:inline-block;width:14px;height:12px;
+  border:1px solid var(--rule-2)}
+@media (max-width:420px){.shinbun{padding:8px 6px 12px}}
+</style>
+<div class="shinbun"><div class="mast"><b>ポケットターフ</b><span>2026-09-20 中央 9-12R</span><i>中山・阪神</i></div><div class="scroll"><table><caption>中山<em>4レース ・ 発走前</em></caption><thead><tr><th rowspan="2">Race</th><th rowspan="2">発走</th><th rowspan="2">競走名/条件</th><th rowspan="2">距離</th><th class="grp edge" colspan="2">軸馬候補</th><th class="grp dot" colspan="2">相手馬<small>馬券に絡みそう</small></th><th class="grp edge" colspan="4">押さえ<small>手広く買うなら</small></th><th class="grp" colspan="3">着 順<small>1着 / 2着 / 3着</small></th><th rowspan="2">単 勝</th><th rowspan="2">馬連複</th><th rowspan="2">馬連単</th><th rowspan="2">三連複</th><th rowspan="2">三連単</th></tr><tr><th class="">1</th><th class="">2</th><th class="">3</th><th class="dot">4</th><th class="">5</th><th class="sol">6</th><th class="">7</th><th class="">8</th><th>1</th><th>2</th><th class="edge">3</th></tr></thead><tbody><tr><td class="rno">9R</td><td class="post">14:25</td><td class="rname">松戸特別(2勝クラス)<u>2勝クラス<b class="ar">標準</b></u></td><td class="kyori edge">ダ2400m<u>良</u></td><td class="cell"><span class="mk">◎</span><span class="u w3">3</span></td><td class="cell"><span class="mk">○<i>差</i></span><span class="u w6">8</span></td><td class="cell"><span class="mk">▲<i>差</i></span><span class="u w7">9</span></td><td class="cell dot"><span class="mk">△<i>先</i></span><span class="u w7">10</span></td><td class="cell"><span class="mk">△<i>先</i></span><span class="u w5">5</span></td><td class="cell sol"><span class="mk">△<i>先</i></span><span class="u w5">6</span></td><td class="cell"><span class="mk">注<i>逃</i></span><span class="u w1">1</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w2">2</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr><tr><td class="rno">10R</td><td class="post">15:05</td><td class="rname">汐留特別(2勝クラス)<u>2勝クラス<b class="ar">標準</b></u></td><td class="kyori edge">ダ1200m<u>良</u></td><td class="cell"><span class="mk">◎<i>先</i></span><span class="u w5">9</span></td><td class="cell"><span class="mk">○<i>先</i></span><span class="u w4">8</span></td><td class="cell"><span class="mk">▲<i>先</i></span><span class="u w1">1</span></td><td class="cell dot"><span class="mk">△<i>先</i></span><span class="u w6">11</span></td><td class="cell"><span class="mk">△</span><span class="u w8">15</span></td><td class="cell sol"><span class="mk">△<i>差</i></span><span class="u w1">2</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w3">6</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w6">12</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr><tr><td class="rno">11R</td><td class="post">15:45</td><td class="rname">オールカマー(G2)<u>G2<b class="ar">標準</b></u></td><td class="kyori edge">芝2200m<u>良</u></td><td class="cell"><span class="mk">◎<i>差</i></span><span class="u w8">12</span></td><td class="cell"><span class="mk">○<i>差</i></span><span class="u w5">6</span></td><td class="cell"><span class="mk">▲</span><span class="u w6">9</span></td><td class="cell dot"><span class="mk">△</span><span class="u w4">4</span></td><td class="cell"><span class="mk">△<i>差</i></span><span class="u w1">1</span></td><td class="cell sol"><span class="mk">△<i>差</i></span><span class="u w5">7</span></td><td class="cell"><span class="mk">注<i>先</i></span><span class="u w7">10</span></td><td class="cell"><span class="mk">注<i>先</i></span><span class="u w8">13</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr><tr><td class="rno">12R</td><td class="post">16:30</td><td class="rname">3歳以上1勝クラス<u>1勝クラス<b class="ar">荒れそう</b></u></td><td class="kyori edge">芝1200m<u>良</u></td><td class="cell"><span class="mk">◎<i>差</i></span><span class="u w6">12</span></td><td class="cell"><span class="mk">○<i>先</i></span><span class="u w3">6</span></td><td class="cell"><span class="mk">▲</span><span class="u w1">1</span></td><td class="cell dot"><span class="mk">△<i>差</i></span><span class="u w1">2</span></td><td class="cell"><span class="mk">△<i>先</i></span><span class="u w8">16</span></td><td class="cell sol"><span class="mk">△<i>差</i></span><span class="u w5">9</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w3">5</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w4">8</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr></tbody></table></div><div class="scroll"><table><caption>阪神<em>4レース ・ 発走前</em></caption><thead><tr><th rowspan="2">Race</th><th rowspan="2">発走</th><th rowspan="2">競走名/条件</th><th rowspan="2">距離</th><th class="grp edge" colspan="2">軸馬候補</th><th class="grp dot" colspan="2">相手馬<small>馬券に絡みそう</small></th><th class="grp edge" colspan="4">押さえ<small>手広く買うなら</small></th><th class="grp" colspan="3">着 順<small>1着 / 2着 / 3着</small></th><th rowspan="2">単 勝</th><th rowspan="2">馬連複</th><th rowspan="2">馬連単</th><th rowspan="2">三連複</th><th rowspan="2">三連単</th></tr><tr><th class="">1</th><th class="">2</th><th class="">3</th><th class="dot">4</th><th class="">5</th><th class="sol">6</th><th class="">7</th><th class="">8</th><th>1</th><th>2</th><th class="edge">3</th></tr></thead><tbody><tr><td class="rno">9R</td><td class="post">14:10</td><td class="rname">夕月特別(2勝クラス)<u>2勝クラス<b class="ar">標準</b></u></td><td class="kyori edge">芝2000m<u>良</u></td><td class="cell"><span class="mk">◎<i>差</i></span><span class="u w4">4</span></td><td class="cell"><span class="mk">○<i>先</i></span><span class="u w5">5</span></td><td class="cell"><span class="mk">▲<i>先</i></span><span class="u w7">8</span></td><td class="cell dot"><span class="mk">△<i>差</i></span><span class="u w1">1</span></td><td class="cell"><span class="mk">△</span><span class="u w6">6</span></td><td class="cell sol"><span class="mk">△<i>差</i></span><span class="u w7">7</span></td><td class="cell"><span class="mk">注<i>逃</i></span><span class="u w2">2</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w3">3</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr><tr><td class="rno">10R</td><td class="post">14:50</td><td class="rname">鳥取特別(2勝クラス)<u>2勝クラス<b class="ar">標準</b></u></td><td class="kyori edge">ダ1800m<u>良</u></td><td class="cell"><span class="mk">◎<i>先</i></span><span class="u w2">3</span></td><td class="cell"><span class="mk">○<i>差</i></span><span class="u w6">11</span></td><td class="cell"><span class="mk">▲</span><span class="u w7">12</span></td><td class="cell dot"><span class="mk">△<i>先</i></span><span class="u w2">2</span></td><td class="cell"><span class="mk">△<i>差</i></span><span class="u w8">14</span></td><td class="cell sol"><span class="mk">△</span><span class="u w3">5</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w4">6</span></td><td class="cell"><span class="mk">注</span><span class="u w8">15</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr><tr><td class="rno">11R</td><td class="post">15:30</td><td class="rname">道頓堀S(3勝クラス)<u>3勝クラス<b class="ar">標準</b></u></td><td class="kyori edge">芝1200m<u>良</u></td><td class="cell"><span class="mk">◎<i>先</i></span><span class="u w6">12</span></td><td class="cell"><span class="mk">○<i>先</i></span><span class="u w2">4</span></td><td class="cell"><span class="mk">▲<i>先</i></span><span class="u w7">14</span></td><td class="cell dot"><span class="mk">△<i>差</i></span><span class="u w5">10</span></td><td class="cell"><span class="mk">△<i>先</i></span><span class="u w2">3</span></td><td class="cell sol"><span class="mk">△<i>先</i></span><span class="u w5">9</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w4">7</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w8">15</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr><tr><td class="rno">12R</td><td class="post">16:10</td><td class="rname">3歳以上1勝クラス<u>1勝クラス</u></td><td class="kyori edge">ダ1400m<u>良</u></td><td class="cell"><span class="mk">◎<i>差</i></span><span class="u w2">3</span></td><td class="cell"><span class="mk">○<i>追</i></span><span class="u w1">1</span></td><td class="cell"><span class="mk">▲<i>差</i></span><span class="u w8">15</span></td><td class="cell dot"><span class="mk">△<i>先</i></span><span class="u w8">14</span></td><td class="cell"><span class="mk">△<i>先</i></span><span class="u w5">8</span></td><td class="cell sol"><span class="mk">△<i>差</i></span><span class="u w3">5</span></td><td class="cell"><span class="mk">注<i>先</i></span><span class="u w6">10</span></td><td class="cell"><span class="mk">注<i>差</i></span><span class="u w4">7</span></td><td class="chaku none">—</td><td class="chaku none">—</td><td class="chaku none edge">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td><td class="yen none">—</td></tr></tbody></table></div><p class="keys"><s><em style="background:var(--c1)"></em>1着</s><s><em style="background:var(--c2)"></em>2着</s><s><em style="background:var(--c3)"></em>3着</s><s><em style="background:var(--scr)"></em>取消・除外</s><s><em style="border:0;border-right:2px dashed var(--dotted);width:10px"></em>上位4頭BOX</s><s><em style="border:0;border-right:2px solid var(--vermilion);width:10px"></em>上位6頭BOX</s></p><p class="legend">印は◎本命／○対抗／▲単穴／△押さえ／注警戒。馬券はご自身の判断でお願いします。</p></div>
