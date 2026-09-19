@@ -20,6 +20,7 @@ from collections import defaultdict
 from datetime import date
 import sys
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.parent))
+from keiba.models import parse_agari_3f
 from keiba.racefiles import result_paths  # 対象レース帯の絞り込みを1か所に集約
 
 STAKE = 100
@@ -59,7 +60,9 @@ for f in result_paths('data/collected_jra'):
     # 上がり3Fのレース内順位（速い順）
     ag = []
     for r in rows:
-        try: ag.append((float(r['上がり3F']), r['馬番']))
+        try:
+            a = parse_agari_3f(r.get('上がり3F'))
+            if a is not None: ag.append((a, r['馬番']))
         except (ValueError, KeyError): pass
     ag.sort()
     agari_rank = {ub: i for i, (_, ub) in enumerate(ag, start=1)}

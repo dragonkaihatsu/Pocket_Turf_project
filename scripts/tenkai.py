@@ -39,6 +39,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba import power
+from keiba.models import parse_agari_3f
 from keiba.racefiles import DEFAULT_RACES, race_number, result_paths
 
 STAKE = 100
@@ -103,7 +104,9 @@ def load(directory: str, races: str) -> dict[str, list[dict]]:
         ag = []
         for r in rows:
             try:
-                ag.append((float(r["上がり3F"]), r["馬番"]))
+                a = parse_agari_3f(r.get("上がり3F"))
+                if a is None: continue
+                ag.append((a, r["馬番"]))
             except (ValueError, KeyError):
                 pass
         ag.sort()

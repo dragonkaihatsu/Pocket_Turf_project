@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from keiba.models import parse_agari_3f
 from keiba.racefiles import DEFAULT_RACES, race_number, result_files
 from keiba import profile
 
@@ -116,7 +117,9 @@ def main() -> None:
                 "着差": (r.get("着差") or "").strip(),
                 # 結果CSVに通過順・ペースは無い（レース単位の別CSV）ので空
                 "通過": "", "ペース": "",
-                "上り": (r.get("上がり3F") or "").strip(),
+                # 障害は3Fではない値（13秒台）を入れてくるので通す
+                "上り": ("" if (_a := parse_agari_3f(r.get("上がり3F"))) is None
+                        else f"{_a:.1f}"),
             })
 
     rows_out.sort(key=lambda r: (r["馬名"], r["日付"]))

@@ -56,6 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.power import HEADER, ROI_HEADER, judge, judge_roi
 from keiba.scoring import tier1_min_rides
+from keiba.models import parse_agari_3f
 from keiba.racefiles import (DEFAULT_RACES, parse_races, race_number,
                              result_paths)
 
@@ -146,7 +147,9 @@ def load() -> list[dict]:
         ag = []
         for r in rows:
             try:
-                ag.append((float(r['上がり3F']), r['馬番']))
+                a = parse_agari_3f(r.get('上がり3F'))
+                if a is None: continue
+                ag.append((a, r['馬番']))
             except (ValueError, KeyError):
                 pass
         ag.sort()

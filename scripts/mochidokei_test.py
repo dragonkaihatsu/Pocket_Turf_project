@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from keiba.models import parse_agari_3f
 from keiba import mochidokei as mk
 from keiba import power
 from keiba.racefiles import (DEFAULT_RACES, race_number, race_venue,
@@ -67,9 +68,8 @@ def load(paths, info, base) -> tuple[list[dict], dict]:
         if not ri or not d or not ba:
             continue
         rows = list(csv.DictReader(open(p, encoding="utf-8-sig")))
-        agaris = [float(r["上がり3F"]) for r in rows
-                  if (r.get("上がり3F") or "").strip()
-                  and _f(r.get("上がり3F")) is not None]
+        agaris = [a for r in rows
+                  if (a := parse_agari_3f(r.get("上がり3F"))) is not None]
         # 上がり3Fは小さいほど速い→符号を反転して偏差値化する
         devs = mk_deviations([-a for a in agaris])
         it = iter(devs)
@@ -77,7 +77,7 @@ def load(paths, info, base) -> tuple[list[dict], dict]:
             name = (r.get("馬名") or "").strip()
             if not name:
                 continue
-            a = _f(r.get("上がり3F"))
+            a = parse_agari_3f(r.get("上がり3F"))
             ad = next(it) if a is not None else None
             idx = base.index(mk.parse_time(r.get("タイム")), ba,
                              ri["馬場種別"], ri["距離"], ri["馬場"])

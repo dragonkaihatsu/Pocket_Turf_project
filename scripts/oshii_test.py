@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from keiba.models import parse_agari_3f
 from keiba.power import min_detectable_diff, wilson
 from keiba.racefiles import DEFAULT_RACES, result_paths
 
@@ -87,8 +88,8 @@ def load(directory: str, races: str) -> dict[str, list[dict]]:
             continue
         rows.sort(key=lambda r: int(r["着順"]))
         # 上がり3Fのレース内順位（速い順）
-        agari = sorted((float(r["上がり3F"]), r["馬番"]) for r in rows
-                       if (r.get("上がり3F") or "").replace(".", "", 1).isdigit())
+        agari = sorted((a, r["馬番"]) for r in rows
+                       if (a := parse_agari_3f(r.get("上がり3F"))) is not None)
         agari_rank = {ub: i for i, (_, ub) in enumerate(agari, start=1)}
         # 勝ち馬からの累計着差
         total = 0.0

@@ -32,6 +32,8 @@ import re
 from collections import defaultdict
 from datetime import date
 
+from keiba.models import parse_agari_3f
+
 STAKE = 100
 DATE_RE = re.compile(r'.*/(\d{4}-\d{2}-\d{2})_')
 # 9-12Rに絞る。1-8Rの収集が途中なので混ぜると期間の偏りが入る
@@ -96,7 +98,9 @@ for f in sorted(glob.glob('data/collected_jra/*_結果.csv')):
     ag = []
     for r in rows:
         try:
-            ag.append((float(r['上がり3F']), r['馬番']))
+            a = parse_agari_3f(r.get('上がり3F'))
+            if a is not None:
+                ag.append((a, r['馬番']))
         except (ValueError, KeyError):
             pass
     ag.sort()
