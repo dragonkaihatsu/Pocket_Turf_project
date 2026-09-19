@@ -42,6 +42,10 @@ def main() -> int:
                     help="基礎能力に上がり3Fを混ぜる重み 0.0〜1.0。"
                          "0=持ち時計のみ（既定）、1.0=上がり3Fのみ（旧モデル）、"
                          "0.5=半々。前走テーブルなど他の項目は変わらない")
+    ap.add_argument("--no-records", action="store_true",
+                    help="馬別戦績を使わず馬柱だけで採点する。持ち時計・"
+                         "コース適性・距離適性・乗り替わり補正が中立に倒れ、"
+                         "上がり3Fと前走テーブルだけがスコアを動かす（波乱寄り）")
     ap.add_argument("--published",
                     help="公表した印の並びJSON {\"中山9R\": [6,2,...]}。"
                          "渡すとスコアで並べ直さず、その並びに結果を塗る")
@@ -51,7 +55,8 @@ def main() -> int:
         config = json.load(f)
     published = shinbun.load_published(a.published) if a.published else None
     page = shinbun.build_sheet(config, title=a.title, published=published,
-                               agari_mix=a.agari_mix)
+                               agari_mix=a.agari_mix,
+                               use_records=not a.no_records)
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

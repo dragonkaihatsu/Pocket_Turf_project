@@ -489,8 +489,12 @@ def _venue_table(venue: str, rows: list[RaceRow]) -> str:
 def build_sheet(config: dict, title: str | None = None,
                 records: str | None = None,
                 published: dict[str, list[int]] | None = None,
-                agari_mix: float = 0.0) -> str:
-    by_name = load_by_name(records, config_venue(config))
+                agari_mix: float = 0.0,
+                use_records: bool = True) -> str:
+    # use_records=False は「馬柱だけで採点する」味付け。戦績を渡さないので
+    # 持ち時計・コース適性・距離適性・乗り替わり補正がすべて中立に倒れ、
+    # **基礎能力(上がり3F)と前走テーブルだけがスコアを動かす**
+    by_name = load_by_name(records, config_venue(config)) if use_records else None
     as_of = config_date(config)
     rows = [race_row(r, by_name, as_of, published, agari_mix)
             for r in config["races"]]
@@ -506,6 +510,8 @@ def build_sheet(config: dict, title: str | None = None,
     elif agari_mix > 0.0:
         source = ((source + " / " if source else "")
                   + f"基礎能力=持ち時計{1 - agari_mix:.0%}+上がり3F{agari_mix:.0%}")
+    if not use_records:
+        source = (source + " / " if source else "") + "馬柱のみ"
     by_venue: dict[str, list[RaceRow]] = {}
     for r in rows:
         by_venue.setdefault(r.venue or "—", []).append(r)

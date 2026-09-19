@@ -75,6 +75,8 @@ def main() -> None:
                     help="騎乗数を引く実測ファイル。**明示しないと既定プロファイル"
                          "（地方）を読んでしまい、中央のレースに大井の騎手データを"
                          "当てる事故になる**")
+    ap.add_argument("--no-records", action="store_true",
+                    help="馬別戦績を使わず馬柱だけで採点する")
     ap.add_argument("--agari-mix", type=float, default=0.0, metavar="W",
                     help="基礎能力に上がり3Fを混ぜる重み 0.0〜1.0")
     ap.add_argument("--with-norikae", action="store_true",
@@ -127,7 +129,8 @@ def main() -> None:
         if len(horses) < 5:
             continue
         scores = sc.score_race(horses, None, kyori=kyori_by.get(stem),
-                               records=by_name, as_of=race_date(stem),
+                               records=None if args.no_records else by_name,
+                               as_of=race_date(stem),
                                venue=race_venue(stem), agari_mix=args.agari_mix)
         ranked = sorted(scores, key=lambda s: s.total_yoi, reverse=True)
         used += 1
