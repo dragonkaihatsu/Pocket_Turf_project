@@ -197,7 +197,8 @@ MIN_MOCHI_FIELD = 4
 
 
 def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse],
-                        mochi: dict[str, float] | None = None) -> ScoreItem:
+                        mochi: dict[str, float] | None = None,
+                        agari_mix: float = 0.0) -> ScoreItem:
     """基礎能力（25点）: 近走能力の相対評価。
 
     尺度の優先順位（2026-09-13 に更新）:
@@ -228,29 +229,44 @@ def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse],
         pts = max(0.0, min(MAX_KISO, horse.kiso_nouryoku_override))
         return ScoreItem("基礎能力", pts, "手動評価カラムによる上書き")
 
+    w = max(0.0, min(1.0, agari_mix))
+    mochi_pts = mochi_note = None
     if mochi and len(mochi) >= MIN_MOCHI_FIELD and horse.name in mochi:
         v = mochi[horse.name]
         lo, hi = min(mochi.values()), max(mochi.values())
-        pts = _scale(v, lo, hi, MAX_KISO * 0.4, MAX_KISO)
+        mochi_pts = _scale(v, lo, hi, MAX_KISO * 0.4, MAX_KISO)
+        mochi_note = (f"持ち時計指数{v:+.2f}（メンバー{len(mochi)}頭中 "
+                      f"{hi:+.2f}〜{lo:+.2f}・"
+                      f"平均差{v - statistics.fmean(mochi.values()):+.2f}）")
+
+    agari_pts = agari_note = None
+    times = [h.agari_3f for h in field_horses if h.agari_3f is not None]
+    if times and horse.agari_3f is not None:
+        best, worst = min(times), max(times)
+        # 上がり3F は小さいほど速い＝良い
+        agari_pts = _scale(horse.agari_3f, worst, best, MAX_KISO * 0.4, MAX_KISO)
+        agari_note = (f"上がり3F={horse.agari_3f:.1f}秒"
+                      f"（出走馬中 最速{best:.1f}〜最遅{worst:.1f}）の相対評価")
+
+    if mochi_pts is not None and agari_pts is not None and w > 0.0:
+        if w >= 1.0:
+            return ScoreItem("基礎能力", round(agari_pts, 2),
+                             agari_note + "（上がり3F単独・持ち時計は不使用）")
+        pts = (1.0 - w) * mochi_pts + w * agari_pts
         return ScoreItem(
             "基礎能力", round(pts, 2),
-            f"持ち時計指数{v:+.2f}（メンバー{len(mochi)}頭中 "
-            f"{hi:+.2f}〜{lo:+.2f}・平均差{v - statistics.fmean(mochi.values()):+.2f}）",
+            f"持ち時計{mochi_pts:.1f}点と上がり3F{agari_pts:.1f}点を "
+            f"{1 - w:.0%}:{w:.0%} で混合／{mochi_note}／{agari_note}",
         )
 
-    times = [h.agari_3f for h in field_horses if h.agari_3f is not None]
-    if not times or horse.agari_3f is None:
-        return ScoreItem("基礎能力", MAX_KISO * 0.6, "上がり3Fデータなし→中立値")
+    if mochi_pts is not None:
+        return ScoreItem("基礎能力", round(mochi_pts, 2), mochi_note)
 
-    best, worst = min(times), max(times)
-    # 上がり3F は小さいほど速い＝良い
-    pts = _scale(horse.agari_3f, worst, best, MAX_KISO * 0.4, MAX_KISO)
-    tail = "（持ち時計が作れず上がり3Fで代替）" if mochi is not None else ""
-    return ScoreItem(
-        "基礎能力", round(pts, 2),
-        f"上がり3F={horse.agari_3f:.1f}秒（出走馬中 最速{best:.1f}〜最遅{worst:.1f}）"
-        f"の相対評価{tail}",
-    )
+    if agari_pts is not None:
+        tail = "（持ち時計が作れず上がり3Fで代替）" if (mochi is not None and w < 1.0) else ""
+        return ScoreItem("基礎能力", round(agari_pts, 2), agari_note + tail)
+
+    return ScoreItem("基礎能力", MAX_KISO * 0.6, "上がり3Fデータなし→中立値")
 
 
 # 前走着順 → 素点。**実測の今走複勝率を線形に写した値**であって、
@@ -802,6 +818,7 @@ def score_horse(
     as_of=None,
     venue: str | None = None,
     mochi: dict[str, float] | None = None,
+    agari_mix: float = 0.0,
 ) -> HorseScore:
     """venue は開催場名。コース適性はその場での自己成績から出すため、
     **渡さないとコース適性は中立になる**。以前は既定が「大井」だったが、
@@ -824,7 +841,7 @@ def score_horse(
     ratings = load_ratings(venue=venue)
 
     base_items = [
-        score_kiso_nouryoku(horse, field_horses, mochi),
+        score_kiso_nouryoku(horse, field_horses, mochi, agari_mix),
         score_zenso_naiyou(horse),
         course_item,
         score_kyori_tekisei(horse, None, ratings, self_kyori),
@@ -858,6 +875,7 @@ def score_race(
     as_of=None,
     venue: str | None = None,
     base_times=None,
+    agari_mix: float = 0.0,
 ) -> list[HorseScore]:
     """出走馬をまとめて採点する。
 
@@ -869,7 +887,8 @@ def score_race(
     """
     mochi = load_mochi(records, horses, as_of, base_times, venue)
     return [score_horse(h, horses, history, kyori, jockey_tiers,
-                        records, as_of, venue, mochi) for h in horses]
+                        records, as_of, venue, mochi, agari_mix)
+            for h in horses]
 
 
 def load_mochi(records, horses, as_of, base_times=None,

@@ -38,6 +38,10 @@ def main() -> int:
     ap.add_argument("--scale", type=int, default=2)
     ap.add_argument("--chrome")
     ap.add_argument("--title", help="Artifact用。貼る用には付けない")
+    ap.add_argument("--agari-mix", type=float, default=0.0, metavar="W",
+                    help="基礎能力に上がり3Fを混ぜる重み 0.0〜1.0。"
+                         "0=持ち時計のみ（既定）、1.0=上がり3Fのみ（旧モデル）、"
+                         "0.5=半々。前走テーブルなど他の項目は変わらない")
     ap.add_argument("--published",
                     help="公表した印の並びJSON {\"中山9R\": [6,2,...]}。"
                          "渡すとスコアで並べ直さず、その並びに結果を塗る")
@@ -46,7 +50,8 @@ def main() -> int:
     with open(a.config, encoding="utf-8-sig") as f:
         config = json.load(f)
     published = shinbun.load_published(a.published) if a.published else None
-    page = shinbun.build_sheet(config, title=a.title, published=published)
+    page = shinbun.build_sheet(config, title=a.title, published=published,
+                               agari_mix=a.agari_mix)
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

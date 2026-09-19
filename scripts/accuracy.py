@@ -75,6 +75,8 @@ def main() -> None:
                     help="騎乗数を引く実測ファイル。**明示しないと既定プロファイル"
                          "（地方）を読んでしまい、中央のレースに大井の騎手データを"
                          "当てる事故になる**")
+    ap.add_argument("--agari-mix", type=float, default=0.0, metavar="W",
+                    help="基礎能力に上がり3Fを混ぜる重み 0.0〜1.0")
     ap.add_argument("--with-norikae", action="store_true",
                     help="乗り替わり補正を効かせる。騎手の騎乗数だけを渡し、"
                          "複勝率は中立値に潰すので騎手補正・血統補正は働かない。"
@@ -126,7 +128,7 @@ def main() -> None:
             continue
         scores = sc.score_race(horses, None, kyori=kyori_by.get(stem),
                                records=by_name, as_of=race_date(stem),
-                               venue=race_venue(stem))
+                               venue=race_venue(stem), agari_mix=args.agari_mix)
         ranked = sorted(scores, key=lambda s: s.total_yoi, reverse=True)
         used += 1
         for rank, s in enumerate(ranked, start=1):

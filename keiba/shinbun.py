@@ -350,10 +350,12 @@ def published_key(r: dict) -> str:
 
 
 def race_row(r: dict, records=None, as_of=None,
-             published: dict[str, list[int]] | None = None) -> RaceRow:
+             published: dict[str, list[int]] | None = None,
+             agari_mix: float = 0.0) -> RaceRow:
     horses = load_horses(r["entries"])
     history = load_history(r["history"]) if r.get("history") else None
     scores = score_race(horses, history, kyori=r.get("kyori"),
+                        agari_mix=agari_mix,
                         records=records, as_of=as_of, venue=r.get("venue"))
     baba = r.get("baba") or "良"
     order = (published or {}).get(published_key(r))
@@ -486,15 +488,24 @@ def _venue_table(venue: str, rows: list[RaceRow]) -> str:
 
 def build_sheet(config: dict, title: str | None = None,
                 records: str | None = None,
-                published: dict[str, list[int]] | None = None) -> str:
+                published: dict[str, list[int]] | None = None,
+                agari_mix: float = 0.0) -> str:
     by_name = load_by_name(records, config_venue(config))
     as_of = config_date(config)
-    rows = [race_row(r, by_name, as_of, published) for r in config["races"]]
+    rows = [race_row(r, by_name, as_of, published, agari_mix)
+            for r in config["races"]]
     # 公表版と作り直した版が混ざらないよう、見出しに出どころを書く
     n_pub = sum(1 for r in config["races"]
                 if published and published_key(r) in published)
     source = (f"印は公表版（{n_pub}/{len(config['races'])}レース）"
               if n_pub else "")
+    # 味付けを紙面に書く。**同じ日の紙面が2種類あるときに、どちらを見て
+    # いるか分からなくなるのを防ぐ**（`--published` で版を分けたのと同じ理由）
+    if agari_mix >= 1.0:
+        source = (source + " / " if source else "") + "基礎能力=上がり3F"
+    elif agari_mix > 0.0:
+        source = ((source + " / " if source else "")
+                  + f"基礎能力=持ち時計{1 - agari_mix:.0%}+上がり3F{agari_mix:.0%}")
     by_venue: dict[str, list[RaceRow]] = {}
     for r in rows:
         by_venue.setdefault(r.venue or "—", []).append(r)
