@@ -38,11 +38,15 @@ def main() -> int:
     ap.add_argument("--scale", type=int, default=2)
     ap.add_argument("--chrome")
     ap.add_argument("--title", help="Artifact用。貼る用には付けない")
+    ap.add_argument("--published",
+                    help="公表した印の並びJSON {\"中山9R\": [6,2,...]}。"
+                         "渡すとスコアで並べ直さず、その並びに結果を塗る")
     a = ap.parse_args()
 
     with open(a.config, encoding="utf-8-sig") as f:
         config = json.load(f)
-    page = shinbun.build_sheet(config, title=a.title)
+    published = shinbun.load_published(a.published) if a.published else None
+    page = shinbun.build_sheet(config, title=a.title, published=published)
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

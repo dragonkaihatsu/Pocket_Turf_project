@@ -197,3 +197,72 @@ class TestAmebloSafe(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPublishedOrderIsNotRescored(unittest.TestCase):
+    """公表した並びを渡したら、スコアで並べ直さないこと。
+
+    スコアの不具合を直すと並びが変わる。**直したあとのスコアで結果を塗ると、
+    実際に公表した紙面とは別のものを検証することになる**ので、公表版の
+    並びをそのまま使う経路が要る（`scripts/settle_day.py` が
+    `--published` を必須にしたのと同じ理由）。
+    """
+
+    PUBLISHED = ROOT / "data" / "2026-09-19_中央_公表印.json"
+    CONFIG19 = ROOT / "config" / "2026-09-19_中央.json"
+
+    @classmethod
+    def setUpClass(cls):
+        if not (cls.PUBLISHED.exists() and cls.CONFIG19.exists()):
+            raise unittest.SkipTest("2026-09-19 の設定と公表印が必要")
+        with open(cls.CONFIG19, encoding="utf-8-sig") as f:
+            cls.cfg = json.load(f)
+        cls.pub = shinbun.load_published(cls.PUBLISHED)
+        cls.by_name = shinbun.load_by_name(None, shinbun.config_venue(cls.cfg))
+        cls.as_of = shinbun.config_date(cls.cfg)
+
+    def rows(self, published):
+        return [shinbun.race_row(r, self.by_name, self.as_of, published)
+                for r in self.cfg["races"]
+                if Path(r["entries"]).exists()]
+
+    def test_note_rows_are_skipped(self):
+        # 注記（文字列）を印の並びと取り違えない
+        self.assertTrue(all(isinstance(v, list) for v in self.pub.values()))
+        self.assertNotIn("_note", self.pub)
+
+    def test_cells_follow_the_published_order(self):
+        rows = self.rows(self.pub)
+        self.assertTrue(rows)
+        for row in rows:
+            want = self.pub[shinbun.published_key(
+                {"venue": row.venue, "race_no": row.race_no})]
+            got = [c.umaban for c in row.cells]
+            self.assertEqual(got, want[:len(got)])
+
+    def test_marks_come_from_the_shared_sequence(self):
+        from keiba.marks import mark_sequence
+        for row in self.rows(self.pub):
+            self.assertEqual([c.mark for c in row.cells],
+                             mark_sequence()[:len(row.cells)])
+
+    def test_current_scores_differ_so_the_flag_matters(self):
+        # 現行スコアと公表版で並びが違うこと＝このフラグが no-op でない
+        pub = [[c.umaban for c in r.cells] for r in self.rows(self.pub)]
+        now = [[c.umaban for c in r.cells] for r in self.rows(None)]
+        self.assertNotEqual(pub, now)
+
+    def test_painted_cells_match_the_result_files(self):
+        for row in self.rows(self.pub):
+            chaku, _, _ = shinbun.load_result(
+                next(r["entries"] for r in self.cfg["races"]
+                     if r["venue"] == row.venue and r["race_no"] == row.race_no))
+            for c in row.cells:
+                self.assertEqual(c.chaku,
+                                 chaku.get(c.umaban) if chaku.get(c.umaban) in
+                                 shinbun.MEDALS else None)
+
+    def test_heading_says_it_is_the_published_order(self):
+        page = shinbun.build_sheet(self.cfg, published=self.pub)
+        self.assertIn("公表版", page)
+        self.assertNotIn("公表版", shinbun.build_sheet(self.cfg))

@@ -34,6 +34,17 @@ def split_for_total(total: int) -> tuple[int, int]:
     return min(rest, 3), max(0, rest - 3)
 
 
+def mark_sequence(n_osae: int = 3, n_chuui: int = 2) -> list[str]:
+    """スコア順位に対応する印の並び。既定は ◎○▲ + △3 + 注2 の8頭。
+
+    **印の並びをここ1か所に置く。** 公表済みの並びから紙面を作り直す
+    （`keiba/shinbun.py` の `--published`）ときにも同じ並びが要るので、
+    2か所に書くと静かにずれる（一軍騎手の閾値・`horse_records` の列で
+    実際に起きた失敗と同じ型）。
+    """
+    return MARK_ORDER + ["△"] * n_osae + ["注"] * n_chuui
+
+
 def assign_marks(
     scores: list[HorseScore],
     baba: str = "良",
@@ -43,16 +54,5 @@ def assign_marks(
     """baba: '良' なら良馬場スコア、それ以外（稍重/重/不良）なら重馬場スコアで並べる。"""
     key = (lambda s: s.total_yoi) if baba == "良" else (lambda s: s.total_omoi)
     ranked = sorted(scores, key=key, reverse=True)
-
-    marked: list[MarkedHorse] = []
-    for i, s in enumerate(ranked):
-        if i < len(MARK_ORDER):
-            mark = MARK_ORDER[i]
-        elif i < len(MARK_ORDER) + n_osae:
-            mark = "△"
-        elif i < len(MARK_ORDER) + n_osae + n_chuui:
-            mark = "注"
-        else:
-            break
-        marked.append(MarkedHorse(mark=mark, score=s))
-    return marked
+    return [MarkedHorse(mark=mark, score=s)
+            for s, mark in zip(ranked, mark_sequence(n_osae, n_chuui))]

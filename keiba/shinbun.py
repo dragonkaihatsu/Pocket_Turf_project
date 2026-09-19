@@ -42,7 +42,7 @@ from pathlib import Path
 from .arare import judge as arare_judge
 from . import profile
 from .horsedb import load_records
-from .marks import assign_marks
+from .marks import assign_marks, mark_sequence
 from .models import load_history, load_horses
 from .notice import MARK_NOTICE
 from .scoring import score_race
@@ -327,16 +327,46 @@ def load_by_name(records: str | None = None,
     return by_name
 
 
-def race_row(r: dict, records=None, as_of=None) -> RaceRow:
+# ## 公表した並びで結果を塗る（`--published`・2026-09-19）
+#
+# スコアの不具合を直すと並びが変わるので、**直したあとのスコアで結果を
+# 塗ると、実際に公表した紙面とは別のものを検証することになる**。
+# `scripts/settle_day.py` が「実際の購入は投票履歴からしか分からない」と
+# して `--published` を必須にしたのと同じ理由で、**公表済みの印の並びを
+# ファイルから読んでそのまま並べる**経路を用意する。
+#
+# 形は {"中山9R": [6,2,9,3,8,1,4,7], ...}（スコア順位の順に馬番）。
+# 載っていないレースはスコアから作る（混ぜたことが分かるように見出しへ出す）。
+def load_published(path: str | Path) -> dict[str, list[int]]:
+    import json
+    with open(path, encoding="utf-8-sig") as f:
+        raw = json.load(f)
+    return {str(k): [int(u) for u in v]
+            for k, v in raw.items() if isinstance(v, list)}
+
+
+def published_key(r: dict) -> str:
+    return f"{r.get('venue', '')}{r.get('race_no', '')}"
+
+
+def race_row(r: dict, records=None, as_of=None,
+             published: dict[str, list[int]] | None = None) -> RaceRow:
     horses = load_horses(r["entries"])
     history = load_history(r["history"]) if r.get("history") else None
     scores = score_race(horses, history, kyori=r.get("kyori"),
                         records=records, as_of=as_of, venue=r.get("venue"))
     baba = r.get("baba") or "良"
-    key = (lambda s: s.total_yoi) if baba == "良" else (lambda s: s.total_omoi)
-    ranked = sorted(scores, key=key, reverse=True)[:MARKS_SHOWN]
-    mark_of = {m.score.horse.umaban: m.mark
-               for m in assign_marks(scores, baba=baba)}
+    order = (published or {}).get(published_key(r))
+    if order:
+        # 公表した並びをそのまま使う。**スコアで並べ直さない**
+        by_uma = {s.horse.umaban: s for s in scores}
+        ranked = [by_uma[u] for u in order[:MARKS_SHOWN] if u in by_uma]
+        mark_of = dict(zip(order, mark_sequence()))
+    else:
+        key = (lambda s: s.total_yoi) if baba == "良" else (lambda s: s.total_omoi)
+        ranked = sorted(scores, key=key, reverse=True)[:MARKS_SHOWN]
+        mark_of = {m.score.horse.umaban: m.mark
+                   for m in assign_marks(scores, baba=baba)}
 
     # 荒れそう／堅そう。1番人気オッズ帯 × 上位3人気の支持集中度の2軸
     # （`keiba/arare.py`）。判定できないレースは空にして作らない
@@ -455,10 +485,16 @@ def _venue_table(venue: str, rows: list[RaceRow]) -> str:
 
 
 def build_sheet(config: dict, title: str | None = None,
-                records: str | None = None) -> str:
+                records: str | None = None,
+                published: dict[str, list[int]] | None = None) -> str:
     by_name = load_by_name(records, config_venue(config))
     as_of = config_date(config)
-    rows = [race_row(r, by_name, as_of) for r in config["races"]]
+    rows = [race_row(r, by_name, as_of, published) for r in config["races"]]
+    # 公表版と作り直した版が混ざらないよう、見出しに出どころを書く
+    n_pub = sum(1 for r in config["races"]
+                if published and published_key(r) in published)
+    source = (f"印は公表版（{n_pub}/{len(config['races'])}レース）"
+              if n_pub else "")
     by_venue: dict[str, list[RaceRow]] = {}
     for r in rows:
         by_venue.setdefault(r.venue or "—", []).append(r)
@@ -477,7 +513,8 @@ def build_sheet(config: dict, title: str | None = None,
     body = (f'<div class="shinbun">'
             f'<div class="mast"><b>ポケットターフ</b>'
             f'<span>{_esc(heading)}</span>'
-            f'<i>{_esc("・".join(by_venue))}</i></div>'
+            + (f'<span>{_esc(source)}</span>' if source else "")
+            + f'<i>{_esc("・".join(by_venue))}</i></div>'
             f'{tables}{keys}'
             f'<p class="legend">{_esc(MARK_NOTICE)}</p></div>')
     parts = []
