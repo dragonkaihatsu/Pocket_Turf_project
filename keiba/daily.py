@@ -402,7 +402,7 @@ def _race_section(race: RaceEntry, first: bool,
     horses = load_horses(race.entries)
     history = load_history(race.history) if race.history else None
     scores = score_race(horses, history, kyori=race.kyori, records=records,
-                        as_of=as_of, venue=race.venue)
+                        as_of=as_of, venue=race.venue, surface=race.surface)
     marked = assign_marks(scores, baba=race.baba)
     plan = make_betting_plan(marked, baba=race.baba)
     pace = forecast_pace(horses)

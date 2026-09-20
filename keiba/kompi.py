@@ -227,7 +227,8 @@ def race_grid(r: dict, metric: str = "score",
     horses = load_horses(r["entries"])
     history = load_history(r["history"]) if r.get("history") else None
     scores = score_race(horses, history, kyori=r.get("kyori"),
-                        records=records, as_of=as_of, venue=r.get("venue"))
+                        records=records, as_of=as_of, venue=r.get("venue"),
+                        surface=r.get("surface"))
     baba = r.get("baba") or "良"
     key = (lambda s: s.total_yoi) if baba == "良" else (lambda s: s.total_omoi)
     ranked = sorted(scores, key=key, reverse=True)

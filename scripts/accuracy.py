@@ -83,6 +83,9 @@ def main() -> None:
                     help="乗り替わり補正を効かせる。騎手の騎乗数だけを渡し、"
                          "複勝率は中立値に潰すので騎手補正・血統補正は働かない。"
                          "騎乗数は結果（着順）ではないため後知恵にならない")
+    ap.add_argument("--with-wakuban", action="store_true",
+                    help="枠順補正（場×芝ダ代用表）を効かせる。surfaceを"
+                         "score_raceに渡す。渡さない既定では0点のまま")
     args = ap.parse_args()
 
     if args.with_norikae:
@@ -99,6 +102,14 @@ def main() -> None:
         sc.load_ratings = lambda *a, **k: {}   # 騎手・血統補正は切る（後知恵排除）
 
     kyori_by = load_race_info(args.race_info)
+    surface_by: dict[str, str] = {}
+    if args.with_wakuban:
+        p = Path(args.race_info)
+        if p.exists():
+            with open(p, encoding="utf-8-sig") as f:
+                for row in csv.DictReader(f):
+                    if row.get("馬場種別"):
+                        surface_by[row["stem"]] = row["馬場種別"] + (row.get("距離") or "") + "m"
     recs = load_records(args.records)
     by_name: dict[str, list[dict]] = {}
     for rows in recs.values():
@@ -131,7 +142,8 @@ def main() -> None:
         scores = sc.score_race(horses, None, kyori=kyori_by.get(stem),
                                records=None if args.no_records else by_name,
                                as_of=race_date(stem),
-                               venue=race_venue(stem), agari_mix=args.agari_mix)
+                               venue=race_venue(stem), agari_mix=args.agari_mix,
+                               surface=surface_by.get(stem))
         ranked = sorted(scores, key=lambda s: s.total_yoi, reverse=True)
         used += 1
         for rank, s in enumerate(ranked, start=1):

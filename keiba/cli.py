@@ -62,7 +62,8 @@ def _build_common(args) -> tuple:
     records = _load_horse_records(getattr(args, "records", None))
     as_of = getattr(args, "race_date", None)
     scores = score_race(horses, history, kyori=args.kyori, records=records,
-                        as_of=as_of, venue=getattr(args, "venue", None))
+                        as_of=as_of, venue=getattr(args, "venue", None),
+                        surface=getattr(args, "surface", None))
     if records is not None:
         hit = sum(1 for h in horses if h.name in records)
         print(f"馬別戦績: {hit}/{len(horses)}頭に実績データあり"
@@ -177,7 +178,7 @@ def cmd_text(args) -> None:
         horses = load_horses(r["entries"])
         scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
                             as_of=args.race_date, venue=r.get("venue"),
-                            agari_mix=args.agari_mix)
+                            agari_mix=args.agari_mix, surface=r.get("surface"))
         n_osae, n_chuui = split_for_total(args.marks)
         marked = assign_marks(scores, baba=r.get("baba", "良"),
                               n_osae=n_osae, n_chuui=n_chuui)
@@ -354,6 +355,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--race-date", help="レース日 (YYYY-MM-DD)。指定するとその日より前の戦績だけを使う")
     common.add_argument("--venue", help="開催場名。コース適性をその場の自己成績から出す。"
                                         "省略するとコース適性は中立になる")
+    common.add_argument("--surface", help="芝/ダ（例: 芝2000m）。"
+                                          "枠順補正の場×芝ダ代用表を引くために使う")
 
     p_predict = sub.add_parser("predict", parents=[common], help="スコアリング・買い目プランを出力")
     p_predict.set_defaults(func=cmd_predict)

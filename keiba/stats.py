@@ -104,7 +104,7 @@ def load_records(config_paths: list[str | Path],
             history = load_history(race.history) if race.history else None
             scores = score_race(horses, history, kyori=race.kyori,
                                 records=by_name, as_of=as_of,
-                                venue=race.venue)
+                                venue=race.venue, surface=race.surface)
             marked = assign_marks(scores, baba=race.baba)
             records.append(
                 RaceRecord(

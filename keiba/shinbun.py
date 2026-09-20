@@ -356,7 +356,8 @@ def race_row(r: dict, records=None, as_of=None,
     history = load_history(r["history"]) if r.get("history") else None
     scores = score_race(horses, history, kyori=r.get("kyori"),
                         agari_mix=agari_mix,
-                        records=records, as_of=as_of, venue=r.get("venue"))
+                        records=records, as_of=as_of, venue=r.get("venue"),
+                        surface=r.get("surface"))
     baba = r.get("baba") or "良"
     order = (published or {}).get(published_key(r))
     if order:

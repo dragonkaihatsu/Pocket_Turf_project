@@ -32,7 +32,8 @@ class TestOrderMatchesMarks(unittest.TestCase):
 
     def _ranked(self, baba):
         horses = load_horses(str(ENTRIES))
-        scores = score_race(horses, None, kyori=2200, venue="中山")
+        scores = score_race(horses, None, kyori=2200, venue="中山",
+                            surface="芝2200m")
         key = ((lambda s: s.total_yoi) if baba == "良"
                else (lambda s: s.total_omoi))
         return [s.horse.umaban

@@ -54,7 +54,7 @@ class TestEveryBuilderPassesRecords(unittest.TestCase):
             for call in score_race_calls(p):
                 seen += 1
                 kw = {k.arg for k in call.keywords}
-                for need in ("records", "as_of", "venue"):
+                for need in ("records", "as_of", "venue", "surface"):
                     self.assertIn(
                         need, kw,
                         f"{rel}: score_race に {need}= を渡していない。"

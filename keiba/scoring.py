@@ -707,34 +707,84 @@ def correction_ketto(horse: Horse, ratings: dict | None = None) -> ScoreItem:
                      f"{horse.ketto_chichi}産駒: 当地複勝率{rate:.0%}（{n}頭の実測）")
 
 
-def correction_wakuban(horse: Horse, history: list[HistoryRecord] | None) -> ScoreItem:
+def load_waku_stats(path: Path | str | None = None,
+                    venue: str | None = None) -> list[dict]:
+    """場×芝ダの枠番バイアス実測（`scripts/build_waku_table.py`）を読む。
+
+    `HistoryRecord`（同一レース名の過去10年データ）は日々の自動予想では
+    一度も渡っていない（発火率0%）。同じレース名の多年データを集めるのは
+    特別戦では非現実的なので、`keiba/courses.py` と同じ「場で束ねる」
+    やり方で手元のコーパス（1-12R）から作った代用表。パスはratings.json等
+    と同じく**競馬場名から**決める（`profile.active()` に頼らない）。
+    """
+    p = Path(path) if path else (
+        profile.for_venue(venue) if venue else profile.active()
+    ).path("waku_stats.json")
+    if not p.exists():
+        return []
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [e for e in d.get("組み合わせ", []) if e.get("採用")]
+
+
+def correction_wakuban(horse: Horse, history: list[HistoryRecord] | None,
+                       venue: str | None = None, surface: str | None = None,
+                       waku_stats: list[dict] | None = None) -> ScoreItem:
+    """**同一レース名の過去10年データ**（`history`）があればそちらを優先する
+    （その特別戦自体の枠バイアスなので、束ねた表より直接的）。無ければ
+    `waku_stats`（場×芝ダで束ねた実測。`--採用`のセルのみ、両期間3年で
+    符号が再現したものに限る）で代用する。
+    """
     by_frame: dict[int, list[bool]] = {}
     for r in history or []:
         if r.wakuban is None or r.chakujun is None:
             continue
         by_frame.setdefault(r.wakuban, []).append(r.chakujun <= 3)
 
-    if horse.wakuban not in by_frame or len(by_frame) < 2:
-        return ScoreItem("枠順補正", 0.0, "過去10年データ不足→補正なし")
+    if horse.wakuban in by_frame and len(by_frame) >= 2:
+        rates = {w: sum(v) / len(v) for w, v in by_frame.items() if v}
+        mean_rate = statistics.mean(rates.values())
+        my_rate = rates.get(horse.wakuban, mean_rate)
+        diff = my_rate - mean_rate
 
-    rates = {w: sum(v) / len(v) for w, v in by_frame.items() if v}
-    mean_rate = statistics.mean(rates.values())
-    my_rate = rates.get(horse.wakuban, mean_rate)
-    diff = my_rate - mean_rate
+        if diff >= 0.15:
+            pts = 3.0
+        elif diff >= 0.05:
+            pts = 2.0
+        elif diff <= -0.15:
+            pts = -3.0
+        elif diff <= -0.05:
+            pts = -2.0
+        else:
+            pts = 0.0
+        return ScoreItem(
+            "枠順補正", pts,
+            f"{horse.wakuban}枠 複勝率{my_rate:.0%}（全体平均{mean_rate:.0%}・"
+            "レース固有の過去10年データ）",
+        )
 
-    if diff >= 0.15:
-        pts = 3.0
-    elif diff >= 0.05:
-        pts = 2.0
-    elif diff <= -0.15:
-        pts = -3.0
-    elif diff <= -0.05:
-        pts = -2.0
-    else:
-        pts = 0.0
+    if not venue or not surface or not waku_stats:
+        return ScoreItem("枠順補正", 0.0, "過去10年データ・実測表のいずれも無し→補正なし")
+
+    from .sanko import waku_band
+    band = waku_band(horse.wakuban)
+    if band not in ("内枠(1-2)", "外枠(7-8)"):
+        return ScoreItem("枠順補正", 0.0, f"{horse.wakuban}枠は中枠(3-6)で対象外")
+    sd = surface[:1]
+    hit = next((e for e in waku_stats if e["場"] == venue and e["芝ダ"] == sd
+               and e["枠帯"] == band), None)
+    if hit is None:
+        return ScoreItem("枠順補正", 0.0,
+                         f"{venue}・{sd}・{band}: 場×芝ダの実測は再現していない→補正なし")
+    diff = hit["差"]
+    pts = 3.0 if abs(diff) >= 0.045 else 2.0
+    pts = pts if diff > 0 else -pts
     return ScoreItem(
         "枠順補正", pts,
-        f"{horse.wakuban}枠 複勝率{my_rate:.0%}（全体平均{mean_rate:.0%}）",
+        f"{horse.wakuban}枠（{band}） {venue}・{sd}の実測{diff * 100:+.1f}p"
+        f"（n={hit['n']:,}・2024-2026再現・場×芝ダで束ねた代用表）",
     )
 
 
@@ -819,10 +869,13 @@ def score_horse(
     venue: str | None = None,
     mochi: dict[str, float] | None = None,
     agari_mix: float = 0.0,
+    surface: str | None = None,
+    waku_stats: list[dict] | None = None,
 ) -> HorseScore:
     """venue は開催場名。コース適性はその場での自己成績から出すため、
     **渡さないとコース適性は中立になる**。以前は既定が「大井」だったが、
     中央のレースで大井の実績を探しに行く潜在バグだったため None にした。
+    surface（芝/ダ）は枠順補正の場×芝ダ代用表を引くために使う。
     """
     self_course = self_kyori = None
     if records is not None:
@@ -851,7 +904,7 @@ def score_horse(
         correction_kishu(horse, jockey_tiers, ratings),
         correction_norikae(horse, records, as_of, ratings),
         correction_ketto(horse, ratings),
-        correction_wakuban(horse, history),
+        correction_wakuban(horse, history, venue, surface, waku_stats),
         correction_zenso_furi(horse),
         correction_koreiuma(horse, kyori),
         correction_hatsu_course(horse, has_experience),
@@ -876,6 +929,7 @@ def score_race(
     venue: str | None = None,
     base_times=None,
     agari_mix: float = 0.0,
+    surface: str | None = None,
 ) -> list[HorseScore]:
     """出走馬をまとめて採点する。
 
@@ -884,10 +938,14 @@ def score_race(
     戦績だけを使う（過去レースを採点するときは必ず指定すること）。
     venue に開催場名を渡すとコース適性がその場の自己成績になる。
     渡さなければコース適性は中立のままになる。
+    surface（芝/ダ）は枠順補正の場×芝ダ代用表を引くために使う。
+    渡さなければ枠順補正はレース固有の過去10年データが無い限り0点のまま。
     """
     mochi = load_mochi(records, horses, as_of, base_times, venue)
+    waku_stats = load_waku_stats(venue=venue) if surface else None
     return [score_horse(h, horses, history, kyori, jockey_tiers,
-                        records, as_of, venue, mochi, agari_mix)
+                        records, as_of, venue, mochi, agari_mix,
+                        surface, waku_stats)
             for h in horses]
 
 

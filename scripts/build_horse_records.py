@@ -131,9 +131,13 @@ def main() -> None:
         w.writeheader()
         w.writerows(rows_out)
 
-    horses = {r["馬名"] for r in rows_out}
-    counts = sorted(sum(1 for r in rows_out if r["馬名"] == h) for h in horses)
-    print(f"{races:,}レース → {len(rows_out):,}行・{len(horses):,}頭 を {out}")
+    # O(頭数×行数)で数えると 1-12R（延べ十万行規模）で数分〜十数分かかる
+    # （2026-09-20に実測：出力は完了していたのにこの集計だけで止まっていた）。
+    # Counter で1パスに落とす
+    from collections import Counter
+    tally = Counter(r["馬名"] for r in rows_out)
+    counts = sorted(tally.values())
+    print(f"{races:,}レース → {len(rows_out):,}行・{len(tally):,}頭 を {out}")
     if counts:
         print(f"1頭あたりの戦績数: 中央値{counts[len(counts) // 2]}走 / "
               f"最大{counts[-1]}走")
