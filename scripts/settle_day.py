@@ -29,13 +29,26 @@ STAKE = 100
 
 
 def load_published(path: Path) -> dict[str, list[int]]:
-    """公表テキストから レース名 → 上位6頭（スコア順の馬番）。"""
+    """公表テキストから レース名 → 上位6頭（スコア順の馬番）。
+
+    **【スコア順】ブロックの行から直接読む。** 買い目欄の「6頭BOX」行の
+    書式（馬名を並べる／「上位6頭」と省略する）は本人の指示で何度も
+    変わっているため、そこに依存すると静かに0レースになる
+    （CLAUDE.md「数字を載せるなら、その数字を再現する行をスクリプトに
+    残す」と同じ理由）。スコア順の行は印の頭数を変えても形が変わらない。
+    """
     out = {}
+    row_re = re.compile(r"^\s*\d+\s+\S+\s+(\d+)\s+\S", re.M)
     for blk in re.split(r"━+", path.read_text(encoding="utf-8-sig")):
         head = re.search(r"(中山|阪神|東京|京都|新潟|中京|小倉|福島|札幌|函館)(\d+R)", blk)
-        six = re.search(r"^  6頭\s+(\S+)", blk, re.M)
-        if head and six:
-            out[head.group(1) + head.group(2)] = [int(x) for x in six.group(1).split("-")]
+        if not head:
+            continue
+        m = re.search(r"【スコア順】\n(.+?)(?:\n\n|\Z)", blk, re.S)
+        if not m:
+            continue
+        umaban = [int(u) for u in row_re.findall(m.group(1))][:6]
+        if umaban:
+            out[head.group(1) + head.group(2)] = umaban
     return out
 
 
