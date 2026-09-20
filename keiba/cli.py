@@ -167,13 +167,17 @@ def cmd_feedback(args) -> None:
 def cmd_text(args) -> None:
     """開催日の設定JSONから、スコア順・候補一覧のテキストを書き出す。"""
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    records = _load_horse_records(args.records)
+    # --no-records は「馬柱だけで採点する」味付け（`build_shinbun.py` と同じ）。
+    # 戦績を渡さないので持ち時計・コース適性・距離適性・乗り替わり補正が
+    # 中立に倒れ、参考ブロック（相手関係・騎手の得意条件）も該当なしになる
+    records = None if args.no_records else _load_horse_records(args.records)
     exp = Expectation()
     blocks = []
     for r in cfg["races"]:
         horses = load_horses(r["entries"])
         scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
-                            as_of=args.race_date, venue=r.get("venue"))
+                            as_of=args.race_date, venue=r.get("venue"),
+                            agari_mix=args.agari_mix)
         n_osae, n_chuui = split_for_total(args.marks)
         marked = assign_marks(scores, baba=r.get("baba", "良"),
                               n_osae=n_osae, n_chuui=n_chuui)
@@ -188,7 +192,17 @@ def cmd_text(args) -> None:
                                   as_of=args.race_date, n_show=args.marks,
                                   kyori=r.get("kyori"),
                                   breakdown=args.breakdown))
-    text = format_day(blocks, cfg.get("heading", "予想"))
+    # 味付けを見出しに書く。同じ日のテキストが複数出るときにどれを見ているか
+    # 分からなくなるのを防ぐ（`keiba/shinbun.py` と同じ理由）
+    heading = cfg.get("heading", "予想")
+    if args.agari_mix >= 1.0:
+        heading += " / 基礎能力=上がり3F"
+    elif args.agari_mix > 0.0:
+        heading += (f" / 基礎能力=持ち時計{1 - args.agari_mix:.0%}"
+                   f"+上がり3F{args.agari_mix:.0%}")
+    if args.no_records:
+        heading += " / 馬柱のみ"
+    text = format_day(blocks, heading)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     # BOM付きUTF-8。Windowsのメモ帳・Excelが文字コードを取り違えないようにする
@@ -354,6 +368,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_text.add_argument("--output", required=True, help="出力テキストパス")
     p_text.add_argument("--records", help="馬別戦績CSV")
     p_text.add_argument("--race-date", help="レース日 (YYYY-MM-DD)")
+    p_text.add_argument("--agari-mix", type=float, default=0.0, metavar="W",
+                        help="基礎能力に上がり3Fを混ぜる重み 0.0〜1.0。"
+                             "0=持ち時計のみ（既定）、1.0=上がり3Fのみ（旧モデル）、"
+                             "0.5=半々。`build_shinbun.py` と同じ")
+    p_text.add_argument("--no-records", action="store_true",
+                        help="馬別戦績を使わず馬柱だけで採点する（③・波乱寄り）。"
+                             "持ち時計・コース適性・距離適性・乗り替わり補正・"
+                             "参考ブロックが中立/該当なしになる")
     p_text.add_argument("--breakdown", action="store_true",
                         help="スコアの根拠（馬ごとの内訳）を付ける。既定は付けない"
                              "（説明しすぎない方針。内訳が要るときは daily の"
