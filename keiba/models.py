@@ -100,7 +100,11 @@ class Horse:
     # --- 拡張カラム（任意。無ければ中立値/Falseにフォールバック） ---
     kishu_norikae: bool = False  # 乗り替わり（Y/N）
     zenso_furi: bool = False  # 前走不利（展開・コース適性等の外的要因）
-    kyusoku_days: int | None = None  # 休養日数（長期休養明け判定用）
+    # 休養日数（長期休養明け判定用）。**収集CSVの列名は `前走間隔日数`**で、
+    # `休養日数` という列は存在しない。`休養日数` だけを読んでいたため
+    # `correction_hatsu_course` の −3点が延べ2,736頭で0%発火だった
+    # （2026-09-21に発見。枠順補正が0%発火だったのと同型の列名取り違え）
+    kyusoku_days: int | None = None
     zenso_handicap: bool = False  # 前走がハンデ戦の好走だったか
     kyakushitsu: str = ""  # 脚質（逃げ/先行/差し/追込）
     michiwaru_koumono: bool = False  # 道悪巧者（Y/N）
@@ -139,7 +143,7 @@ class Horse:
             ketto_hahachichi=g("血統母父", "母父"),
             kishu_norikae=_to_bool(g("乗り替わり")),
             zenso_furi=_to_bool(g("前走不利")),
-            kyusoku_days=_to_int(g("休養日数")),
+            kyusoku_days=_to_int(g("休養日数", "前走間隔日数")),
             zenso_handicap=_to_bool(g("前走ハンデ戦")),
             kyakushitsu=g("脚質"),
             michiwaru_koumono=_to_bool(g("道悪巧者")),

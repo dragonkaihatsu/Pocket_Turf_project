@@ -109,6 +109,31 @@ def reproduced(test: list[dict], ctrl: list[dict], place: bool) -> str:
     return "再現" if len(set(signs)) == 1 else "反転"
 
 
+def measure(rows: list[dict], label: str, ctrl_pred, ctrl_name: str) -> None:
+    """ある間隔ラベルを、指定した対照と同一人気帯内で比べる。
+
+    **対照の定義を書き添える**。連闘を「非連闘全体」と比べるか
+    「中2週以上」と比べるかで差の大きさが変わる（中1週自体が
+    平均より下なので、対照に混ぜると差が縮む）。
+    """
+    test_all = [r for r in rows if r["label"] == label]
+    ctrl_all = [r for r in rows if ctrl_pred(r)]
+    print(f"== {label}（n={len(test_all):,}）vs {ctrl_name}（n={len(ctrl_all):,}）==")
+    for place, mlab in ((True, "複勝率"), (False, "勝率")):
+        print(f"  -- {mlab} --")
+        print("  " + HEADER)
+        for b in BANDS:
+            t = [r for r in test_all if r["band"] == b]
+            c = [r for r in ctrl_all if r["band"] == b]
+            if len(t) < 50 or len(c) < 50:
+                continue
+            kt, nt = rate(t, place)
+            kc, nc = rate(c, place)
+            v = judge(f"{b} {label}", kt, nt, kc, nc)
+            print(f"  {v.line()}[{reproduced(t, c, place)}]")
+    print()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected_jra")
@@ -163,6 +188,11 @@ def main() -> None:
                 v = judge(f"{b} {clab}×連闘", kt, nt, kc, nc)
                 print(f"  {v.line()}[{reproduced(t, c, place)}]")
         print()
+
+    # 対照の定義を変えて測り直す（連闘・中1週を同じ土台で並べる）
+    std = lambda r: r["label"] not in ("連闘", "中1週")
+    for lab in ("連闘", "中1週"):
+        measure(rows, lab, std, "中2週以上")
 
     # 間隔ラベル全体の並び（連闘がどこに位置するか）
     print("== 間隔ラベル別の複勝率（全体・参考）==")

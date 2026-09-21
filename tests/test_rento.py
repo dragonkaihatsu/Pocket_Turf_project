@@ -90,3 +90,48 @@ class TestRealEntries(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLayoffColumn(unittest.TestCase):
+    """長期休養明け −3点が発火すること（列名の取り違えで0%だった）。
+
+    収集CSVの列名は `前走間隔日数`（`keiba/collect.py` の ENTRY_COLUMNS）。
+    `休養日数` という列は存在しないので、そこだけを読んでいると
+    `correction_hatsu_course` が延べ2,736頭で一度も発火しない。
+    """
+
+    def base(self, **extra) -> dict:
+        row = {"馬番": "1", "枠番": "1", "馬名": "テスト", "性齢": "牡6",
+               "斤量": "56", "騎手": "テスト騎手", "前走着順": "5",
+               "前走レース名": "テスト特別", "上がり3F": "35.0",
+               "調教評価": ""}
+        row.update(extra)
+        return row
+
+    def test_reads_zenso_interval(self):
+        h = Horse.from_row(self.base(前走間隔日数="200"))
+        self.assertEqual(h.kyusoku_days, 200)
+
+    def test_penalty_fires_over_180_days(self):
+        from keiba.scoring import correction_hatsu_course
+        it = correction_hatsu_course(Horse.from_row(self.base(前走間隔日数="200")), None)
+        self.assertEqual(it.points, -3.0)
+        self.assertIn("長期休養明け", it.note)
+
+    def test_no_penalty_at_or_below_180(self):
+        from keiba.scoring import correction_hatsu_course
+        for d in ("180", "30", "7"):
+            it = correction_hatsu_course(
+                Horse.from_row(self.base(前走間隔日数=d)), None)
+            self.assertEqual(it.points, 0.0, f"{d}日で減点している")
+
+    def test_explicit_column_still_wins(self):
+        """`休養日数` を明示で渡せばそちらを使う（手入力CSV向け）。"""
+        h = Horse.from_row(self.base(休養日数="300", 前走間隔日数="10"))
+        self.assertEqual(h.kyusoku_days, 300)
+
+    def test_collect_writes_the_column(self):
+        from keiba.collect import ENTRY_COLUMNS
+        self.assertIn("前走間隔日数", ENTRY_COLUMNS)
+        self.assertNotIn("休養日数", ENTRY_COLUMNS,
+                         "収集側が休養日数を書くなら models 側の優先順を見直す")
