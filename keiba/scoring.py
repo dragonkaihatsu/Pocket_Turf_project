@@ -788,10 +788,52 @@ def correction_wakuban(horse: Horse, history: list[HistoryRecord] | None,
     )
 
 
-def correction_zenso_furi(horse: Horse) -> ScoreItem:
+def zenso_furi_b(records: dict[str, list[dict]] | None, horse: Horse,
+                 as_of=None) -> tuple[bool | None, str]:
+    """前走に対する不利痕跡の代理B「脚質は逃げ/先行なのに4角6番手以下」。
+
+    実測（中央9-12R・前走ペア1,341組・2024込み最終測定）:
+        該当 勝率5.1% 対照 勝率3.2%（差+1.4〜1.8pt・両期間で再現・単勝回収121〜140%）
+        複勝率では差が消える（+1.2〜2.1p・判定不能または差なし）
+
+    **正解率（勝率）としては差あり・期間再現を通ったが、複勝率では通っていない**。
+    ZENSO_TABLE（複勝率で校正）と性質が違う量なので、同じ表に混ぜず
+    独立の小さな補正として扱う。
+
+    馬別戦績（`records`）に前走の脚質・4角通過順位が必要。どちらか一方でも
+    欠けていれば None（判定不能。データが無いことを「該当しない」と
+    混同しない）。前走が無い（新馬・転入初戦）場合も None。
+    """
+    if not records:
+        return None, "馬別戦績なし→判定不能"
+    from .horsedb import records_before
+    past = records_before(records.get(horse.name, []), as_of)
+    if not past:
+        return None, "前走データなし→判定不能"
+    prev = past[-1]
+    kyaku = (prev.get("脚質") or "").strip()
+    pos4_raw = (prev.get("通過") or "").strip()
+    if not kyaku or not pos4_raw.isdigit():
+        return None, "前走の脚質・4角位置が不明→判定不能"
+    pos4 = int(pos4_raw)
+    hit = kyaku in ("逃げ", "先行") and pos4 >= 6
+    return hit, f"前走{kyaku}・4角{pos4}番手"
+
+
+def correction_zenso_furi(horse: Horse, records: dict[str, list[dict]] | None = None,
+                          as_of=None) -> ScoreItem:
+    """前走不利補正。手動評価（`horse.zenso_furi`）があればそちらを優先し、
+    無ければ代理B（脚質×4角位置）を自動判定する。
+    """
     if horse.zenso_furi:
         return ScoreItem("前走不利補正", 2.0, "前走は展開・コース適性等の外的要因で崩れたと判定")
-    return ScoreItem("前走不利補正", 0.0, "該当なし")
+    hit, note = zenso_furi_b(records, horse, as_of)
+    if hit is None:
+        return ScoreItem("前走不利補正", 0.0, f"該当なし（{note}）")
+    if hit:
+        return ScoreItem("前走不利補正", 2.0,
+                         f"不利痕跡あり（代理B・{note}）。実測で勝率+1.4〜1.8pt・両期間再現")
+    return ScoreItem("前走不利補正", 0.0, f"該当なし（{note}）")
 
 
 def correction_koreiuma(horse: Horse, kyori: int | None) -> ScoreItem:
@@ -905,7 +947,7 @@ def score_horse(
         correction_norikae(horse, records, as_of, ratings),
         correction_ketto(horse, ratings),
         correction_wakuban(horse, history, venue, surface, waku_stats),
-        correction_zenso_furi(horse),
+        correction_zenso_furi(horse, records, as_of),
         correction_koreiuma(horse, kyori),
         correction_hatsu_course(horse, has_experience),
     ]

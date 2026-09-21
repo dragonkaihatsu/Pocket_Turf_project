@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.models import parse_agari_3f
 from keiba.racefiles import DEFAULT_RACES, race_number, result_files
+from keiba.tenkai import last_corner_ranks
 from keiba import profile
 
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_")
@@ -88,6 +89,23 @@ def main() -> None:
         if not rows:
             continue
         races += 1
+        # 最終コーナーの通過順位（代理B「前走の脚質×4角位置」の材料）。
+        # 読めなければ空のまま（数字を作らない）
+        pos4: dict[int, int] = {}
+        corner_path = res.with_name(stem + "_通過順.csv")
+        if corner_path.exists():
+            corners = list(csv.DictReader(open(corner_path, encoding="utf-8-sig")))
+            if corners:
+                pos4 = last_corner_ranks(corners[-1].get("通過順") or "", len(rows))
+        # 脚質（同代理Bの材料）は結果CSVには無く、同じレースの出走馬CSV
+        # （馬柱由来の事前情報）にしか載っていない。馬番で突き合わせる
+        kyaku: dict[int, str] = {}
+        entries_path = res.with_name(stem + "_出走馬.csv")
+        if entries_path.exists():
+            for e in csv.DictReader(open(entries_path, encoding="utf-8-sig")):
+                ub = (e.get("馬番") or "").strip()
+                if ub.isdigit() and e.get("脚質"):
+                    kyaku[int(ub)] = e["脚質"].strip()
         for r in rows:
             name = (r.get("馬名") or "").strip()
             if not name:
@@ -115,8 +133,14 @@ def main() -> None:
                 # mochidokei.canon_baba で正規化して使う
                 "タイム": (r.get("タイム") or "").strip(),
                 "着差": (r.get("着差") or "").strip(),
-                # 結果CSVに通過順・ペースは無い（レース単位の別CSV）ので空
-                "通過": "", "ペース": "",
+                # 通過＝最終コーナーの通過順位（1始まり）。代理B
+                # 「前走の脚質×4角位置」の材料。読めなければ空（数字を作らない）
+                "通過": str(pos4.get(int(r["馬番"]), ""))
+                         if (r.get("馬番") or "").isdigit()
+                         and int(r["馬番"]) in pos4 else "",
+                "ペース": "",
+                "脚質": (kyaku.get(int(r["馬番"]), "")
+                         if (r.get("馬番") or "").isdigit() else ""),
                 # 障害は3Fではない値（13秒台）を入れてくるので通す
                 "上り": ("" if (_a := parse_agari_3f(r.get("上がり3F"))) is None
                         else f"{_a:.1f}"),

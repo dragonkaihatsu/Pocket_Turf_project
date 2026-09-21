@@ -86,7 +86,13 @@ def main() -> None:
     ap.add_argument("--with-wakuban", action="store_true",
                     help="枠順補正（場×芝ダ代用表）を効かせる。surfaceを"
                          "score_raceに渡す。渡さない既定では0点のまま")
+    ap.add_argument("--no-furi-b", action="store_true",
+                    help="前走不利補正（代理B）を無効化する。既定は有効"
+                         "（records があれば自動発火）。A/B比較用")
     args = ap.parse_args()
+
+    if args.no_furi_b:
+        sc.zenso_furi_b = lambda *a, **k: (None, "A/B比較のため無効化")
 
     if args.with_norikae:
         # 一軍判定に必要な騎乗数だけを残す。複勝率は correction_kishu が

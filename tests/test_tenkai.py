@@ -9,7 +9,8 @@ import json
 import unittest
 from pathlib import Path
 
-from keiba.tenkai import GAP, field_spread, pace_raw, spread_per_horse
+from keiba.tenkai import (GAP, field_spread, last_corner_ranks, pace_raw,
+                           parse_corner, spread_per_horse)
 
 PACE = Path("data/profiles/jra/pace.json")
 TAIRE = Path("data/profiles/jra/taire.json")
@@ -43,6 +44,32 @@ class TestFieldSpread(unittest.TestCase):
         few = spread_per_horse("1-2-3-4-5")
         many = spread_per_horse("1-2-3-4-5-6-7-8-9-10")
         self.assertAlmostEqual(few, many, places=6)
+
+
+class TestParseCorner(unittest.TestCase):
+    def test_simple_order(self):
+        self.assertEqual(parse_corner("4(11,12)(2,13,7,16)-(3,9,10)5,14(8,15)-1,6", 16),
+                          [4, 11, 12, 2, 13, 7, 16, 3, 9, 10, 5, 14, 8, 15, 1, 6])
+
+    def test_glued_single_digits_are_split(self):
+        # "123"は18を超えるので、1頭ずつの単勝馬番(1,2,3)の連結とみなして割る
+        self.assertEqual(parse_corner("123", 3), [1, 2, 3])
+
+    def test_field_size_mismatch_is_none(self):
+        self.assertIsNone(parse_corner("1,2,3", 16))
+
+    def test_unreadable_is_none(self):
+        self.assertIsNone(parse_corner("", 8))
+
+
+class TestLastCornerRanks(unittest.TestCase):
+    def test_rank_by_umaban(self):
+        ranks = last_corner_ranks("3,1-2", 3)
+        self.assertEqual(ranks, {3: 1, 1: 2, 2: 3})
+
+    def test_unreadable_is_empty(self):
+        self.assertEqual(last_corner_ranks("", 8), {})
+        self.assertEqual(last_corner_ranks("1,2", 8), {})  # 頭数と合わない
 
 
 class TestPaceRaw(unittest.TestCase):

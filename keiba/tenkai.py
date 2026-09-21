@@ -34,6 +34,38 @@ import re
 GAP = {",": 1.0, "-": 3.0, "=": 6.0}
 
 
+def parse_corner(s: str, n: int) -> list[int] | None:
+    """通過順の1コーナー分（例 "4(11,12)(2,13,7,16)-(3,9,10)5,14(8,15)-1,6"）を
+    馬番の並びに変換する。桁が頭数を超えて連結された表記（例"1112"）も1桁ずつに割る。
+
+    頭数と極端にずれる場合は取消・除外の混入を疑い None を返す
+    （furi_test.py 由来。複数スクリプトに同じ定義が散っていたため
+    `keiba/tenkai.py` に集約した）。
+    """
+    toks = re.findall(r"\d+", s)
+    out: list[int] = []
+    for t in toks:
+        v = int(t)
+        if v <= 18:
+            out.append(v)
+        else:
+            out.extend(int(c) for c in t)
+    if len(set(out)) != len(out) or not (n - 2 <= len(out) <= n):
+        return None
+    return out
+
+
+def last_corner_ranks(corner_text: str, field_size: int) -> dict[int, int]:
+    """最終コーナーの通過順テキストから {馬番: 何番手だったか} を返す。
+
+    読めなければ空dict（欠損として扱う。数字を作らない）。
+    """
+    order = parse_corner(corner_text, field_size)
+    if not order:
+        return {}
+    return {umaban: rank for rank, umaban in enumerate(order, start=1)}
+
+
 def field_spread(s: str, min_horses: int = 5) -> tuple[float, int] | None:
     """4コーナーの通過順から (先頭〜最後方の推定馬身差, 頭数) を出す。
 
