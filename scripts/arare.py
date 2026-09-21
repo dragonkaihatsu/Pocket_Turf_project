@@ -89,7 +89,10 @@ def main() -> int:
     ap.add_argument("--races", default=DEFAULT_RACES)
     ap.add_argument("--months")
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
-    ap.add_argument("--records", default="data/profiles/jra/horse_records_corpus.csv")
+    ap.add_argument("--records", default="data/profiles/jra/horse_records.csv",
+                    help="馬別戦績CSV。**canonical な名前を渡すこと**"
+                         "（コーパスを直接指すとマージが働かず、"
+                         "全キャリアの220頭が抜ける）")
     ap.add_argument("--out", help="判定表をJSONで書き出す（予想時に引く）")
     a = ap.parse_args()
 

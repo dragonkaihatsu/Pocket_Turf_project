@@ -226,7 +226,7 @@ def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
                 venue: str | None, surface: str, baba: str,
                 kyori: int | None, as_of: str | None,
                 n_show: int = 8) -> list[str]:
-    """参考注記（相手関係・騎手の得意条件・レース単位のコース注記）。
+    """参考注記（相手関係・騎手の得意条件・持ち時計の読み・コース注記）。
 
     いずれも**スコアには入っていない**（`keiba/sanko.py`）。該当が無ければ
     見出しごと出さない。行の有無で「該当なし」を伝えるのは、1点買いの
@@ -245,6 +245,18 @@ def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
         idx = Index.build(records)
     today = [s.horse.name for s in scores]
 
+    # 持ち時計を「走ってきたレースの水準」と「そのレース内での相対」に分ける
+    # （`keiba/racelevel.py`）。**採点は現行のまま**（絶対＝2成分の和を
+    # メンバー相対で使う）。分解して4帯すべてで再現したのは和だけなので、
+    # ここは読みの助けとしての表示にとどめる
+    from . import racelevel as rl
+    from .scoring import _base_times
+    splits = rl.field_splits(records, today, rl.load_table(venue=venue),
+                             as_of, _base_times(venue))
+    level_note = rl.race_note(splits)
+    mochi_notes = rl.horse_notes(
+        splits, {s.horse.name: s.horse.ninki for s in scores})
+
     lines: list[str] = []
     for i, m in enumerate(marked[:n_show], start=1):
         h = m.score.horse
@@ -256,13 +268,17 @@ def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
         if n := jockey_note(h.jockey, stats, venue, sd, kyori,
                             h.kyakushitsu, h.wakuban, baseline):
             bits.append(n)
+        if n := mochi_notes.get(h.name):
+            bits.append(n)
         if bits:
             lines.append(f"  {i:>2} {m.mark} {h.umaban:>2} {h.name:<14}"
                          + "  ".join(bits))
 
-    if not lines and not race_note:
+    if not lines and not race_note and not level_note:
         return []
     out = ["", "【参考】スコアには未反映"]
+    if level_note:
+        out.append(f"  ※{level_note}")
     if race_note:
         out.append(f"  ※{race_note}")
     out.extend(lines)

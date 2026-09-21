@@ -16,14 +16,15 @@
 
 ## 限界を明示しておく
 
-- **カバー範囲は収集した帯（既定9-12R）に限られる**。1-8Rや他年の戦績は
-  入らないので、netkeiba から取った全キャリアより短い
+- **カバー範囲は収集した帯に限られる**（既定は 1-12R。9-12Rで作ると
+  前走の47.6%が抜ける）。収集していない年の戦績は入らないので、
+  netkeiba から取った全キャリアより短い
 - 馬IDが結果CSVに無いため、**馬名をキーにする**。同名馬は区別できない
 - したがってこれは全キャリアの代用であって、上位互換ではない。当日の予想は
   `keiba.cli horses` で取った全キャリアを使うほうが厚い
 
     python3 scripts/build_horse_records.py \
-        --dir data/collected_jra --races 9-12 \
+        --dir data/collected_jra --races 1-12 \
         --race-info data/profiles/jra/race_info.csv \
         --out data/profiles/jra/horse_records_corpus.csv
 """
@@ -38,7 +39,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.models import parse_agari_3f
-from keiba.racefiles import DEFAULT_RACES, race_number, result_files
+from keiba.racefiles import race_number, result_files
 from keiba.tenkai import last_corner_ranks
 from keiba import profile
 
@@ -64,7 +65,14 @@ def load_race_info(path: Path) -> dict[str, dict]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/collected_jra")
-    ap.add_argument("--races", default=DEFAULT_RACES)
+    # **既定は 1-12R**。他の集計スクリプトの既定（9-12R）と違えてある。
+    # この表は集計の母集団ではなく**予想が引く戦績そのもの**で、前走の
+    # 47.6%は1-8Rにあるため、9-12Rで作ると持ち時計・コース適性・
+    # 乗り替わり補正がまとめて薄くなる。2026-09-21に既定のまま流して
+    # 81,445行→43,066行に縮め、持ち時計の発火を88%→56%に落とした
+    ap.add_argument("--races", default="1-12",
+                    help="戦績を拾う帯。**既定1-12**（9-12Rにすると前走の"
+                         "半分が抜ける。他のスクリプトの既定とは違う）")
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
     ap.add_argument("--out", default="data/profiles/jra/horse_records_corpus.csv")
     args = ap.parse_args()
