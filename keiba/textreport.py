@@ -19,7 +19,7 @@ from .sanko import (course_note, jockey_note, load_jockey_stats,
                     rento_note, surface_kind)
 from .marks import MarkedHorse, assign_marks, split_for_total
 from .arare import judge as arare_judge
-from .notice import MARK_NOTICE
+from .notice import NOTICE_LINES
 from .scoring import HorseScore
 from .single import best_single
 from .tanpuku import best_tanpuku
@@ -474,4 +474,5 @@ def format_race(
 
 def format_day(blocks: list[str], heading: str) -> str:
     body = "\n\n".join(blocks)
-    return f"{heading}\n\n{body}\n{RULE}\n{MARK_NOTICE}\n"
+    notice = "\n".join(NOTICE_LINES)
+    return f"{heading}\n\n{body}\n{RULE}\n{notice}\n"

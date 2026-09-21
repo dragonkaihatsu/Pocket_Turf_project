@@ -239,5 +239,20 @@ class TestTrimmed(unittest.TestCase):
         self.assertNotIn("【根拠】", self.text)
 
     def test_day_ends_with_the_fixed_notice(self):
-        from keiba.notice import MARK_NOTICE
-        self.assertTrue(self.day.rstrip().endswith(MARK_NOTICE), self.day[-120:])
+        """末尾は印の意味 → AIが見ていないもの、の2行で閉じる。
+
+        文言は `keiba/notice.py` にしかない。ここで endswith を見るのは、
+        行を足したときに**順番と最後の1行**が崩れていないかを固定するため。
+        """
+        from keiba.notice import NOTICE_LINES
+        tail = self.day.rstrip()
+        self.assertTrue(tail.endswith("\n".join(NOTICE_LINES)), tail[-200:])
+
+    def test_day_states_what_the_ai_cannot_see(self):
+        """調教・パドックを見ていないことを必ず書く（本人の指示・2026-09-21）。
+
+        調教10点は採点対象外・パドックは映像なので収集データに無い。
+        **スコアが75点満点である理由そのもの**なので、削らない。
+        """
+        for word in ("調教", "パドック"):
+            self.assertIn(word, self.day)

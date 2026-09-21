@@ -49,7 +49,7 @@ from .hensachi import deviations
 from .marks import assign_marks
 from .shinbun import config_date, config_venue, load_by_name
 from .models import load_history, load_horses
-from .notice import MARK_NOTICE
+from .notice import NOTICE_LINES
 from .scoring import score_race
 
 # JRAの枠色は 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃。**地色はCSSの .w1〜.w8 に
@@ -327,7 +327,7 @@ def build_sheet(config: dict, calibration: dict | None = None,
     # 凡例は**読み方の解説をやめ、印の意味と免責だけ**にした（本人の指示・
     # 2026-09-14「記事の末尾の言葉はこれにする」「説明しすぎない」）。
     # 文言は `keiba/notice.py` に1か所だけ置く
-    legend = f'<p class="legend">{_esc(MARK_NOTICE)}</p>'
+    legend = "".join(f'<p class="legend">{_esc(n)}</p>' for n in NOTICE_LINES)
     body = (
         f'<div class="kompi">'
         f'<div class="mast">'

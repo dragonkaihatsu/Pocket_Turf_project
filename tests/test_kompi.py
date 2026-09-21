@@ -102,10 +102,14 @@ class TestSheetStructure(unittest.TestCase):
         self.assertIn("<tfoot>", self.sheet())
 
     def test_legend_is_only_the_fixed_notice(self):
-        """凡例は印の意味と免責だけ。読み方の解説は置かない（説明しすぎない）。"""
-        from keiba.notice import MARK_NOTICE
-        legend = re.search(r'<p class="legend">(.*?)</p>', self.sheet(), re.S)
-        self.assertEqual(legend.group(1), MARK_NOTICE)
+        """凡例は印の意味とAIの限界だけ。読み方の解説は置かない（説明しすぎない）。
+
+        **数を数える**のが要点。`re.search` は先頭1つしか見ないので、
+        3つ目の段落を足しても気づけない状態になっていた。
+        """
+        from keiba.notice import NOTICE_LINES
+        legends = re.findall(r'<p class="legend">(.*?)</p>', self.sheet(), re.S)
+        self.assertEqual(legends, list(NOTICE_LINES))
         self.assertNotIn("読み方", self.sheet())
 
     def test_hensachi_metric_changes_the_label(self):

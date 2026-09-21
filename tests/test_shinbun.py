@@ -180,6 +180,17 @@ class TestAmebloSafe(unittest.TestCase):
         self.assertLess(len(shinbun.build_sheet(config()).encode("utf-8")),
                         60_000)
 
+    def test_legend_is_the_fixed_notice(self):
+        """新聞は配信の既定なので、注意書きを必ず載せる。
+
+        `keiba/notice.py` の行をそのまま・その順に並べる。テキストと
+        一覧だけ固定していて新聞が抜けていたため、追加した。
+        """
+        from keiba.notice import NOTICE_LINES
+        legends = re.findall(r'<p class="legend">(.*?)</p>',
+                             shinbun.build_sheet(config()), re.S)
+        self.assertEqual(legends, list(NOTICE_LINES))
+
     def test_css_is_scoped(self):
         css = re.search(r"<style>(.*?)</style>", shinbun.build_sheet(config()),
                         re.S).group(1)

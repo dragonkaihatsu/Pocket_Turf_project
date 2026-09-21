@@ -44,7 +44,7 @@ from . import profile
 from .horsedb import load_records
 from .marks import assign_marks, mark_sequence
 from .models import load_history, load_horses
-from .notice import MARK_NOTICE
+from .notice import NOTICE_LINES
 from .scoring import score_race
 
 # 欄の割り当て（スコア順位。終端を含む）。**実測の買い目幅に合わせてある**
@@ -534,7 +534,8 @@ def build_sheet(config: dict, title: str | None = None,
             + (f'<span>{_esc(source)}</span>' if source else "")
             + f'<i>{_esc("・".join(by_venue))}</i></div>'
             f'{tables}{keys}'
-            f'<p class="legend">{_esc(MARK_NOTICE)}</p></div>')
+            + "".join(f'<p class="legend">{_esc(n)}</p>' for n in NOTICE_LINES)
+            + '</div>')
     parts = []
     if title:
         parts += [f"<title>{_esc(title)}</title>", FONTS,
