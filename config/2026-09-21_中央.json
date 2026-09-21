@@ -1,0 +1,62 @@
+{
+ "title": "2026-09-21 中央予想",
+ "heading": "2026-09-21 中央 9-12R",
+ "races": [
+  {
+   "venue": "阪神",
+   "race_no": "9R",
+   "name": "新涼特別(2勝クラス)",
+   "grade": "2勝クラス",
+   "entries": "data/collected_jra/2026-09-21_阪神09R_新涼特別(2勝クラス)_出走馬.csv",
+   "kyori": 1400,
+   "surface": "ダ1400m",
+   "baba": "良",
+   "post_time": "14:25",
+   "turn": "右",
+   "inner_outer": "",
+   "kui": ""
+  },
+  {
+   "venue": "阪神",
+   "race_no": "10R",
+   "name": "Mキタサンブラック(3勝クラス)",
+   "grade": "3勝クラス",
+   "entries": "data/collected_jra/2026-09-21_阪神10R_Mキタサンブラック(3勝クラス)_出走馬.csv",
+   "kyori": 2200,
+   "surface": "芝2200m",
+   "baba": "良",
+   "post_time": "15:05",
+   "turn": "右",
+   "inner_outer": "",
+   "kui": "B"
+  },
+  {
+   "venue": "阪神",
+   "race_no": "11R",
+   "name": "神戸新聞杯(G2)",
+   "grade": "G2",
+   "entries": "data/collected_jra/2026-09-21_阪神11R_神戸新聞杯(G2)_出走馬.csv",
+   "kyori": 2400,
+   "surface": "芝2400m",
+   "baba": "良",
+   "post_time": "15:45",
+   "turn": "右",
+   "inner_outer": "外",
+   "kui": "B"
+  },
+  {
+   "venue": "阪神",
+   "race_no": "12R",
+   "name": "3歳以上1勝クラス",
+   "grade": "1勝クラス",
+   "entries": "data/collected_jra/2026-09-21_阪神12R_3歳以上1勝クラス_出走馬.csv",
+   "kyori": 1400,
+   "surface": "ダ1400m",
+   "baba": "良",
+   "post_time": "16:30",
+   "turn": "右",
+   "inner_outer": "",
+   "kui": ""
+  }
+ ]
+}
