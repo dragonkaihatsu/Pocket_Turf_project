@@ -139,6 +139,14 @@ class HorseScore:
     base_items: list[ScoreItem] = field(default_factory=list)
     corrections: list[ScoreItem] = field(default_factory=list)
     baba_note: str = ""
+    # 持ち時計指数のメンバー平均差と、指数が作れた頭数。**採点で使った量
+    # そのもの**を持ち回るための置き場で、表示が別に計算して静かにずれるのを
+    # 防ぐ（閾値を2か所に書いた失敗と同じ型）。作れなければ None のまま
+    mochi_delta: float | None = None
+    mochi_field: int = 0
+    # 採点に使ったか。`--agari-mix 1.0`（味付け③）では指数が作れても
+    # 基礎能力は上がり3F単独になるため、表示で「採点済み」と読ませない
+    mochi_used: bool = False
 
     @property
     def base_subtotal(self) -> float:
@@ -196,6 +204,23 @@ def _scale(value: float, lo: float, hi: float, out_lo: float, out_hi: float) -> 
 MIN_MOCHI_FIELD = 4
 
 
+def mochi_delta(mochi: dict[str, float] | None,
+                name: str) -> tuple[float, int] | None:
+    """持ち時計指数の**メンバー平均差**と、指数が作れた頭数を返す。
+
+    採点（`score_kiso_nouryoku`）と表示（`keiba/textreport.py`）が同じ値を
+    読むための単一の入口。片方が独自に計算すると、`MIN_MOCHI_FIELD` を
+    上げ下げしたときに表示だけ残るような食い違いが静かに起きる。
+
+    平均差にするのは、実測で再現したのがメンバー相対の形だったため
+    （絶対値のまま帯に切ると1-3番人気の複勝リフトが期間で符号ごと変わる）。
+    作れなければ None（0 を返すと「平均並みの馬」と区別できない）。
+    """
+    if not mochi or len(mochi) < MIN_MOCHI_FIELD or name not in mochi:
+        return None
+    return mochi[name] - statistics.fmean(mochi.values()), len(mochi)
+
+
 def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse],
                         mochi: dict[str, float] | None = None,
                         agari_mix: float = 0.0) -> ScoreItem:
@@ -231,13 +256,13 @@ def score_kiso_nouryoku(horse: Horse, field_horses: list[Horse],
 
     w = max(0.0, min(1.0, agari_mix))
     mochi_pts = mochi_note = None
-    if mochi and len(mochi) >= MIN_MOCHI_FIELD and horse.name in mochi:
+    if (md := mochi_delta(mochi, horse.name)) is not None:
+        delta, n_field = md
         v = mochi[horse.name]
         lo, hi = min(mochi.values()), max(mochi.values())
         mochi_pts = _scale(v, lo, hi, MAX_KISO * 0.4, MAX_KISO)
-        mochi_note = (f"持ち時計指数{v:+.2f}（メンバー{len(mochi)}頭中 "
-                      f"{hi:+.2f}〜{lo:+.2f}・"
-                      f"平均差{v - statistics.fmean(mochi.values()):+.2f}）")
+        mochi_note = (f"持ち時計指数{v:+.2f}（メンバー{n_field}頭中 "
+                      f"{hi:+.2f}〜{lo:+.2f}・平均差{delta:+.2f}）")
 
     agari_pts = agari_note = None
     times = [h.agari_3f for h in field_horses if h.agari_3f is not None]
@@ -953,6 +978,9 @@ def score_horse(
     ]
 
     score = HorseScore(horse=horse, base_items=base_items, corrections=corrections)
+    if (md := mochi_delta(mochi, horse.name)) is not None:
+        score.mochi_delta, score.mochi_field = md
+        score.mochi_used = agari_mix < 1.0
     apply_handicap_discount(score, horse)
 
     delta, note = baba_delta(horse)

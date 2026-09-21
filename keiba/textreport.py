@@ -209,7 +209,15 @@ def _horse_line(rank: int, m: MarkedHorse, exp: Expectation,
 
     偏差値を併記する理由: 絶対点数だけでは「その点差が大きいのか小さいのか」
     が読めない。1位と2位の差は実測で中央値2.6点しかなく、混戦なのか
-    抜けているのかは点差の散らばり次第で変わる（keiba/hensachi.py）。"""
+    抜けているのかは点差の散らばり次第で変わる（keiba/hensachi.py）。
+
+    持ち時計を併記する理由: 基礎能力25点の尺度は2026-09-13に上がり3Fから
+    **持ち時計指数**（直近365日・距離と馬場で正規化した走破タイム）へ
+    変わったが、値はスコアに溶けて見えなかった。出すのは
+    **メンバー平均差**——採点がメンバー相対で使っている量そのもので、
+    絶対値はレースの格を含むため頭数の違うレースをまたいで読めない。
+    **作れない馬は空にする**。中立値を入れると、窓内3走未満で上がり3Fに
+    落ちた馬（2歳戦では大半）が「平均並みの時計を持つ馬」に見える。"""
     h = m.score.horse
     ninki = f"{h.ninki}人気" if h.ninki else "—"
     odds = f"{h.tansho_odds:.1f}倍" if h.tansho_odds else "—"
@@ -217,9 +225,34 @@ def _horse_line(rank: int, m: MarkedHorse, exp: Expectation,
     score = f"良{m.score.total_yoi:.1f}/重{m.score.total_omoi:.1f}"
     dev = (devs or {}).get(h.umaban)
     dev_txt = f"偏差{dev:>4.1f}" if dev is not None else "偏差   —"
+    md = m.score.mochi_delta
+    # 小数2桁。レース内の平均差の幅は実測で 1.0〜1.7 しかないので、
+    # 1桁に丸めると近い馬が同じ値に潰れて読み比べられない
+    mochi_txt = f"時計{md:>+6.2f}" if md is not None else "時計    —"
     return (f"{rank:>2} {m.mark} {h.umaban:>2} {h.name:<14}"
-            f"{ninki:>6}{odds:>8}  {score:>12} {dev_txt}  "
+            f"{ninki:>6}{odds:>8}  {score:>12} {dev_txt} {mochi_txt}  "
             f"{h.kyakushitsu or '—':<3} 1着{win}/着内{place}")
+
+
+def mochi_note(scores: list[HorseScore]) -> str:
+    """持ち時計が何頭に作れたかを1行に添える。
+
+    作れない馬は上がり3Fに落ちる（`score_kiso_nouryoku`）。**混在している
+    ことを隠さない**のが目的で、2歳戦・障害では窓内3走に届かず0頭になる。
+    0頭のときこそ出す価値がある（そのレースだけ旧尺度で採点されている）。
+    """
+    n = len(scores)
+    k = sum(1 for s in scores if s.mochi_delta is not None)
+    used = any(s.mochi_used for s in scores)
+    if k and not used:
+        tail = "（表示のみ・採点は上がり3F）"
+    elif k == n:
+        tail = ""
+    elif k:
+        tail = "（残りは上がり3Fで代替）"
+    else:
+        tail = "（上がり3Fで採点）"
+    return f"持ち時計 {k}/{n}頭{tail}"
 
 
 def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
@@ -372,7 +405,7 @@ def format_race(
                    f"（{tp.label}）")
 
     out.append("")
-    out.append("【スコア順】")
+    out.append(f"【スコア順】  {mochi_note(scores)}")
     for i, m in enumerate(marked[:n_show], start=1):
         out.append(_horse_line(i, m, exp, devs))
 
