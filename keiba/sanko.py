@@ -45,6 +45,24 @@ NAKAYAMA_DIRT_INSIDE = (
 )
 
 
+def surface_kind(surface: str | None) -> str | None:
+    """「芝2000m」→「芝」、「ダ1800m」→「ダ」。**障害・不明は None**。
+
+    障害を芝ダのどちらかに落とすと、平地で測った実測（枠順補正の
+    場×芝ダ代用表・騎手の芝ダ条件・中山の道悪×内枠・コース特性の芝種）を
+    障害戦に当ててしまう。2026-09-22の中山1R（3歳以上障害未勝利）で
+    「中山・ダートは内枠が不利」が出ていたのがそれで、
+    **測っていない条件に数字を出さない**ためここで None に倒す。
+    """
+    if not surface:
+        return None
+    if surface.startswith("芝"):
+        return "芝"
+    if surface.startswith("ダ"):
+        return "ダ"
+    return None
+
+
 def distance_band(kyori: int) -> str:
     """`scripts/jockey_stats.py` と同じ境目。**境目を2か所に書くと
     静かにずれる**ので、あちらはここを import する。"""

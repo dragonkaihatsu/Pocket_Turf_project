@@ -15,7 +15,8 @@ from .boxes import build_options
 from .expectation import Expectation
 from .aite import note as aite_note
 from .hensachi import by_umaban, spread_note
-from .sanko import course_note, jockey_note, load_jockey_stats
+from .sanko import (course_note, jockey_note, load_jockey_stats,
+                    surface_kind)
 from .marks import MarkedHorse, assign_marks, split_for_total
 from .arare import judge as arare_judge
 from .notice import MARK_NOTICE
@@ -232,7 +233,8 @@ def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
     見出しごと出さない。行の有無で「該当なし」を伝えるのは、1点買いの
     ★と同じ扱い（本人の指示「説明しすぎない」）。
     """
-    sd = "芝" if surface.startswith("芝") else "ダ"
+    # 障害は None になる（平地で測った実測を当てない）
+    sd = surface_kind(surface)
     race_note = course_note(venue, sd, baba)
     stats = load_jockey_stats(venue=venue)
     # 騎手の「得意条件」は全体成績との対比で出すので、比べる相手が要る
@@ -249,13 +251,18 @@ def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
     # （`keiba/racelevel.py`）。**採点は現行のまま**（絶対＝2成分の和を
     # メンバー相対で使う）。分解して4帯すべてで再現したのは和だけなので、
     # ここは読みの助けとしての表示にとどめる
-    from . import racelevel as rl
-    from .scoring import _base_times
-    splits = rl.field_splits(records, today, rl.load_table(venue=venue),
-                             as_of, _base_times(venue))
-    level_note = rl.race_note(splits)
-    mochi_notes = rl.horse_notes(
-        splits, {s.horse.name: s.horse.ninki for s in scores})
+    # **障害では出さない**（`racelevel.build_levels` が 馬場種別 not in 芝/ダ を
+    # 除いているので、レース水準は障害で一度も測っていない）
+    level_note = None
+    mochi_notes: dict[str, str] = {}
+    if sd:
+        from . import racelevel as rl
+        from .scoring import _base_times
+        splits = rl.field_splits(records, today, rl.load_table(venue=venue),
+                                 as_of, _base_times(venue))
+        level_note = rl.race_note(splits)
+        mochi_notes = rl.horse_notes(
+            splits, {s.horse.name: s.horse.ninki for s in scores})
 
     lines: list[str] = []
     for i, m in enumerate(marked[:n_show], start=1):
@@ -375,16 +382,16 @@ def format_race(
             f"{s.horse.umaban}{s.horse.name}(偏差{devs.get(s.horse.umaban, 50):.0f})"
             for s in rest[:5]))
 
-    if records and venue:
+    if records and venue and (sk := surface_kind(surface)):
         # コース特性ごとの適性。**点数には入れていない**（scripts/course_traits.py
         # の独立検証で判別力が確認できなかったため）。母数と対比を出して
-        # 買う人が判断できる形にする第1段階
+        # 買う人が判断できる形にする第1段階。
+        # 障害（surface_kind が None）は対象外
         lines = []
         for i, m in enumerate(marked[:n_show], start=1):
             h = m.score.horse
             recs = trait_records(records.get(h.name, []), venue,
-                                 "芝" if surface.startswith("芝") else "ダート",
-                                 as_of)
+                                 "芝" if sk == "芝" else "ダート", as_of)
             notable = [r for r in recs if r.tag in ("得意", "苦手")]
             if not notable:
                 continue

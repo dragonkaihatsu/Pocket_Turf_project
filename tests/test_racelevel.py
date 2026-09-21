@@ -241,3 +241,45 @@ class TestMidPopularityAvoidNote(unittest.TestCase):
         s = self.splits()
         for nk in (1, 4, 8, 12):
             self.assertNotIn("強相手で接戦", rl.horse_notes(s, {"強相手で接戦": nk}))
+
+
+class TestSurfaceKind(unittest.TestCase):
+    """障害を芝ダのどちらかに落とさない（平地で測った実測を当てないため）。
+
+    2026-09-22の中山1R（3歳以上障害未勝利）で「中山・ダートは内枠が
+    不利」が出ていた。障害は芝ダ両用のコースで、枠順補正の場×芝ダ表・
+    騎手の芝ダ条件・コース特性の芝種はいずれも平地で測ったもの。
+    """
+
+    def test_flat_surfaces(self):
+        from keiba.sanko import surface_kind
+        self.assertEqual(surface_kind("芝2000m"), "芝")
+        self.assertEqual(surface_kind("ダ1800m"), "ダ")
+
+    def test_hurdle_and_unknown_are_none(self):
+        from keiba.sanko import surface_kind
+        for v in ("障2880m", "障3200m", None, "", "x"):
+            self.assertIsNone(surface_kind(v), f"{v!r} が None にならない")
+
+    def test_course_note_is_silent_for_hurdles(self):
+        from keiba.sanko import course_note, surface_kind
+        self.assertIsNone(course_note("中山", surface_kind("障2880m"), "不良"))
+        # 平地なら出る（注記そのものは生きている）
+        self.assertIsNotNone(course_note("中山", surface_kind("ダ1800m"), "不良"))
+
+    def test_textreport_uses_surface_kind(self):
+        """`startswith("芝") else "ダ"` の直書きが戻っていないこと。"""
+        src = Path("keiba/textreport.py").read_text(encoding="utf-8")
+        self.assertIn("surface_kind(surface)", src)
+        self.assertNotIn('"芝" if surface.startswith("芝") else "ダ"', src)
+
+    def test_racelevel_display_is_skipped_for_hurdles(self):
+        """レース水準は障害で一度も測っていないので表示もしない。
+
+        `build_levels` は 馬場種別 not in ("芝","ダ") を除いている。
+        """
+        src = Path("keiba/textreport.py").read_text(encoding="utf-8")
+        i = src.index("racelevel as rl")
+        head = src[max(0, i - 400):i]
+        self.assertIn("if sd:", head,
+                      "障害でレース水準の表示を止めるガードが無い")
