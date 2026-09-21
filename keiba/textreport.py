@@ -16,7 +16,7 @@ from .expectation import Expectation
 from .aite import note as aite_note
 from .hensachi import by_umaban, spread_note
 from .sanko import (course_note, jockey_note, load_jockey_stats,
-                    surface_kind)
+                    rento_note, surface_kind)
 from .marks import MarkedHorse, assign_marks, split_for_total
 from .arare import judge as arare_judge
 from .notice import MARK_NOTICE
@@ -274,6 +274,8 @@ def sanko_lines(marked: list[MarkedHorse], scores: list[HorseScore],
                 bits.append(n)
         if n := jockey_note(h.jockey, stats, venue, sd, kyori,
                             h.kyakushitsu, h.wakuban, baseline):
+            bits.append(n)
+        if n := rento_note(h.kankaku, h.ninki, h.zenso_chakujun):
             bits.append(n)
         if n := mochi_notes.get(h.name):
             bits.append(n)

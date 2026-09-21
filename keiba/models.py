@@ -107,6 +107,9 @@ class Horse:
     kiso_nouryoku_override: float | None = None  # 基礎能力の手動評価（0-25点）
     tansho_odds: float | None = None  # 単勝オッズ（買い目戦略の判定に使う）
     ninki: int | None = None  # 単勝人気順
+    # netkeibaの馬柱が持つ間隔ラベル（「連闘」「中1週」…）。日数で切ると
+    # 順延・変則開催がずれるので、開催の数え方に忠実なこちらを使う
+    kankaku: str = ""
 
     @property
     def age(self) -> int | None:
@@ -143,6 +146,7 @@ class Horse:
             kiso_nouryoku_override=_to_float(g("基礎能力評価")),
             tansho_odds=_to_float(g("単勝オッズ")),
             ninki=_to_int(g("人気")),
+            kankaku=g("間隔表記"),
         )
 
 

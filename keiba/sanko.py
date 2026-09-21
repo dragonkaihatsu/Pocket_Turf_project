@@ -192,6 +192,38 @@ def jockey_note(jockey: str, stats: list[dict], venue: str | None,
             f"（複勝率{c['複勝率']:.0%}→全体{base:.0%}・{c['n']}騎乗）")
 
 
+# 連闘（前走から中0週）。`scripts/rento.py` の実測（中央1-12R・
+# 116,024出走・連闘3,507）で、同一人気帯内リフトが 差あり＋3年再現
+# （2024/2025/2026）になった区分だけを出す。4-5番人気は差なし／判定不能
+# なので出さない。**避ける条件**なので回収率の裏づけが無くても運用できる
+# （見送る・軸から下げるだけで外れ馬券を買わない）
+RENTO_NOTES = (
+    (1, 3, "連闘 → 勝ち切りは割り引く（勝率 −5.4p・3年再現／複勝率は判定不能）"),
+    (6, 9, "連闘 → 複勝率 −2.5p（3年再現）"),
+    (10, 99, "連闘 → 複勝率 −1.3p（3年再現）"),
+)
+# 6-9番人気で前走二桁からの連闘はさらに落ちる（複勝率 −3.9p・n=335・3年再現）
+RENTO_ZENSO_NIKETA = "連闘×前走二桁 → 複勝率 −3.9p（3年再現）"
+
+
+def rento_note(kankaku: str | None, ninki: int | None,
+               zenso_chakujun: int | None) -> str | None:
+    """連闘の注記。測れた人気帯にだけ出す（`scripts/rento.py`）。
+
+    間隔ラベルは netkeiba の馬柱そのままを使う。**日数で切らない**のは
+    順延・変則開催でずれるため（2026-09-22の中山は台風順延なので、
+    連闘馬の間隔が9〜10日と出る。ふつうの連闘は7日）。
+    """
+    if (kankaku or "").strip() != "連闘" or ninki is None:
+        return None
+    if 6 <= ninki <= 9 and zenso_chakujun is not None and zenso_chakujun >= 10:
+        return RENTO_ZENSO_NIKETA
+    for lo, hi, text in RENTO_NOTES:
+        if lo <= ninki <= hi:
+            return text
+    return None
+
+
 def course_note(venue: str | None, surface: str | None,
                 baba: str | None) -> str | None:
     """レース単位の参考注記（中山の道悪×内枠）。"""
