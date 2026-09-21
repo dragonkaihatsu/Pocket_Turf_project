@@ -363,7 +363,7 @@ def parse_result(html: str, race_id: str) -> RaceData | None:
 # ---------------------------------------------------------------------------
 
 ENTRY_COLUMNS = [
-    "馬番", "枠番", "馬名", "性齢", "騎手", "厩舎", "脚質", "単勝オッズ", "人気",
+    "馬番", "枠番", "馬名", "性齢", "斤量", "騎手", "厩舎", "脚質", "単勝オッズ", "人気",
     "前走着順", "前走レース名", "上がり3F", "馬体重",
     "前走開催場", "前走間隔日数", "間隔表記", "転入初戦", "長期休養明け", "直近3走JRA数",
     "血統父", "血統母父", "調教評価", "ブリンカー",
@@ -438,9 +438,15 @@ def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
         if m := re.search(r'<span class="Barei">(.*?)</span>', row):
             h["性齢"] = _text(m.group(1))[:2]
         if m := re.search(r'<td class="Jockey".*?</td>', row, re.S):
-            names = re.findall(r">([^<>]{2,10})</a>", m.group())
+            cell = m.group()
+            names = re.findall(r">([^<>]{2,10})</a>", cell)
             if names:
                 h["騎手"] = names[-1].strip()
+            # 斤量は騎手名リンクの直後に素のテキストで入る
+            # （例: <a ...>ルメー</a><br />\n<span>56.0</span>）。
+            # 出走馬CSVのkinryo列（既存のHorse.kinryoが読む）を初めて埋める
+            if k := re.search(r"</a>\s*(?:<br\s*/?>\s*)+\s*<span>([\d.]+)</span>", cell):
+                h["斤量"] = float(k.group(1))
 
         pasts = [_parse_past_cell(b) for _, b in
                  re.findall(r'<td class="(Past[^"]*)"[^>]*>(.*?)</td>', row, re.S)]

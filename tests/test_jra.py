@@ -63,7 +63,8 @@ SHUTUBA_ROW = """
       <div class="Popular"><span id="odds-1_01">---.-</span>
         <span id="ninki-1_01">**</span></div></div>
   </div></td>
-  <td class="Jockey"><span class="Barei">牝4栗</span><a href="#">浜中</a></td>
+  <td class="Jockey"><span class="Barei">牝4栗</span><a href="#">浜中</a><br />
+<span>54.0</span></td>
 </tr>
 <tr class="HorseList">
   <td class="Horse_Info"><div class="fc">
@@ -127,6 +128,9 @@ class TestJraShutubaParsing(unittest.TestCase):
 
     def test_weight_with_extra_class_is_read(self):
         self.assertEqual(self.rows[0]["馬体重"], "476(-2)")
+
+    def test_kinryo_after_jockey_link_is_read(self):
+        self.assertEqual(self.rows[0]["斤量"], 54.0)
 
     def test_odds_are_absent_after_the_race(self):
         # 発走後は ---.- になるため取れない。結果から補完する必要がある
