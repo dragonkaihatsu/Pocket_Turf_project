@@ -45,6 +45,7 @@ from .horsedb import load_records
 from .marks import assign_marks, mark_sequence
 from .models import load_history, load_horses
 from .notice import NOTICE_LINES
+from .racefiles import DEFAULT_RACES
 from .scoring import score_race
 from .target import excluded_note, split_races
 
@@ -493,7 +494,8 @@ def build_sheet(config: dict, title: str | None = None,
                 published: dict[str, list[int]] | None = None,
                 agari_mix: float = 0.0,
                 use_records: bool = True,
-                include_all: bool = False) -> str:
+                include_all: bool = False,
+                target_races: str | None = DEFAULT_RACES) -> str:
     # use_records=False は「馬柱だけで採点する」味付け。戦績を渡さないので
     # 持ち時計・コース適性・距離適性・乗り替わり補正がすべて中立に倒れ、
     # **基礎能力(上がり3F)と前走テーブルだけがスコアを動かす**
@@ -502,7 +504,7 @@ def build_sheet(config: dict, title: str | None = None,
     # 障害・新馬は予想の対象外（本人の指示・2026-09-22）。判定は
     # `keiba/target.py` の1か所で、4つの出力経路が同じ関数を通る
     races, dropped = ((config["races"], []) if include_all
-                      else split_races(config["races"]))
+                      else split_races(config["races"], target_races))
     rows = [race_row(r, by_name, as_of, published, agari_mix) for r in races]
     # 公表版と作り直した版が混ざらないよう、見出しに出どころを書く
     n_pub = sum(1 for r in races if published and published_key(r) in published)

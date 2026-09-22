@@ -36,6 +36,7 @@ from .horsedb import rebuild_from_cache
 from .marks import assign_marks, split_for_total
 from .models import load_history, load_horses
 from .pace import forecast_pace
+from .racefiles import DEFAULT_RACES
 from .report import generate_report
 from .scoring import score_race
 from .target import excluded_note, split_races
@@ -176,7 +177,7 @@ def cmd_text(args) -> None:
     # 障害・新馬は予想の対象外（本人の指示・2026-09-22）。判定は
     # `keiba/target.py` の1か所で、4つの出力経路が同じ関数を通る
     races, dropped = ((cfg["races"], []) if args.include_all
-                      else split_races(cfg["races"]))
+                      else split_races(cfg["races"], args.races))
     exp = Expectation()
     blocks = []
     for r in races:
@@ -220,7 +221,7 @@ def cmd_text(args) -> None:
 
 
 def cmd_daily(args) -> None:
-    html_out = build_from_config(args.config,
+    html_out = build_from_config(args.config, races=args.races,
                                  include_all=args.include_all)
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -400,18 +401,24 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=["utf-8-sig", "utf-8", "cp932"],
                         help="出力の文字コード。既定はBOM付きUTF-8（Windowsで"
                              "文字化けしない）。古い環境向けに cp932 も選べる")
+    p_text.add_argument("--races", default=DEFAULT_RACES, metavar="帯",
+                        help="対象レース帯。既定は9-12R（CLAUDE.md「対象"
+                             "レース帯は9-12R」）。1-8Rは半分が未勝利で"
+                             "持ち時計の発火が42%%しかない")
     p_text.add_argument("--include-all", action="store_true",
-                        help="障害・新馬も予想に入れる。既定では外す"
-                             "（採点の入力が欠けるため。根拠は "
+                        help="帯・障害・新馬で絞らず全レースを入れる。既定"
+                             "では外す（採点の入力が欠けるため。根拠は "
                              "scripts/taisho.py。収集は絞らない）")
     p_text.set_defaults(func=cmd_text)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
     p_daily.add_argument("config", help="開催日設定JSON")
     p_daily.add_argument("--output", required=True, help="出力HTMLパス")
+    p_daily.add_argument("--races", default=DEFAULT_RACES, metavar="帯",
+                         help="対象レース帯。既定は9-12R")
     p_daily.add_argument("--include-all", action="store_true",
-                         help="障害・新馬も予想に入れる。既定では外す"
-                              "（採点の入力が欠けるため。根拠は "
+                         help="帯・障害・新馬で絞らず全レースを入れる。既定"
+                              "では外す（採点の入力が欠けるため。根拠は "
                               "scripts/taisho.py。収集は絞らない）")
     p_daily.set_defaults(func=cmd_daily)
 

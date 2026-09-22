@@ -25,6 +25,7 @@ from .models import Horse, load_history, load_horses
 from .pace import PaceForecast, forecast_pace
 from .scoring import HorseScore, score_race
 from .shinbun import config_date, config_venue, load_by_name
+from .racefiles import DEFAULT_RACES
 from .target import split_races
 
 FONTS = (
@@ -446,10 +447,12 @@ def _race_section(race: RaceEntry, first: bool,
 
 
 def build_daily_page(config: dict, records: str | None = None,
-                     include_all: bool = False) -> str:
-    # 障害・新馬は予想の対象外（`keiba/target.py`・4経路で共有）
+                     include_all: bool = False,
+                     races: str | None = DEFAULT_RACES) -> str:
+    # 帯（既定9-12R）・障害・新馬は予想の対象外
+    # （`keiba/target.py`・4経路で共有）
     kept, _ = ((config["races"], []) if include_all
-               else split_races(config["races"]))
+               else split_races(config["races"], races))
     races = [RaceEntry.from_dict(r) for r in kept]
     # 予想テキストと同じスコアで出す（`keiba/shinbun.py` の冒頭を参照）
     by_name = load_by_name(records, config_venue(config))
@@ -477,6 +480,8 @@ def build_daily_page(config: dict, records: str | None = None,
 
 def build_from_config(config_path: str | Path,
                       records: str | None = None,
-                      include_all: bool = False) -> str:
+                      include_all: bool = False,
+                      races: str | None = DEFAULT_RACES) -> str:
     with open(config_path, encoding="utf-8-sig") as f:
-        return build_daily_page(json.load(f), records, include_all=include_all)
+        return build_daily_page(json.load(f), records,
+                                include_all=include_all, races=races)

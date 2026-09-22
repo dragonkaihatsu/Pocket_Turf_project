@@ -10,13 +10,17 @@
   3. 逆に平地の WASJ・ヤングJSFR を障害と誤らない
   4. 4つの出力経路が `split_races` を通る（経路ごとに条件を書かない）
   5. `collect` は絞られていない
+  6. 帯の既定は 9-12R で、`racefiles.DEFAULT_RACES` から引く（2か所に
+     書くと実測表を作った帯と予想する帯が静かに食い違う）
 """
 import csv
 import unittest
 from pathlib import Path
 
-from keiba.target import (excluded_note, excluded_reason, is_debut, is_jump,
-                          is_target, race_class, split_races)
+from keiba.racefiles import DEFAULT_RACES
+from keiba.target import (band_label, excluded_note, excluded_reason, in_band,
+                          is_debut, is_jump, is_target, race_class,
+                          race_number, split_races)
 
 ROOT = Path(__file__).resolve().parent.parent
 RACE_INFO = ROOT / "data/profiles/jra/race_info.csv"
@@ -64,6 +68,76 @@ class TestSurfaceIsAuthoritative(unittest.TestCase):
                 self.assertFalse(is_jump(surface=s, name="鋸山特別"))
 
 
+class TestBand(unittest.TestCase):
+    """予想の対象帯は9-12R（本人の指示・2026-09-22「普段通りの9〜12に戻す」）。
+
+    理由は実測: 1-8Rは半分が未勝利（50.5%）で、そこは持ち時計の発火が
+    **42%**しかない（9-12Rの未勝利68%・条件戦76%）。
+    """
+
+    def test_default_band_comes_from_racefiles(self):
+        """帯の定義を2か所に書かない。集計側と同じ既定を使う。"""
+        self.assertEqual(DEFAULT_RACES, "9-12")
+        self.assertEqual(band_label(), "9-12R外")
+
+    def test_9_to_12_is_the_target(self):
+        for n in (9, 10, 11, 12):
+            with self.subTest(race=n):
+                self.assertTrue(in_band(f"{n}R"))
+                self.assertIsNone(excluded_reason(name="鋸山特別",
+                                                  surface="芝1800m",
+                                                  race_no=f"{n}R"))
+
+    def test_1_to_8_is_excluded(self):
+        for n in range(1, 9):
+            with self.subTest(race=n):
+                self.assertFalse(in_band(f"{n}R"))
+                self.assertEqual(
+                    excluded_reason(name="3歳未勝利", surface="ダ1200m",
+                                    race_no=f"{n}R"), "9-12R外")
+
+    def test_band_is_checked_before_class(self):
+        """1-8Rの障害は「9-12R外」。理由は1つだけ返す。"""
+        self.assertEqual(
+            excluded_reason(name="3歳以上障害未勝利", surface="障3000m",
+                            race_no="1R"), "9-12R外")
+        # 9-12Rに入っている障害は「障害」で落ちる（コーパスに21本ある）
+        self.assertEqual(
+            excluded_reason(name="中山グランドジャンプ", surface="障4250m",
+                            race_no="11R"), "障害")
+
+    def test_race_no_can_be_read_in_several_shapes(self):
+        for v, want in (("9R", 9), ("12R", 12), ("9r", 9), (11, 11),
+                        (" 10R ", 10)):
+            with self.subTest(value=v):
+                self.assertEqual(race_number(v), want)
+
+    def test_unreadable_race_no_is_excluded_not_passed(self):
+        """読めない設定は通さない（絞ったつもりで絞れていない状態を作らない）。
+
+        黙って落ちるわけではなく、`excluded_note` に出る。
+        """
+        for v in (None, "", "R", "第9競走"):
+            with self.subTest(value=v):
+                self.assertIsNone(race_number(v))
+                self.assertFalse(in_band(v))
+
+    def test_band_can_be_widened(self):
+        self.assertTrue(in_band("3R", "1-12"))
+        self.assertIsNone(excluded_reason(name="3歳未勝利", surface="ダ",
+                                          race_no="3R", races="1-12"))
+
+    def test_none_means_no_band_filter(self):
+        self.assertTrue(in_band("3R", None))
+        self.assertIsNone(excluded_reason(name="3歳未勝利", surface="ダ",
+                                          race_no="3R", races=None))
+
+    def test_no_race_no_means_class_only(self):
+        """`race_no` を渡さない呼び出しは帯を見ない（クラスだけで判定）。"""
+        self.assertIsNone(excluded_reason(name="鋸山特別", surface="芝"))
+        self.assertTrue(is_target(name="鋸山特別", surface="芝"))
+
+
 class TestDebut(unittest.TestCase):
     def test_debut_is_decided_by_name(self):
         self.assertTrue(is_debut("2歳新馬"))
@@ -101,6 +175,22 @@ class TestSplitAndNote(unittest.TestCase):
     def test_note_is_empty_when_nothing_is_dropped(self):
         """該当が無ければ行そのものを出さない（参考注記と同じ扱い）。"""
         self.assertEqual(excluded_note([]), "")
+
+    def test_split_uses_the_band_when_race_no_is_present(self):
+        entries = [
+            {"race_no": "1R", "name": "3歳以上障害未勝利", "surface": "障3000m"},
+            {"race_no": "5R", "name": "2歳新馬", "surface": "芝1600m"},
+            {"race_no": "9R", "name": "鋸山特別", "surface": "芝1800m"},
+            {"race_no": "11R", "name": "新潟JS", "surface": "障3250m"},
+            {"race_no": "12R", "name": "3歳以上1勝クラス", "surface": "ダ1200m"},
+        ]
+        kept, dropped = split_races(entries)
+        self.assertEqual([r["race_no"] for r in kept], ["9R", "12R"])
+        self.assertEqual([(r["race_no"], why) for r, why in dropped],
+                         [("1R", "9-12R外"), ("5R", "9-12R外"),
+                          ("11R", "障害")])
+        self.assertEqual(excluded_note(dropped),
+                         "対象外 3レース（9-12R外2・障害1）")
 
     def test_split_keeps_the_original_dicts(self):
         kept, _ = split_races(self.SAMPLE)
