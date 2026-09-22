@@ -22,7 +22,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba import shinbun
-from keiba.racefiles import DEFAULT_RACES
 
 # CLAUDE.md「アメブロに貼るには変換が要る」の禁止タグ
 FORBIDDEN = ("html", "head", "body", "iframe", "object", "form", "input",
@@ -47,11 +46,9 @@ def main() -> int:
                     help="馬別戦績を使わず馬柱だけで採点する。持ち時計・"
                          "コース適性・距離適性・乗り替わり補正が中立に倒れ、"
                          "上がり3Fと前走テーブルだけがスコアを動かす（波乱寄り）")
-    ap.add_argument("--races", default=DEFAULT_RACES, metavar="帯",
-                    help="対象レース帯。既定は9-12R")
     ap.add_argument("--include-all", action="store_true",
-                    help="障害・新馬も予想に入れる。既定では外す"
-                         "（採点の入力が欠けるため。根拠は "
+                    help="帯（9-12R固定）・障害・新馬で絞らず全レースを入れる。"
+                         "既定では外す（採点の入力が欠けるため。根拠は "
                          "scripts/taisho.py。収集は絞らない）")
     ap.add_argument("--published",
                     help="公表した印の並びJSON {\"中山9R\": [6,2,...]}。"
@@ -64,8 +61,7 @@ def main() -> int:
     page = shinbun.build_sheet(config, title=a.title, published=published,
                                agari_mix=a.agari_mix,
                                use_records=not a.no_records,
-                               include_all=a.include_all,
-                               target_races=a.races)
+                               include_all=a.include_all)
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

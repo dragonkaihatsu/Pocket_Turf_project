@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 
 from keiba.racefiles import DEFAULT_RACES
-from keiba.target import (band_label, excluded_note, excluded_reason, in_band,
+from keiba.target import (BAND_LABEL, excluded_note, excluded_reason, in_band,
                           is_debut, is_jump, is_target, race_class,
                           race_number, split_races)
 
@@ -78,7 +78,7 @@ class TestBand(unittest.TestCase):
     def test_default_band_comes_from_racefiles(self):
         """帯の定義を2か所に書かない。集計側と同じ既定を使う。"""
         self.assertEqual(DEFAULT_RACES, "9-12")
-        self.assertEqual(band_label(), "9-12R外")
+        self.assertEqual(BAND_LABEL, "9-12R外")
 
     def test_9_to_12_is_the_target(self):
         for n in (9, 10, 11, 12):
@@ -121,16 +121,6 @@ class TestBand(unittest.TestCase):
             with self.subTest(value=v):
                 self.assertIsNone(race_number(v))
                 self.assertFalse(in_band(v))
-
-    def test_band_can_be_widened(self):
-        self.assertTrue(in_band("3R", "1-12"))
-        self.assertIsNone(excluded_reason(name="3歳未勝利", surface="ダ",
-                                          race_no="3R", races="1-12"))
-
-    def test_none_means_no_band_filter(self):
-        self.assertTrue(in_band("3R", None))
-        self.assertIsNone(excluded_reason(name="3歳未勝利", surface="ダ",
-                                          race_no="3R", races=None))
 
     def test_no_race_no_means_class_only(self):
         """`race_no` を渡さない呼び出しは帯を見ない（クラスだけで判定）。"""

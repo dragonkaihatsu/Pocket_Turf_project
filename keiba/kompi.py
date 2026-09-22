@@ -50,7 +50,6 @@ from .marks import assign_marks
 from .shinbun import config_date, config_venue, load_by_name
 from .models import load_history, load_horses
 from .notice import NOTICE_LINES
-from .racefiles import DEFAULT_RACES
 from .scoring import score_race
 from .target import excluded_note, split_races
 
@@ -313,15 +312,14 @@ def _venue_table(venue: str, grids: list[RaceGrid], cal: dict | None,
 def build_sheet(config: dict, calibration: dict | None = None,
                 metric: str = "score", title: str | None = None,
                 records: str | None = None,
-                include_all: bool = False,
-                target_races: str | None = DEFAULT_RACES) -> str:
+                include_all: bool = False) -> str:
     """設定JSONから紙面1枚を組む。`title` を渡すとArtifact用に<title>を足す。"""
     by_name = load_by_name(records, config_venue(config))
     as_of = config_date(config)
-    # 帯（既定9-12R）・障害・新馬は予想の対象外
+    # 帯（9-12R固定）・障害・新馬は予想の対象外
     # （`keiba/target.py`・4経路で共有）
     races, dropped = ((config["races"], []) if include_all
-                      else split_races(config["races"], target_races))
+                      else split_races(config["races"]))
     grids = [race_grid(r, metric, by_name, as_of) for r in races]
     by_venue: dict[str, list[RaceGrid]] = {}
     for g in grids:

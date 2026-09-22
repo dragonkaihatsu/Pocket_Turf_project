@@ -5,7 +5,18 @@
 > ただし、結果は集積します
 > （本人の指示・2026-09-22）
 
-予想の対象は **9-12R かつ 障害・新馬でないレース** である。
+> 普段通りの9〜12に戻しましょう
+> 持ち時計比較などが未勝利だと分かりにくいので やめときます
+> （本人の指示・2026-09-22 追加）
+
+> 一応確認ですが、1-12ではないことはみんなわかってると思うので、
+> 9-12に単純にして欲しい
+> （本人の指示・2026-09-22 さらに追加）
+
+予想の対象は **9-12R かつ 障害・新馬でないレース** で固定である。
+帯を9-12R以外に広げる使い道は無いので、設定できる形にはしない
+（`--races` のような引数は持たない。全レースを見たいときは各経路の
+`--include-all` を使う）。
 
 **除外するのは予想・買い目だけで、収集は一切絞らない。**
 `keiba.cli collect` は全レースを取り続け、コーパスは今までどおり育つ
@@ -23,7 +34,7 @@
 45点——の入力が無い状態で、残りの項目は中立に倒れる。
 実測は `scripts/taisho.py` で再現する。
 
-## 帯の既定は `racefiles.DEFAULT_RACES`（9-12R）から引く
+## 帯は `racefiles.DEFAULT_RACES`（9-12R）から引く。書き換えない
 **帯の定義を2か所に書かない。** 集計側（`keiba/racefiles.py`）と
 予想側でずれると、実測表を作った帯と予想する帯が静かに食い違う
 （CLAUDE.mdが一軍騎手の閾値・`horse_records` の列で繰り返し踏んだ失敗）。
@@ -48,14 +59,12 @@ from .racefiles import DEFAULT_RACES, parse_races
 # 除外の理由（表示にもそのまま使う）
 JUMP = "障害"
 DEBUT = "新馬"
+BAND_LABEL = f"{DEFAULT_RACES}R外"
 
 # 設定JSONの `race_no` は "9R" の形
 RACE_NO_RE = re.compile(r"(\d{1,2})\s*R", re.I)
 
-
-def band_label(races: str | None = None) -> str:
-    """帯から外れた理由の表示（`9-12R外`）。"""
-    return f"{races or DEFAULT_RACES}R外"
+_BAND = parse_races(DEFAULT_RACES)
 
 
 def race_number(race_no: str | int | None) -> int | None:
@@ -66,24 +75,14 @@ def race_number(race_no: str | int | None) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def in_band(race_no: str | int | None,
-            races: str | None = DEFAULT_RACES) -> bool:
-    """予想の対象帯（既定9-12R）に入っているか。
-
-    **`races=None` は「帯で絞らない」**。既定値を `None` にして
-    `races or DEFAULT_RACES` と書くと意味が反転するので、既定は
-    文字列で持つ（テストで固定した）。
+def in_band(race_no: str | int | None) -> bool:
+    """予想の対象帯（9-12R固定）に入っているか。
 
     **番号が読めないレースは対象外**にする（注記に出るので黙って
     落ちるわけではない）。
     """
-    if races is None:
-        return True
-    wanted = parse_races(races)
-    if wanted is None:
-        return True
     n = race_number(race_no)
-    return n is not None and n in wanted
+    return n is not None and n in _BAND
 
 
 def is_jump(surface: str | None = None, name: str | None = None) -> bool:
@@ -104,16 +103,13 @@ def is_debut(name: str | None = None) -> bool:
 
 def excluded_reason(name: str | None = None,
                     surface: str | None = None,
-                    race_no: str | int | None = None,
-                    races: str | None = DEFAULT_RACES) -> str | None:
+                    race_no: str | int | None = None) -> str | None:
     """予想の対象外なら理由（`9-12R外` / `障害` / `新馬`）、対象なら None。
 
     `race_no` を渡さなければ帯は見ない（クラスだけで判定する）。
-    `races=None` は帯で絞らない。
     """
-    if race_no is not None and races is not None \
-            and not in_band(race_no, races):
-        return band_label(races)
+    if race_no is not None and not in_band(race_no):
+        return BAND_LABEL
     if is_jump(surface, name):
         return JUMP
     if is_debut(name):
@@ -122,10 +118,9 @@ def excluded_reason(name: str | None = None,
 
 
 def is_target(name: str | None = None, surface: str | None = None,
-              race_no: str | int | None = None,
-              races: str | None = DEFAULT_RACES) -> bool:
+              race_no: str | int | None = None) -> bool:
     """予想（買い目）を出すレースか。"""
-    return excluded_reason(name, surface, race_no, races) is None
+    return excluded_reason(name, surface, race_no) is None
 
 
 def race_class(name: str | None = None, surface: str | None = None) -> str:
@@ -144,20 +139,17 @@ def race_class(name: str | None = None, surface: str | None = None) -> str:
 
 
 def split_races(entries: list[dict],
-                races: str | None = DEFAULT_RACES,
                 ) -> tuple[list[dict], list[tuple[dict, str]]]:
-    """設定JSONのレース一覧を、予想対象と除外（理由つき）に分ける。
+    """設定JSONのレース一覧を、予想対象（9-12R・障害/新馬でない）と
+    除外（理由つき）に分ける。
 
     **4つの出力経路（テキスト・新聞・一覧・カード）がここを通る。**
     経路ごとに条件を書くと静かにずれる（CLAUDE.mdが一軍騎手の閾値・
     `horse_records` の列・印の並びで繰り返し踏んだ失敗）。
-
-    `races` は予想の対象帯（既定9-12R）。`None` なら帯で絞らない。
     """
     kept, dropped = [], []
     for r in entries:
-        why = excluded_reason(r.get("name"), r.get("surface"),
-                              r.get("race_no"), races)
+        why = excluded_reason(r.get("name"), r.get("surface"), r.get("race_no"))
         (dropped.append((r, why)) if why else kept.append(r))
     return kept, dropped
 

@@ -26,7 +26,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from keiba.kompi import build_sheet, load_calibration
-from keiba.racefiles import DEFAULT_RACES
 from keiba.shot import render_png
 
 # アメブロで使えないタグ（CLAUDE.md「アメブロに貼るには変換が要る」）
@@ -47,11 +46,9 @@ def main() -> int:
                     help="最下段に順位別の実測（勝率・複勝率）を付ける")
     ap.add_argument("--calibration",
                     default="data/profiles/jra/calibration.json")
-    ap.add_argument("--races", default=DEFAULT_RACES, metavar="帯",
-                    help="対象レース帯。既定は9-12R")
     ap.add_argument("--include-all", action="store_true",
-                    help="障害・新馬も予想に入れる。既定では外す"
-                         "（採点の入力が欠けるため。根拠は "
+                    help="帯（9-12R固定）・障害・新馬で絞らず全レースを入れる。"
+                         "既定では外す（採点の入力が欠けるため。根拠は "
                          "scripts/taisho.py。収集は絞らない）")
     ap.add_argument("--metric", choices=("score", "hensachi"), default="score")
     ap.add_argument("--title", default=None,
@@ -69,7 +66,7 @@ def main() -> int:
             print(f"※ 実測表が無いので最下段を出さない: {a.calibration}")
 
     sheet = build_sheet(config, cal, metric=a.metric, title=a.title,
-                        include_all=a.include_all, target_races=a.races)
+                        include_all=a.include_all)
     rc = 0
     if a.out:
         out = Path(a.out)
@@ -94,7 +91,7 @@ def main() -> int:
     if a.png:
         # 画像には <title> を入れず、外部フォントも読まない（取得を待たない）
         body = build_sheet(config, cal, metric=a.metric,
-                           include_all=a.include_all, target_races=a.races)
+                           include_all=a.include_all)
         w, h = render_png(body, a.png, scale=a.scale, chrome=a.chrome)
         p = Path(a.png)
         print(f"{p}  {w}×{h}px ×{a.scale}  {p.stat().st_size:,}バイト")
