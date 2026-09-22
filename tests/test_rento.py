@@ -76,16 +76,21 @@ class TestRealEntries(unittest.TestCase):
         if not files:
             self.skipTest("2026-09-22 の出走馬CSVが無い")
         labels = set()
-        rento = 0
+        # **(レース, 馬番) で数える。** `--force` で収集し直すと、結果ページの
+        # レース名が馬柱の `<title>` 由来の名前と違うレースだけ出走馬CSVが
+        # 2本になる（2026-09-22は9R/10R/11Rがそれ。朝のオッズ版と確定オッズ版）。
+        # 行を数えると同じ馬を二重に数えて静かにずれる
+        rento = set()
         for f in files:
+            race = f.name.split("R_", 1)[0]
             for r in csv.DictReader(open(f, encoding="utf-8-sig")):
                 lab = (r.get("間隔表記") or "").strip()
                 if lab:
                     labels.add(lab)
                 if lab == "連闘":
-                    rento += 1
+                    rento.add((race, (r.get("馬番") or "").strip()))
         self.assertTrue(any(l.startswith("中") for l in labels), labels)
-        self.assertEqual(rento, 4, "2026-09-22 中山の連闘は4頭")
+        self.assertEqual(len(rento), 4, f"2026-09-22 中山の連闘は4頭: {sorted(rento)}")
 
 
 if __name__ == "__main__":
