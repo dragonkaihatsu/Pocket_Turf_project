@@ -46,6 +46,7 @@ from .marks import assign_marks, mark_sequence
 from .models import load_history, load_horses
 from .notice import NOTICE_LINES
 from .scoring import score_race
+from .target import excluded_note, split_races
 
 # 欄の割り当て（スコア順位。終端を含む）。**実測の買い目幅に合わせてある**
 GROUPS = (("軸馬候補", "", 1, 2),
@@ -491,19 +492,23 @@ def build_sheet(config: dict, title: str | None = None,
                 records: str | None = None,
                 published: dict[str, list[int]] | None = None,
                 agari_mix: float = 0.0,
-                use_records: bool = True) -> str:
+                use_records: bool = True,
+                include_all: bool = False) -> str:
     # use_records=False は「馬柱だけで採点する」味付け。戦績を渡さないので
     # 持ち時計・コース適性・距離適性・乗り替わり補正がすべて中立に倒れ、
     # **基礎能力(上がり3F)と前走テーブルだけがスコアを動かす**
     by_name = load_by_name(records, config_venue(config)) if use_records else None
     as_of = config_date(config)
-    rows = [race_row(r, by_name, as_of, published, agari_mix)
-            for r in config["races"]]
+    # 障害・新馬は予想の対象外（本人の指示・2026-09-22）。判定は
+    # `keiba/target.py` の1か所で、4つの出力経路が同じ関数を通る
+    races, dropped = ((config["races"], []) if include_all
+                      else split_races(config["races"]))
+    rows = [race_row(r, by_name, as_of, published, agari_mix) for r in races]
     # 公表版と作り直した版が混ざらないよう、見出しに出どころを書く
-    n_pub = sum(1 for r in config["races"]
-                if published and published_key(r) in published)
-    source = (f"印は公表版（{n_pub}/{len(config['races'])}レース）"
-              if n_pub else "")
+    n_pub = sum(1 for r in races if published and published_key(r) in published)
+    source = (f"印は公表版（{n_pub}/{len(races)}レース）" if n_pub else "")
+    if note := excluded_note(dropped):
+        source = (source + " / " if source else "") + note
     # 味付けを紙面に書く。**同じ日の紙面が2種類あるときに、どちらを見て
     # いるか分からなくなるのを防ぐ**（`--published` で版を分けたのと同じ理由）
     if agari_mix >= 1.0:

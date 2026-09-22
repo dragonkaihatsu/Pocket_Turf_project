@@ -46,6 +46,10 @@ def main() -> int:
                     help="馬別戦績を使わず馬柱だけで採点する。持ち時計・"
                          "コース適性・距離適性・乗り替わり補正が中立に倒れ、"
                          "上がり3Fと前走テーブルだけがスコアを動かす（波乱寄り）")
+    ap.add_argument("--include-all", action="store_true",
+                    help="障害・新馬も予想に入れる。既定では外す"
+                         "（採点の入力が欠けるため。根拠は "
+                         "scripts/taisho.py。収集は絞らない）")
     ap.add_argument("--published",
                     help="公表した印の並びJSON {\"中山9R\": [6,2,...]}。"
                          "渡すとスコアで並べ直さず、その並びに結果を塗る")
@@ -56,7 +60,8 @@ def main() -> int:
     published = shinbun.load_published(a.published) if a.published else None
     page = shinbun.build_sheet(config, title=a.title, published=published,
                                agari_mix=a.agari_mix,
-                               use_records=not a.no_records)
+                               use_records=not a.no_records,
+                               include_all=a.include_all)
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -38,6 +38,7 @@ from .models import load_history, load_horses
 from .pace import forecast_pace
 from .report import generate_report
 from .scoring import score_race
+from .target import excluded_note, split_races
 from .textreport import format_day, format_race, to_encoding
 from .stats import aggregate, format_report, load_records
 
@@ -172,9 +173,13 @@ def cmd_text(args) -> None:
     # 戦績を渡さないので持ち時計・コース適性・距離適性・乗り替わり補正が
     # 中立に倒れ、参考ブロック（相手関係・騎手の得意条件）も該当なしになる
     records = None if args.no_records else _load_horse_records(args.records)
+    # 障害・新馬は予想の対象外（本人の指示・2026-09-22）。判定は
+    # `keiba/target.py` の1か所で、4つの出力経路が同じ関数を通る
+    races, dropped = ((cfg["races"], []) if args.include_all
+                      else split_races(cfg["races"]))
     exp = Expectation()
     blocks = []
-    for r in cfg["races"]:
+    for r in races:
         horses = load_horses(r["entries"])
         scores = score_race(horses, None, kyori=r.get("kyori"), records=records,
                             as_of=args.race_date, venue=r.get("venue"),
@@ -196,6 +201,8 @@ def cmd_text(args) -> None:
     # 味付けを見出しに書く。同じ日のテキストが複数出るときにどれを見ているか
     # 分からなくなるのを防ぐ（`keiba/shinbun.py` と同じ理由）
     heading = cfg.get("heading", "予想")
+    if note := excluded_note(dropped):
+        heading += f" / {note}"
     if args.agari_mix >= 1.0:
         heading += " / 基礎能力=上がり3F"
     elif args.agari_mix > 0.0:
@@ -213,7 +220,8 @@ def cmd_text(args) -> None:
 
 
 def cmd_daily(args) -> None:
-    html_out = build_from_config(args.config)
+    html_out = build_from_config(args.config,
+                                 include_all=args.include_all)
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(standalone_document(html_out), encoding=HTML_ENCODING)
@@ -392,11 +400,19 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=["utf-8-sig", "utf-8", "cp932"],
                         help="出力の文字コード。既定はBOM付きUTF-8（Windowsで"
                              "文字化けしない）。古い環境向けに cp932 も選べる")
+    p_text.add_argument("--include-all", action="store_true",
+                        help="障害・新馬も予想に入れる。既定では外す"
+                             "（採点の入力が欠けるため。根拠は "
+                             "scripts/taisho.py。収集は絞らない）")
     p_text.set_defaults(func=cmd_text)
 
     p_daily = sub.add_parser("daily", help="開催日単位のArtifact向けページを出力")
     p_daily.add_argument("config", help="開催日設定JSON")
     p_daily.add_argument("--output", required=True, help="出力HTMLパス")
+    p_daily.add_argument("--include-all", action="store_true",
+                         help="障害・新馬も予想に入れる。既定では外す"
+                              "（採点の入力が欠けるため。根拠は "
+                              "scripts/taisho.py。収集は絞らない）")
     p_daily.set_defaults(func=cmd_daily)
 
     p_stats = sub.add_parser("stats", help="結果が判明したレースを横断して成績を集計")

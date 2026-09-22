@@ -46,6 +46,10 @@ def main() -> int:
                     help="最下段に順位別の実測（勝率・複勝率）を付ける")
     ap.add_argument("--calibration",
                     default="data/profiles/jra/calibration.json")
+    ap.add_argument("--include-all", action="store_true",
+                    help="障害・新馬も予想に入れる。既定では外す"
+                         "（採点の入力が欠けるため。根拠は "
+                         "scripts/taisho.py。収集は絞らない）")
     ap.add_argument("--metric", choices=("score", "hensachi"), default="score")
     ap.add_argument("--title", default=None,
                     help="Artifact用に<title>を足す。貼る用には付けない")
@@ -61,7 +65,8 @@ def main() -> int:
         if cal is None:
             print(f"※ 実測表が無いので最下段を出さない: {a.calibration}")
 
-    sheet = build_sheet(config, cal, metric=a.metric, title=a.title)
+    sheet = build_sheet(config, cal, metric=a.metric, title=a.title,
+                        include_all=a.include_all)
     rc = 0
     if a.out:
         out = Path(a.out)
@@ -85,7 +90,8 @@ def main() -> int:
 
     if a.png:
         # 画像には <title> を入れず、外部フォントも読まない（取得を待たない）
-        body = build_sheet(config, cal, metric=a.metric)
+        body = build_sheet(config, cal, metric=a.metric,
+                           include_all=a.include_all)
         w, h = render_png(body, a.png, scale=a.scale, chrome=a.chrome)
         p = Path(a.png)
         print(f"{p}  {w}×{h}px ×{a.scale}  {p.stat().st_size:,}バイト")

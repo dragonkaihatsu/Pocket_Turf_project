@@ -51,6 +51,7 @@ from .shinbun import config_date, config_venue, load_by_name
 from .models import load_history, load_horses
 from .notice import NOTICE_LINES
 from .scoring import score_race
+from .target import excluded_note, split_races
 
 # JRAの枠色は 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃。**地色はCSSの .w1〜.w8 に
 # 1か所だけ置く**（セルごとの inline style にすると1日分で数キロバイト太る）。
@@ -310,11 +311,15 @@ def _venue_table(venue: str, grids: list[RaceGrid], cal: dict | None,
 
 def build_sheet(config: dict, calibration: dict | None = None,
                 metric: str = "score", title: str | None = None,
-                records: str | None = None) -> str:
+                records: str | None = None,
+                include_all: bool = False) -> str:
     """設定JSONから紙面1枚を組む。`title` を渡すとArtifact用に<title>を足す。"""
     by_name = load_by_name(records, config_venue(config))
     as_of = config_date(config)
-    grids = [race_grid(r, metric, by_name, as_of) for r in config["races"]]
+    # 障害・新馬は予想の対象外（`keiba/target.py`・4経路で共有）
+    races, dropped = ((config["races"], []) if include_all
+                      else split_races(config["races"]))
+    grids = [race_grid(r, metric, by_name, as_of) for r in races]
     by_venue: dict[str, list[RaceGrid]] = {}
     for g in grids:
         by_venue.setdefault(g.venue or "—", []).append(g)
