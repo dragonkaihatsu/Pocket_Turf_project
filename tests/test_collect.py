@@ -139,3 +139,121 @@ class TestParseShutubaPast(unittest.TestCase):
     def test_kyakushitsu_is_normalized(self):
         styles = {e.get("脚質") for e in self.entries if e.get("脚質")}
         self.assertTrue(styles <= {"逃げ", "先行", "差し", "追込"}, styles)
+
+
+# 枠順確定前の登録馬段階（Waku番セルが空）で parse_shutuba_past が全馬を
+# 弾いて0頭になる件のfixture。2026-09-26 中山9R(9頭)・10R(28頭)のキャッシュを
+# 架空のrace_id（場コード44=実在しない）に付け替えて保存してある
+PREVIEW_SMALL = ROOT / "data" / "raw" / "202644090926_past.html"   # 9頭・枠順未確定
+PREVIEW_LARGE = ROOT / "data" / "raw" / "202644090927_past.html"   # 28頭・枠順未確定
+CONFIRMED_AFTER_DRAW = ROOT / "data" / "raw" / "202644090922_past.html"  # 11頭・枠順確定後
+
+
+@unittest.skipUnless(PREVIEW_SMALL.exists(), "取得済み登録馬HTMLのキャッシュが必要")
+class TestParseShutubaPreview(unittest.TestCase):
+    """枠順確定前の登録馬段階から、脚質・厩舎・血統を拾えることを検証する。
+
+    枠順未確定だと <td class="Waku"></td> が空になり、parse_shutuba_past は
+    採用条件（馬番がintであること）で全馬を弾いて0頭になる。この
+    レグレッションと、parse_shutuba_preview が代わりに拾えることの
+    両方を固定する（Horse01/Horse02のマッピングは血統父/馬名のままで
+    変わらない点に注意——枠順未確定でもクラス名は同じ）。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from datetime import date
+        cls.html = PREVIEW_SMALL.read_text(encoding="utf-8")
+        cls.race_date = date(2026, 9, 26)
+        from keiba.collect import parse_shutuba_preview
+        cls.entries = parse_shutuba_preview(cls.html, cls.race_date)
+
+    def test_unconfirmed_page_gives_zero_via_past_parser(self):
+        # 枠順未確定ページは parse_shutuba_past だと0頭になる（既知の挙動）。
+        # これが変わったら、以下の代用ロジックの前提そのものが崩れる
+        from keiba.collect import parse_shutuba_past
+        self.assertEqual(parse_shutuba_past(self.html, self.race_date), [])
+
+    def test_all_horses_parsed(self):
+        self.assertEqual(len(self.entries), 9)
+
+    def test_registration_numbers_are_unique_ints(self):
+        nums = [e["登録番号"] for e in self.entries]
+        self.assertEqual(len(nums), len(set(nums)))
+        self.assertTrue(all(isinstance(n, int) for n in nums))
+
+    def test_no_waku_or_umaban_columns(self):
+        # 枠番・馬番はまだ確定していないので出さない（本番の馬番と混同しない）
+        for e in self.entries:
+            self.assertNotIn("馬番", e)
+            self.assertNotIn("枠番", e)
+
+    def test_horse_name_and_sire_and_trainer(self):
+        by_name = {e["馬名"]: e for e in self.entries}
+        horse = by_name["エイシンウルトラン"]
+        self.assertEqual(horse["血統父"], "トランセンド")
+        self.assertEqual(horse["厩舎"], "地方・村上正")
+        self.assertEqual(horse["脚質"], "差し")
+
+    def test_kyakushitsu_is_normalized(self):
+        styles = {e.get("脚質") for e in self.entries if e.get("脚質")}
+        self.assertTrue(styles <= {"逃げ", "先行", "差し", "追込"}, styles)
+
+    def test_legend_row_excluded(self):
+        # テンプレートの凡例行（Horse02="[馬記号] 馬名 [ブリンカー]"のような
+        # プレースホルダ）が混ざらないこと
+        names = [e.get("馬名") for e in self.entries]
+        self.assertNotIn("[馬記号] 馬名 [ブリンカー]", names)
+
+
+@unittest.skipUnless(PREVIEW_LARGE.exists(), "取得済み登録馬HTMLのキャッシュが必要")
+class TestParseShutubaPreviewLargeField(unittest.TestCase):
+    """頭数の多いレース（28頭登録）でも取りこぼしが無いことを確認する。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from datetime import date
+        from keiba.collect import parse_shutuba_preview
+        cls.entries = parse_shutuba_preview(
+            PREVIEW_LARGE.read_text(encoding="utf-8"), date(2026, 9, 26)
+        )
+
+    def test_all_horses_parsed(self):
+        self.assertEqual(len(self.entries), 28)
+
+    def test_no_duplicate_names(self):
+        names = [e["馬名"] for e in self.entries]
+        self.assertEqual(len(names), len(set(names)))
+
+    def test_trainer_present_for_every_horse(self):
+        missing = [e["登録番号"] for e in self.entries if not e.get("厩舎")]
+        self.assertEqual(missing, [], f"厩舎が取れていない登録番号: {missing}")
+
+
+@unittest.skipUnless(CONFIRMED_AFTER_DRAW.exists(), "取得済み馬柱HTMLのキャッシュが必要")
+class TestParseShutubaPastStillWorksAfterRefactor(unittest.TestCase):
+    """_parse_horse_row への共通化（登録馬プレビュー追加時）で、確定後の
+    parse_shutuba_past の挙動が変わっていないことを固定する。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from datetime import date
+        from keiba.collect import parse_shutuba_past
+        cls.entries = parse_shutuba_past(
+            CONFIRMED_AFTER_DRAW.read_text(encoding="utf-8"), date(2026, 9, 22)
+        )
+        cls.by_umaban = {e["馬番"]: e for e in cls.entries}
+
+    def test_all_horses_parsed(self):
+        self.assertEqual(len(self.entries), 11)
+
+    def test_umaban_and_wakuban_are_ints(self):
+        for e in self.entries:
+            self.assertIsInstance(e["馬番"], int)
+            self.assertIsInstance(e["枠番"], int)
+
+    def test_horse_name_and_sire(self):
+        h = self.by_umaban[1]
+        self.assertEqual(h["馬名"], "サムワンユーラヴド")
+        self.assertEqual(h["血統父"], "ダノンキングリー")
+        self.assertEqual(h["厩舎"], "美浦・大和田")

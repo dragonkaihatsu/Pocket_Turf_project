@@ -369,6 +369,16 @@ ENTRY_COLUMNS = [
     "血統父", "血統母父", "調教評価", "ブリンカー",
 ]
 
+# 枠順確定前の登録馬段階の列。「馬番」「枠番」を持たない（まだ抽選されて
+# いないため）代わりに「登録番号」（出馬表上の登録順）を持つ。本番の
+# 予想パイプライン（ENTRY_COLUMNS・score_race）には使わないこと
+PREVIEW_COLUMNS = [
+    "登録番号", "馬名", "性齢", "斤量", "騎手", "厩舎", "脚質",
+    "前走着順", "前走レース名", "上がり3F", "馬体重",
+    "前走開催場", "前走間隔日数", "間隔表記", "転入初戦", "長期休養明け", "直近3走JRA数",
+    "血統父", "血統母父", "調教評価", "ブリンカー",
+]
+
 KYAKUSHITSU = {"逃": "逃げ", "先": "先行", "差": "差し", "追": "追込"}
 
 
@@ -388,83 +398,117 @@ def _parse_past_cell(body: str) -> dict:
     return out
 
 
+def _parse_horse_row(row: str, race_date: _Date) -> dict:
+    """馬柱1行から、枠番・馬番を除く全項目を拾う（過去走・登録段階で共通）。
+
+    馬名などのセルは、地方が <dt class="Horse01">、中央が <div class="Horse01">
+    と囲みタグが違う。後方参照で開始タグと閉じタグを揃えて両方拾う。
+    呼び出し側は先に row.replace("&nbsp;", " ") を済ませておくこと。
+    """
+    h: dict = {}
+    for key, cls in (("血統父", "Horse01"), ("馬名", "Horse02"),
+                     ("血統母父", "Horse04"), ("厩舎", "Horse05")):
+        if m := re.search(rf'<(dt|div) class="{cls}[^"]*">(.*?)</\1>', row, re.S):
+            h[key] = _text(m.group(2)).strip("()")
+    # ブリンカー着用馬は馬名の末尾に「 B」が付く。**馬名から外す**。
+    # 馬名は結果CSV・馬別戦績との突き合わせキーであり、結果ページ側には
+    # この記号が付かない。付いたままだと keiba/scoring.py の
+    # records.get(horse.name) が空を返し、**B着用馬だけコース適性・
+    # 距離適性が静かに中立値へ落ちる**（収集済みデータで4,022行が該当）。
+    # 情報自体は捨てず別列に残す（着用/非着用は実際に成績へ効く要素）
+    if (name := h.get("馬名")) and name.endswith(" B"):
+        h["馬名"] = name[:-2].strip()
+        h["ブリンカー"] = "B"
+    if m := re.search(r'<(dt|div) class="Horse06[^"]*">(.*?)</\1>', row, re.S):
+        body = m.group(2)
+        k = (re.search(r'<div class="Type[^"]*"><span>(.*?)</span>', body)
+             or re.search(r'<span class="kyakusitu">(.*?)</span>', body))
+        if k:
+            h["脚質"] = KYAKUSHITSU.get(_text(k.group(1)), "")
+        rest = re.sub(r'<div class="Type.*?</div>', "", body, flags=re.S)
+        rest = re.sub(r'<span class="kyakusitu">.*?</span>', "", rest, flags=re.S)
+        h["間隔表記"] = _text(rest)
+    if m := re.search(r'<(dt|div) class="Horse07[^"]*">(.*?)</\1>', row, re.S):
+        body = m.group(2)
+        if w := re.search(r'<div class="Weight[^"]*">(\d+)kg<span>\(([-+]?\d+)\)', body):
+            h["馬体重"] = f"{w.group(1)}({w.group(2)})"
+        # 上位人気は <span class="Odds_Ninki"> で囲まれ、それ以外は素の数値で入る
+        if pop := re.search(r'<div class="Popular">(.*?)</div>', body, re.S):
+            ptxt = _text(pop.group(1))
+            if o := re.search(r"([\d.]+)\s*\((\d+)人気\)", ptxt):
+                h["単勝オッズ"], h["人気"] = float(o.group(1)), int(o.group(2))
+    if m := re.search(r'<span class="Barei">(.*?)</span>', row):
+        h["性齢"] = _text(m.group(1))[:2]
+    if m := re.search(r'<td class="Jockey".*?</td>', row, re.S):
+        cell = m.group()
+        names = re.findall(r">([^<>]{2,10})</a>", cell)
+        if names:
+            h["騎手"] = names[-1].strip()
+        # 斤量は騎手名リンクの直後に素のテキストで入る
+        # （例: <a ...>ルメー</a><br />\n<span>56.0</span>）。
+        # 出走馬CSVのkinryo列（既存のHorse.kinryoが読む）を初めて埋める
+        if k := re.search(r"</a>\s*(?:<br\s*/?>\s*)+\s*<span>([\d.]+)</span>", cell):
+            h["斤量"] = float(k.group(1))
+
+    pasts = [_parse_past_cell(b) for _, b in
+             re.findall(r'<td class="(Past[^"]*)"[^>]*>(.*?)</td>', row, re.S)]
+    pasts = [p for p in pasts if p.get("日付")]
+    if pasts:
+        p0 = pasts[0]
+        interval = (race_date - p0["日付"]).days
+        h["前走着順"] = p0.get("着順")
+        h["前走レース名"] = p0.get("レース名", "")
+        h["前走開催場"] = p0.get("開催場")
+        h["上がり3F"] = p0.get("上がり3F")
+        h["前走間隔日数"] = interval
+        h["長期休養明け"] = "Y" if interval > LONG_LAYOFF_DAYS else ""
+        h["転入初戦"] = "Y" if p0.get("開催場") in JRA_VENUES else ""
+        h["直近3走JRA数"] = sum(1 for p in pasts[:3] if p.get("開催場") in JRA_VENUES)
+    return h
+
+
 def parse_shutuba_past(html: str, race_date: _Date) -> list[dict]:
     """馬柱ページから、脚質・間隔・血統・オッズ・前走情報を取り出す。
 
     確定結果には含まれない事前情報（脚質、前走からの間隔、前走の開催場、血統）が
     取れる。前走が中央の開催場なら転入初戦、間隔が180日超なら長期休養明けとする。
     """
-    # 馬名などのセルは、地方が <dt class="Horse01">、中央が <div class="Horse01">
-    # と囲みタグが違う。後方参照で開始タグと閉じタグを揃えて両方拾う
     horses = []
     for row in re.findall(r'<tr[^>]*class="HorseList".*?</tr>', html, re.S):
         row = row.replace("&nbsp;", " ")  # オッズ欄などに実体参照が混ざる
-        h: dict = {}
+        h = _parse_horse_row(row, race_date)
         if m := re.search(r'<td class="Waku(\d+)"', row):
             h["枠番"] = int(m.group(1))
         if m := re.search(r'<td class="Waku"[^>]*>\s*(\d+)\s*</td>', row):
             h["馬番"] = int(m.group(1))
-        for key, cls in (("血統父", "Horse01"), ("馬名", "Horse02"),
-                         ("血統母父", "Horse04"), ("厩舎", "Horse05")):
-            if m := re.search(rf'<(dt|div) class="{cls}[^"]*">(.*?)</\1>', row, re.S):
-                h[key] = _text(m.group(2)).strip("()")
-        # ブリンカー着用馬は馬名の末尾に「 B」が付く。**馬名から外す**。
-        # 馬名は結果CSV・馬別戦績との突き合わせキーであり、結果ページ側には
-        # この記号が付かない。付いたままだと keiba/scoring.py の
-        # records.get(horse.name) が空を返し、**B着用馬だけコース適性・
-        # 距離適性が静かに中立値へ落ちる**（収集済みデータで4,022行が該当）。
-        # 情報自体は捨てず別列に残す（着用/非着用は実際に成績へ効く要素）
-        if (name := h.get("馬名")) and name.endswith(" B"):
-            h["馬名"] = name[:-2].strip()
-            h["ブリンカー"] = "B"
-        if m := re.search(r'<(dt|div) class="Horse06[^"]*">(.*?)</\1>', row, re.S):
-            body = m.group(2)
-            k = (re.search(r'<div class="Type[^"]*"><span>(.*?)</span>', body)
-                 or re.search(r'<span class="kyakusitu">(.*?)</span>', body))
-            if k:
-                h["脚質"] = KYAKUSHITSU.get(_text(k.group(1)), "")
-            rest = re.sub(r'<div class="Type.*?</div>', "", body, flags=re.S)
-            rest = re.sub(r'<span class="kyakusitu">.*?</span>', "", rest, flags=re.S)
-            h["間隔表記"] = _text(rest)
-        if m := re.search(r'<(dt|div) class="Horse07[^"]*">(.*?)</\1>', row, re.S):
-            body = m.group(2)
-            if w := re.search(r'<div class="Weight[^"]*">(\d+)kg<span>\(([-+]?\d+)\)', body):
-                h["馬体重"] = f"{w.group(1)}({w.group(2)})"
-            # 上位人気は <span class="Odds_Ninki"> で囲まれ、それ以外は素の数値で入る
-            if pop := re.search(r'<div class="Popular">(.*?)</div>', body, re.S):
-                ptxt = _text(pop.group(1))
-                if o := re.search(r"([\d.]+)\s*\((\d+)人気\)", ptxt):
-                    h["単勝オッズ"], h["人気"] = float(o.group(1)), int(o.group(2))
-        if m := re.search(r'<span class="Barei">(.*?)</span>', row):
-            h["性齢"] = _text(m.group(1))[:2]
-        if m := re.search(r'<td class="Jockey".*?</td>', row, re.S):
-            cell = m.group()
-            names = re.findall(r">([^<>]{2,10})</a>", cell)
-            if names:
-                h["騎手"] = names[-1].strip()
-            # 斤量は騎手名リンクの直後に素のテキストで入る
-            # （例: <a ...>ルメー</a><br />\n<span>56.0</span>）。
-            # 出走馬CSVのkinryo列（既存のHorse.kinryoが読む）を初めて埋める
-            if k := re.search(r"</a>\s*(?:<br\s*/?>\s*)+\s*<span>([\d.]+)</span>", cell):
-                h["斤量"] = float(k.group(1))
-
-        pasts = [_parse_past_cell(b) for _, b in
-                 re.findall(r'<td class="(Past[^"]*)"[^>]*>(.*?)</td>', row, re.S)]
-        pasts = [p for p in pasts if p.get("日付")]
-        if pasts:
-            p0 = pasts[0]
-            interval = (race_date - p0["日付"]).days
-            h["前走着順"] = p0.get("着順")
-            h["前走レース名"] = p0.get("レース名", "")
-            h["前走開催場"] = p0.get("開催場")
-            h["上がり3F"] = p0.get("上がり3F")
-            h["前走間隔日数"] = interval
-            h["長期休養明け"] = "Y" if interval > LONG_LAYOFF_DAYS else ""
-            h["転入初戦"] = "Y" if p0.get("開催場") in JRA_VENUES else ""
-            h["直近3走JRA数"] = sum(1 for p in pasts[:3] if p.get("開催場") in JRA_VENUES)
         # 馬番と馬名の両方が取れた行だけ採用する。中央の馬柱には
         # 「[馬記号] 馬名 [ブリンカー]」という凡例行が混ざるため
         if h.get("馬名") and isinstance(h.get("馬番"), int):
+            horses.append(h)
+    return horses
+
+
+def parse_shutuba_preview(html: str, race_date: _Date) -> list[dict]:
+    """枠順確定前の登録馬段階から、枠に依存しない情報だけを拾う。
+
+    枠順確定前は枠番・馬番のセルが空（<td class="Waku"></td>）で、
+    parse_shutuba_past の採用条件（馬番がintであること）で全馬が弾かれて
+    「0頭」になる。実データの行は <tr class="HorseList" id="tr_N"> の
+    id 属性を持つ（テンプレートのツールチップ・凡例行は持たない）ので、
+    その有無で判別し、Nを「登録番号」として代用する。**登録番号は
+    出馬表上の登録順であって本番の馬番ではない**。列名を分けて
+    予想パイプラインの馬番と混同しないようにする（本番の予想には
+    使わないこと。枠順確定後は改めて parse_shutuba_past で取り直す）。
+    """
+    horses = []
+    for row in re.findall(r'<tr[^>]*class="HorseList".*?</tr>', html, re.S):
+        m_id = re.search(r'id="tr_(\d+)"', row)
+        if not m_id:
+            continue  # 凡例・ツールチップ行（実データ行はid="tr_N"を持つ）
+        row = row.replace("&nbsp;", " ")
+        h = _parse_horse_row(row, race_date)
+        h["登録番号"] = int(m_id.group(1))
+        if h.get("馬名"):
             horses.append(h)
     return horses
 
@@ -768,6 +812,68 @@ def collect_jra_shutuba(
         _write_csv(p, ENTRY_COLUMNS, entries)
         print(f"→ {name} ({len(entries)}頭{f', オッズ{n}頭' if n else ''}) "
               f"保存: {p.name}")
+        saved.append({"race_id": race_id, "venue": v, "race_no": no,
+                      "name": name, "path": p, "entries": entries})
+
+    return saved
+
+
+def collect_jra_shutuba_preview(
+    date: str,
+    outdir: Path,
+    cache_dir: Path,
+    venue: str | None = None,
+    race_numbers: list[int] | None = None,
+    interval: float = REQUEST_INTERVAL,
+    fetcher: "Fetcher | None" = None,
+    force: bool = False,
+) -> list[dict]:
+    """枠順確定前の登録馬段階で、脚質・厩舎・血統・前走内容だけを事前に見る。
+
+    枠順確定前は shutuba_past.html の枠番・馬番セルが空になるため、
+    collect_jra_shutuba（parse_shutuba_past）は全馬を「未確定」として
+    弾き0頭になる。この関数は parse_shutuba_preview を使い、登録番号
+    （出馬表の登録順。本番の馬番ではない）をキーに事前情報だけを拾う。
+
+    **本番の予想には使わない**（枠番・馬番が無いため score_race に渡せない）。
+    あくまで登録馬の顔ぶれ・脚質・厩舎を事前に把握するための参考出力で、
+    出力ファイル名も「_登録馬.csv」とし「_出走馬.csv」と混同しないように
+    する。枠順確定後（通常は金曜以降）は改めて collect_jra_shutuba で
+    正式な出走馬CSVを取り直すこと。
+    """
+    fetcher = fetcher or Fetcher(cache_dir, interval)
+    outdir = Path(outdir)
+    saved: list[dict] = []
+
+    for race_id in find_jra_race_ids(date, fetcher, venue):
+        no = int(race_id[-2:])
+        if race_numbers and no not in race_numbers:
+            continue
+        v = jra_venue_of(race_id)
+        print(f"  {v}{no:>2}R (race_id={race_id})", end=" ")
+
+        past_html = fetcher.get(JRA_SHUTUBA_PAST_URL.format(race_id=race_id),
+                                f"{race_id}_past", refresh=force)
+        if not past_html:
+            print("→ 取得できず")
+            continue
+        y, mo, d = (int(x) for x in date.split("-"))
+        entries = parse_shutuba_preview(past_html, _Date(y, mo, d))
+        if not entries:
+            print("→ 登録馬0頭（レースが無い、または該当日が対象外）")
+            continue
+
+        if m := re.search(r"<title>(.*?)</title>", past_html):
+            name = re.split(r"[|｜]", _text(m.group(1)))[0]
+            name = re.sub(r"\d{4}年.*", "", name)
+            name = re.sub(r"\s*\d+走表示\s*$", "", name).strip()
+        else:
+            name = ""
+        safe_name = re.sub(r'[\\/:*?"<>|\s]+', "", name) or f"{no:02d}R"
+        prefix = f"{date}_{v}{no:02d}R_{safe_name}"
+        p = outdir / f"{prefix}_登録馬.csv"
+        _write_csv(p, PREVIEW_COLUMNS, entries)
+        print(f"→ {name} ({len(entries)}頭・登録段階) 保存: {p.name}")
         saved.append({"race_id": race_id, "venue": v, "race_no": no,
                       "name": name, "path": p, "entries": entries})
 
