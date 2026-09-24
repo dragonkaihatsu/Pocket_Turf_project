@@ -71,6 +71,11 @@ td.sel,th.sel{background:var(--accent-soft)}
 .flag{color:var(--accent);font-size:11px}
 .bar{display:flex;height:22px;border-radius:5px;overflow:hidden;font-size:11px;font-weight:700}
 .bar div{display:grid;place-items:center;color:#fff;min-width:0}
+.mcbar{position:relative;height:14px;min-width:120px;background:var(--line);border-radius:3px;overflow:hidden}
+.mcbar i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:3px}
+.mc-kyaku{display:flex;flex-wrap:wrap;gap:8px}
+.mc-kyaku span{font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--ground);font-variant-numeric:tabular-nums}
+.mc-kyaku b{color:var(--accent)}
 .notes{font-size:12.5px;color:var(--muted);display:grid;gap:4px;max-width:78ch}
 .notes p{margin:0}
 </style>
@@ -112,6 +117,13 @@ td.sel,th.sel{background:var(--accent-soft)}
     <div class="stage-foot" id="r-foot">左から右へ走ります。下が内ラチ。1馬身≒2.4m。縦の細い棒は200mごとのハロン棒です。</div>
   </section>
 
+  <section class="card" id="mc-card" hidden aria-live="polite">
+    <h2 id="mc-title">1,000回まわした結果</h2>
+    <div id="mc-kyaku" class="mc-kyaku"></div>
+    <div class="tscroll"><table id="mctbl"></table></div>
+    <p>脚質とペースだけで着順を引いた集計です。馬の能力・騎手・枠は入っていないので、<strong>同じ脚質の馬はほぼ同じ数字に並びます</strong>（差は1,000回の抽選のぶれ）。押すたびに新しい1,000回を引きます。</p>
+  </section>
+
   <div class="grid2">
     <section class="card">
       <h2 id="h-table">出走馬</h2>
@@ -128,11 +140,6 @@ td.sel,th.sel{background:var(--accent-soft)}
         <h2>G1はどのペースになりやすいか</h2>
         <div id="g1bar"></div>
         <p id="g1note"></p>
-      </section>
-      <section class="card" id="mc-card" hidden>
-        <h2>1,000回まわした結果</h2>
-        <div class="tscroll"><table id="mctbl"></table></div>
-        <p>脚質とペースだけで決めた順位の集計です。馬の能力は入っていません。</p>
       </section>
     </div>
   </div>
@@ -415,8 +422,6 @@ function setRace(key){
 }
 function syncPaceEnabled(){
   document.querySelectorAll('input[name="pace"]').forEach(i => i.disabled = state.mode === 'real');
-  document.getElementById('mc').disabled = state.mode === 'real';
-  document.getElementById('mc').style.opacity = state.mode === 'real' ? .4 : 1;
 }
 let raf = 0;
 function run(){
@@ -433,8 +438,15 @@ function run(){
 }
 function finish(){ state.done = true; draw(); renderTable(); }
 
+let mcCount = 0;
+function mcPace(){
+  // 実際のレースでは、そのレースの実測ペース（測れなければミドル）で回す
+  return state.mode === 'real' ? (state.race.band || 'ミドル') : state.pace;
+}
 function monteCarlo(){
-  const r = state.race, st = stats(r, state.pace), rnd = mulberry(seed ^ 0x9e3779b9);
+  mcCount += 1;
+  seed = (seed * 1664525 + 1013904223) >>> 0;   // 押すたびに新しい1,000回
+  const r = state.race, pace = mcPace(), st = stats(r, pace), rnd = mulberry(seed ^ 0x9e3779b9);
   const base = baseHorses(r), cnt = new Map(base.map(h => [h.label, 0])), win = new Map(base.map(h => [h.label, 0]));
   for(let i = 0; i < 1000; i++){
     const o = plOrder(base, st, rnd);
@@ -442,12 +454,24 @@ function monteCarlo(){
     win.set(o[0].label, win.get(o[0].label) + 1);
   }
   const rows = base.slice().sort((a,b) => cnt.get(b.label) - cnt.get(a.label));
-  let html = `<thead><tr><th>${r.kind==='next'?'登録':'馬番'}</th><th>馬名</th><th>脚質</th><th class="num">1着</th><th class="num">3着内</th></tr></thead><tbody>`;
-  rows.forEach(h => { const [bg, fg] = WAKU[h.waku] || WAKU[0];
+  const top = Math.max(...rows.map(h => cnt.get(h.label)), 1);
+  let html = `<thead><tr><th>${r.kind==='next'?'登録':'馬番'}</th><th>馬名</th><th>脚質</th><th class="num">1着</th><th class="num">3着内</th><th></th></tr></thead><tbody>`;
+  rows.forEach(h => { const [bg, fg] = WAKU[h.waku] || WAKU[0]; const c = cnt.get(h.label);
     html += `<tr><td><span class="um" style="background:${bg};color:${fg}">${h.label}</span></td><td>${h.name}</td><td>${kyakuCell(h.kyaku)}</td>`+
-      `<td class="num">${(win.get(h.label)/10).toFixed(1)}%</td><td class="num">${(cnt.get(h.label)/10).toFixed(1)}%</td></tr>`; });
+      `<td class="num">${(win.get(h.label)/10).toFixed(1)}%</td><td class="num">${(c/10).toFixed(1)}%</td>`+
+      `<td><div class="mcbar"><i style="width:${(c/top*100).toFixed(1)}%"></i></div></td></tr>`; });
   document.getElementById('mctbl').innerHTML = html + '</tbody>';
-  document.getElementById('mc-card').hidden = false;
+  // 脚質ごとのまとめ（1頭あたりの3着内率）。ここがペースで動く部分
+  const groups = {};
+  base.forEach(h => { const k = h.kyaku || '不明'; (groups[k] = groups[k] || []).push(cnt.get(h.label)); });
+  document.getElementById('mc-kyaku').innerHTML = [...KYAKU, '不明'].filter(k => groups[k]).map(k => {
+    const v = groups[k], avg = v.reduce((a,b)=>a+b,0) / v.length / 10;
+    return `<span>${k} ${v.length}頭 ・ 1頭あたり3着内 <b>${avg.toFixed(1)}%</b></span>`; }).join('');
+  document.getElementById('mc-title').textContent =
+    `1,000回まわした結果（ペース：${pace}${state.mode === 'real' ? '＝このレースの実測' : ''}・${mcCount}回目）`;
+  const card = document.getElementById('mc-card');
+  card.hidden = false;
+  card.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block: 'nearest'});
 }
 
 sel.addEventListener('change', () => setRace(sel.value));
