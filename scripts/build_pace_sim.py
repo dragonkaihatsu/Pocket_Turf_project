@@ -295,13 +295,21 @@ def main() -> int:
                    "band": band(r), "horses": horses})
     g1.sort(key=lambda x: x["date"])
 
-    # 次のG1: 枠順確定前の登録馬（馬番・枠番は無い）
+    # 次のG1。枠順が確定して出馬表（_出走馬.csv）が取れていればそちらを使い、
+    # まだなら枠順確定前の登録馬（_登録馬.csv・馬番/枠番なし）を使う。
+    # 結果CSVがあるレースは終わっているので「次」には入れない（上のG1一覧に入る）。
+    # ファイル名はページの <title> 由来で出馬表と登録馬で表記が違いうるので、
+    # 「日付_場R_」の接頭辞で突き合わせる（keiba/shinbun.py の result_stem と同じ考え方）
     upcoming = []
     for p in sorted(D.glob("*_登録馬.csv")):
         stem = p.name[: -len("_登録馬.csv")]
         m = re.match(r"(\d{4}-\d{2}-\d{2})_(\D+?)(\d{2})R_(.+?)\(G1\)$", stem)
         if not m:
             continue
+        prefix = f"{m.group(1)}_{m.group(2)}{m.group(3)}R_"
+        if list(D.glob(prefix + "*_結果.csv")):
+            continue
+        entries = sorted(D.glob(prefix + "*_出走馬.csv"))
         # 馬柱で脚質が空の馬は、本人の見立てで補える（data/<日付>_<場><R>R_脚質補足.json）。
         # 実測ではないので kyaku_src="本人" を付け、ページ側で区別して見せる。
         # 馬柱に脚質がある馬は上書きしない（補うのは空欄だけ）
@@ -311,11 +319,19 @@ def main() -> int:
             hosoku = {k: v for k, v in json.loads(hp.read_text(encoding="utf-8")).items()
                       if not k.startswith("_")}
         hs = []
-        for e in csv.DictReader(open(p, encoding="utf-8-sig")):
-            if not (e.get("登録番号") or "").isdigit():
-                continue
-            h = {"reg": int(e["登録番号"]), "name": e["馬名"],
-                 "kyaku": (e.get("脚質") or "").strip(), "jockey": e.get("騎手", "")}
+        src = entries[-1] if entries else p
+        for e in csv.DictReader(open(src, encoding="utf-8-sig")):
+            if entries:
+                if not (e.get("馬番") or "").isdigit():
+                    continue
+                h = {"ub": int(e["馬番"]),
+                     "waku": int(e["枠番"]) if (e.get("枠番") or "").isdigit() else 0}
+            else:
+                if not (e.get("登録番号") or "").isdigit():
+                    continue
+                h = {"reg": int(e["登録番号"])}
+            h.update({"name": e["馬名"], "kyaku": (e.get("脚質") or "").strip(),
+                      "jockey": e.get("騎手", "")})
             add = hosoku.get(h["name"])
             if add and not h["kyaku"] and add.get("脚質") in KYAKU:
                 h["kyaku"] = add["脚質"]
@@ -323,10 +339,14 @@ def main() -> int:
                 if add.get("注記"):
                     h["kyaku_note"] = add["注記"]
             hs.append(h)
+        hs.sort(key=lambda h: h.get("ub", h.get("reg", 0)))
         info = next((g for g in reversed(g1) if g["name"] == m.group(4)), None)
         upcoming.append({"stem": stem, "date": m.group(1), "name": m.group(4),
                          "venue": m.group(2), "surface": info["surface"] if info else "芝",
-                         "kyori": info["kyori"] if info else None, "horses": hs})
+                         "kyori": info["kyori"] if info else None, "horses": hs,
+                         "drawn": bool(entries)})
+        print(f"次のG1: {m.group(1)} {m.group(4)} {len(hs)}頭"
+              f"（{'出馬表・枠順確定' if entries else '登録馬・枠順確定前'}）")
 
     band_count = defaultdict(lambda: defaultdict(int))
     for g in g1:

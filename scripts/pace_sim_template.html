@@ -173,7 +173,7 @@ function addGroup(label, list){
   if(!list.length) return;
   const g = document.createElement('optgroup'); g.label = label;
   list.forEach(r => { const o = document.createElement('option'); o.value = r.key;
-    o.textContent = `${r.date}  ${r.name}` + (r.kind==='next' ? '（枠順確定前）' : ''); g.appendChild(o); });
+    o.textContent = `${r.date}  ${r.name}` + (r.kind==='next' ? (r.drawn ? '（枠順確定）' : '（枠順確定前）') : ''); g.appendChild(o); });
   sel.appendChild(g);
 }
 addGroup('次のG1', races.filter(r => r.kind==='next'));
@@ -339,7 +339,7 @@ function renderTable(){
   const r = state.race, hs = state.runners.slice();
   const showFin = state.mode === 'real' || state.done;
   hs.sort((a,b) => showFin ? a.chaku - b.chaku : a.c4 - b.c4);
-  const numLabel = r.kind === 'next' ? '登録' : '馬番';
+  const numLabel = r.kind === 'next' && !r.drawn ? '登録' : '馬番';
   let html = `<thead><tr><th>${numLabel}</th><th>馬名</th><th>脚質</th><th class="num">4角 先頭から</th><th class="num">着順</th><th class="num">着差</th></tr></thead><tbody>`;
   hs.forEach(h => {
     const [bg, fg] = WAKU[h.waku] || WAKU[0];
@@ -356,9 +356,13 @@ function renderTable(){
     note.textContent = '実際の4コーナー通過順と着差です。人気・騎手は結果CSVのまま。';
   } else if(r.kind === 'next'){
     const own = r.horses.filter(h => h.kyaku_src === '本人');
-    note.textContent = '枠順確定前なので、登録番号で表示しています（枠色は未確定の灰色）。脚質は馬柱の表記です。' +
-      (own.length ? `＊は馬柱に脚質が無かったため本人の見立てで補った馬（${own.map(h => h.name + '=' + h.kyaku).join('・')}）。` +
-        own.filter(h => h.kyaku_note).map(h => `${h.name}は${h.kyaku_note}。`).join('') : '');
+    const ownNote = own.length ? `＊は馬柱に脚質が無かったため本人の見立てで補った馬（${own.map(h => h.name + '=' + h.kyaku).join('・')}）。` +
+        own.filter(h => h.kyaku_note).map(h => `${h.name}は${h.kyaku_note}。`).join('') : '';
+    if(r.drawn){
+      note.textContent = '枠順確定後の出馬表です。脚質は馬柱の表記です。' + ownNote;
+      return;
+    }
+    note.textContent = '枠順確定前なので、登録番号で表示しています（枠色は未確定の灰色）。脚質は馬柱の表記です。' + ownNote;
   } else {
     note.textContent = state.done ? 'シミュレーションの着順です。実際の着順は「実際のレース」で見られます。' : '「走らせる」を押すと着順が出ます。';
   }
@@ -465,7 +469,7 @@ function monteCarlo(){
   }
   const rows = base.slice().sort((a,b) => cnt.get(b.label) - cnt.get(a.label));
   const top = Math.max(...rows.map(h => cnt.get(h.label)), 1);
-  let html = `<thead><tr><th>${r.kind==='next'?'登録':'馬番'}</th><th>馬名</th><th>脚質</th><th class="num">1着</th><th class="num">3着内</th><th></th></tr></thead><tbody>`;
+  let html = `<thead><tr><th>${r.kind==='next' && !r.drawn?'登録':'馬番'}</th><th>馬名</th><th>脚質</th><th class="num">1着</th><th class="num">3着内</th><th></th></tr></thead><tbody>`;
   rows.forEach(h => { const [bg, fg] = WAKU[h.waku] || WAKU[0]; const c = cnt.get(h.label);
     html += `<tr><td><span class="um" style="background:${bg};color:${fg}">${h.label}</span></td><td>${h.name}</td><td>${kyakuCell(h.kyaku, h)}</td>`+
       `<td class="num">${(win.get(h.label)/10).toFixed(1)}%</td><td class="num">${(c/10).toFixed(1)}%</td>`+
