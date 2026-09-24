@@ -302,10 +302,27 @@ def main() -> int:
         m = re.match(r"(\d{4}-\d{2}-\d{2})_(\D+?)(\d{2})R_(.+?)\(G1\)$", stem)
         if not m:
             continue
-        hs = [{"reg": int(e["登録番号"]), "name": e["馬名"], "kyaku": (e.get("脚質") or "").strip(),
-               "jockey": e.get("騎手", "")}
-              for e in csv.DictReader(open(p, encoding="utf-8-sig"))
-              if (e.get("登録番号") or "").isdigit()]
+        # 馬柱で脚質が空の馬は、本人の見立てで補える（data/<日付>_<場><R>R_脚質補足.json）。
+        # 実測ではないので kyaku_src="本人" を付け、ページ側で区別して見せる。
+        # 馬柱に脚質がある馬は上書きしない（補うのは空欄だけ）
+        hosoku = {}
+        hp = Path("data") / f"{m.group(1)}_{m.group(2)}{m.group(3)}R_脚質補足.json"
+        if hp.exists():
+            hosoku = {k: v for k, v in json.loads(hp.read_text(encoding="utf-8")).items()
+                      if not k.startswith("_")}
+        hs = []
+        for e in csv.DictReader(open(p, encoding="utf-8-sig")):
+            if not (e.get("登録番号") or "").isdigit():
+                continue
+            h = {"reg": int(e["登録番号"]), "name": e["馬名"],
+                 "kyaku": (e.get("脚質") or "").strip(), "jockey": e.get("騎手", "")}
+            add = hosoku.get(h["name"])
+            if add and not h["kyaku"] and add.get("脚質") in KYAKU:
+                h["kyaku"] = add["脚質"]
+                h["kyaku_src"] = "本人"
+                if add.get("注記"):
+                    h["kyaku_note"] = add["注記"]
+            hs.append(h)
         info = next((g for g in reversed(g1) if g["name"] == m.group(4)), None)
         upcoming.append({"stem": stem, "date": m.group(1), "name": m.group(4),
                          "venue": m.group(2), "surface": info["surface"] if info else "芝",

@@ -327,7 +327,14 @@ function draw(){
 }
 
 // ---- 表 ----
-function kyakuCell(k){ return k || '<span class="flag">不明</span>'; }
+function kyakuCell(k, h){
+  if(!k) return '<span class="flag">不明</span>';
+  if(h && h.real && h.real.kyaku_src === '本人'){
+    const note = h.real.kyaku_note ? `（${h.real.kyaku_note}）` : '';
+    return `${k}<span class="flag" title="本人の見立て${note}">＊</span>`;
+  }
+  return k;
+}
 function renderTable(){
   const r = state.race, hs = state.runners.slice();
   const showFin = state.mode === 'real' || state.done;
@@ -338,7 +345,7 @@ function renderTable(){
     const [bg, fg] = WAKU[h.waku] || WAKU[0];
     const top3 = showFin && h.chaku <= 3 ? ' class="top3"' : '';
     html += `<tr${top3}><td><span class="um" style="background:${bg};color:${fg}">${h.label}</span></td>`+
-      `<td>${h.name}</td><td>${kyakuCell(h.kyaku)}</td>`+
+      `<td>${h.name}</td><td>${kyakuCell(h.kyaku, h)}</td>`+
       `<td class="num">${h.c4.toFixed(1)}馬身${h.noC4 ? ' <span class="flag">記録なし</span>' : ''}</td>`+
       `<td class="num">${showFin ? h.chaku : '—'}</td>`+
       `<td class="num">${showFin ? (h.chaku === 1 ? '—' : '+' + h.fin.toFixed(1)) : '—'}${showFin && h.noFin ? ' <span class="flag">不明</span>' : ''}</td></tr>`;
@@ -348,7 +355,10 @@ function renderTable(){
   if(state.mode === 'real'){
     note.textContent = '実際の4コーナー通過順と着差です。人気・騎手は結果CSVのまま。';
   } else if(r.kind === 'next'){
-    note.textContent = '枠順確定前なので、登録番号で表示しています（枠色は未確定の灰色）。脚質は馬柱の表記です。';
+    const own = r.horses.filter(h => h.kyaku_src === '本人');
+    note.textContent = '枠順確定前なので、登録番号で表示しています（枠色は未確定の灰色）。脚質は馬柱の表記です。' +
+      (own.length ? `＊は馬柱に脚質が無かったため本人の見立てで補った馬（${own.map(h => h.name + '=' + h.kyaku).join('・')}）。` +
+        own.filter(h => h.kyaku_note).map(h => `${h.name}は${h.kyaku_note}。`).join('') : '');
   } else {
     note.textContent = state.done ? 'シミュレーションの着順です。実際の着順は「実際のレース」で見られます。' : '「走らせる」を押すと着順が出ます。';
   }
@@ -457,7 +467,7 @@ function monteCarlo(){
   const top = Math.max(...rows.map(h => cnt.get(h.label)), 1);
   let html = `<thead><tr><th>${r.kind==='next'?'登録':'馬番'}</th><th>馬名</th><th>脚質</th><th class="num">1着</th><th class="num">3着内</th><th></th></tr></thead><tbody>`;
   rows.forEach(h => { const [bg, fg] = WAKU[h.waku] || WAKU[0]; const c = cnt.get(h.label);
-    html += `<tr><td><span class="um" style="background:${bg};color:${fg}">${h.label}</span></td><td>${h.name}</td><td>${kyakuCell(h.kyaku)}</td>`+
+    html += `<tr><td><span class="um" style="background:${bg};color:${fg}">${h.label}</span></td><td>${h.name}</td><td>${kyakuCell(h.kyaku, h)}</td>`+
       `<td class="num">${(win.get(h.label)/10).toFixed(1)}%</td><td class="num">${(c/10).toFixed(1)}%</td>`+
       `<td><div class="mcbar"><i style="width:${(c/top*100).toFixed(1)}%"></i></div></td></tr>`; });
   document.getElementById('mctbl').innerHTML = html + '</tbody>';
