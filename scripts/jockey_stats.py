@@ -101,6 +101,9 @@ def main() -> None:
                     help="対象レース番号（既定9-12）。CLAUDE.mdに載せた"
                          "実測は9-12R基準なので、混ぜると数字が合わなくなる")
     ap.add_argument("--race-info", default="data/profiles/jra/race_info.csv")
+    ap.add_argument("--months", default=None,
+                    help="対象月（'2025-01..2025-12' や '2025-01,2026-08'）。"
+                         "既定は絞らない。期間分割の独立検証に使う")
     ap.add_argument("--out", help="結果をJSONで書き出す")
     ap.add_argument("--csv-out", help="組み合わせ別の一覧をCSVでも書き出す")
     args = ap.parse_args()
@@ -114,7 +117,7 @@ def main() -> None:
     used_rides = 0
     no_info = 0
 
-    for res_path in result_files(d, args.races):
+    for res_path in result_files(d, args.races, args.months):
         stem = res_path.name[: -len("_結果.csv")]
         venue = race_venue(stem)
         info = race_info.get(stem)

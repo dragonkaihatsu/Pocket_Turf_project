@@ -87,7 +87,7 @@ def check_venue(venue: str) -> None:
             print("  参考（判定不能・有意ではない）:")
             rest.sort(key=lambda x: -abs(x[0]))
             for diff, need, c, base in rest:
-                print(f"    {c['騎手']:6s} n={c['n']:4d} {metric}{c[metric]:.1%} "
+                print(f"    {c['騎手']:6s} {c['条件']:24s} n={c['n']:4d} {metric}{c[metric]:.1%} "
                       f"全体{base:.1%} 差{diff:+.1%}pt（要る差±{need:.1%}pt）")
 
 
