@@ -57,34 +57,38 @@ def check_venue(venue: str) -> None:
     print(f"場を含む条件（全粒度）: {len(at_venue)}件")
     print(f"うち信頼できる母数(n≧10かつ勝利10本以上): {len(reliable)}件")
 
-    hits = []
-    checked = []
-    for c in reliable:
-        base_rec = kishu_base.get(c["騎手"])
-        if not base_rec:
-            continue
-        base = base_rec["複勝率"]
-        diff = c["複勝率"] - base
-        need = power.min_detectable_diff(c["n"], base)
-        checked.append((diff, need, c, base))
-        if abs(diff) >= need:
-            hits.append((diff, need, c, base))
+    # 主指標=複勝率（jockey_noteと同じ）。勝率は副指標として並べて出す。
+    # 回収率は看板にしない（期間をまたいで再現したことが無いため・既出）
+    for metric in ("複勝率", "勝率"):
+        hits = []
+        checked = []
+        for c in reliable:
+            base_rec = kishu_base.get(c["騎手"])
+            if not base_rec:
+                continue
+            base = base_rec[metric]
+            diff = c[metric] - base
+            need = power.min_detectable_diff(c["n"], base)
+            checked.append((diff, need, c, base))
+            if abs(diff) >= need:
+                hits.append((diff, need, c, base))
 
-    print(f"差が見える大きさを超えた（＝客観的に「得意/苦手」と言える）: {len(hits)}件")
-    if hits:
+        print(f"\n--- {metric}ベース ---")
+        print(f"差が見える大きさを超えた: {len(hits)}件")
+        hit_names = {id(c) for _, _, c, _ in hits}
         hits.sort(key=lambda x: -abs(x[0]))
         for diff, need, c, base in hits:
             tag = "得意" if diff > 0 else "苦手"
             print(f"  {c['騎手']:6s} {c['条件']:24s} {tag} "
-                  f"複勝{c['複勝率']:.1%}(全体{base:.1%}・差{diff:+.1%}pt・"
+                  f"{metric}{c[metric]:.1%}(全体{base:.1%}・差{diff:+.1%}pt・"
                   f"要る差±{need:.1%}pt) n={c['n']} 勝利{c['勝利数']}")
-    else:
-        print("  該当なし。" +
-              ("参考として、信頼できる母数を持つ騎手の生の値（有意ではない）:" if checked else ""))
-        checked.sort(key=lambda x: -abs(x[0]))
-        for diff, need, c, base in checked:
-            print(f"    {c['騎手']:6s} n={c['n']:4d} 複勝{c['複勝率']:.1%} "
-                  f"全体{base:.1%} 差{diff:+.1%}pt（要る差±{need:.1%}pt・判定不能）")
+        rest = [row for row in checked if id(row[2]) not in hit_names]
+        if rest:
+            print("  参考（判定不能・有意ではない）:")
+            rest.sort(key=lambda x: -abs(x[0]))
+            for diff, need, c, base in rest:
+                print(f"    {c['騎手']:6s} n={c['n']:4d} {metric}{c[metric]:.1%} "
+                      f"全体{base:.1%} 差{diff:+.1%}pt（要る差±{need:.1%}pt）")
 
 
 def main() -> None:
