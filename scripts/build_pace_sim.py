@@ -312,7 +312,8 @@ def main() -> int:
         entries = sorted(D.glob(prefix + "*_出走馬.csv"))
         # 馬柱で脚質が空の馬は、本人の見立てで補える（data/<日付>_<場><R>R_脚質補足.json）。
         # 実測ではないので kyaku_src="本人" を付け、ページ側で区別して見せる。
-        # 馬柱に脚質がある馬は上書きしない（補うのは空欄だけ）
+        # 馬柱に脚質がある馬は、補足側に 上書き=true があるときだけ差し替え、
+        # 元の表記を kyaku_orig に残す（黙って置き換えない）
         hosoku = {}
         hp = Path("data") / f"{m.group(1)}_{m.group(2)}{m.group(3)}R_脚質補足.json"
         if hp.exists():
@@ -333,7 +334,11 @@ def main() -> int:
             h.update({"name": e["馬名"], "kyaku": (e.get("脚質") or "").strip(),
                       "jockey": e.get("騎手", "")})
             add = hosoku.get(h["name"])
-            if add and not h["kyaku"] and add.get("脚質") in KYAKU:
+            if (add and add.get("脚質") in KYAKU
+                    and (not h["kyaku"] or add.get("上書き"))
+                    and add["脚質"] != h["kyaku"]):
+                if h["kyaku"]:
+                    h["kyaku_orig"] = h["kyaku"]
                 h["kyaku"] = add["脚質"]
                 h["kyaku_src"] = "本人"
                 if add.get("注記"):

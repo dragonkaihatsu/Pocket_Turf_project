@@ -330,8 +330,9 @@ function draw(){
 function kyakuCell(k, h){
   if(!k) return '<span class="flag">不明</span>';
   if(h && h.real && h.real.kyaku_src === '本人'){
-    const note = h.real.kyaku_note ? `（${h.real.kyaku_note}）` : '';
-    return `${k}<span class="flag" title="本人の見立て${note}">＊</span>`;
+    const note = (h.real.kyaku_orig ? `（馬柱の表記は${h.real.kyaku_orig}）` : '') +
+      (h.real.kyaku_note ? `（${h.real.kyaku_note}）` : '');
+    return `${k}<span class="flag" title="本人提供の脚質表${note}">＊</span>`;
   }
   return k;
 }
@@ -356,7 +357,7 @@ function renderTable(){
     note.textContent = '実際の4コーナー通過順と着差です。人気・騎手は結果CSVのまま。';
   } else if(r.kind === 'next'){
     const own = r.horses.filter(h => h.kyaku_src === '本人');
-    const ownNote = own.length ? `＊は馬柱に脚質が無かったため本人の見立てで補った馬（${own.map(h => h.name + '=' + h.kyaku).join('・')}）。` +
+    const ownNote = own.length ? `＊は本人提供の脚質表で補った馬（${own.map(h => h.name + '=' + h.kyaku + (h.kyaku_orig ? `［馬柱は${h.kyaku_orig}］` : '')).join('・')}）。` +
         own.filter(h => h.kyaku_note).map(h => `${h.name}は${h.kyaku_note}。`).join('') : '';
     if(r.drawn){
       note.textContent = '枠順確定後の出馬表です。脚質は馬柱の表記です。' + ownNote;
