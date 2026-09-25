@@ -14233,69 +14233,107 @@
    "kyori": 1200,
    "horses": [
     {
-     "reg": 1,
-     "name": "ウインカーネリアン",
-     "kyaku": "先行",
-     "jockey": "三浦"
-    },
-    {
-     "reg": 3,
-     "name": "ママコチャ",
-     "kyaku": "先行",
-     "jockey": "武豊"
-    },
-    {
-     "reg": 4,
+     "ub": 1,
+     "waku": 1,
      "name": "レッドモンレーヴ",
      "kyaku": "追込",
      "jockey": "酒井"
     },
     {
-     "reg": 5,
-     "name": "エーティーマクフィ",
-     "kyaku": "差し",
-     "jockey": "富田"
-    },
-    {
-     "reg": 6,
-     "name": "ルガル",
+     "ub": 2,
+     "waku": 1,
+     "name": "アイサンサン",
      "kyaku": "先行",
-     "jockey": "鮫島駿"
+     "jockey": ""
     },
     {
-     "reg": 8,
-     "name": "ペアポルックス",
-     "kyaku": "追込",
-     "jockey": "岩田康"
+     "ub": 3,
+     "waku": 2,
+     "name": "ママコチャ",
+     "kyaku": "先行",
+     "jockey": "武豊"
     },
     {
-     "reg": 9,
-     "name": "ワールズエンド",
-     "kyaku": "逃げ",
-     "jockey": "津村"
-    },
-    {
-     "reg": 10,
-     "name": "ピューロマジック",
-     "kyaku": "逃げ",
-     "jockey": "岩田望",
-     "kyaku_src": "本人"
-    },
-    {
-     "reg": 11,
+     "ub": 4,
+     "waku": 2,
      "name": "ジューンブレア",
      "kyaku": "先行",
      "jockey": "坂井",
      "kyaku_src": "本人"
     },
     {
-     "reg": 12,
+     "ub": 5,
+     "waku": 3,
+     "name": "サウンドモリアーナ",
+     "kyaku": "先行",
+     "jockey": "吉田隼"
+    },
+    {
+     "ub": 6,
+     "waku": 3,
+     "name": "ワールズエンド",
+     "kyaku": "逃げ",
+     "jockey": "津村"
+    },
+    {
+     "ub": 7,
+     "waku": 4,
+     "name": "ペアポルックス",
+     "kyaku": "追込",
+     "jockey": "岩田康"
+    },
+    {
+     "ub": 8,
+     "waku": 4,
+     "name": "エーティーマクフィ",
+     "kyaku": "差し",
+     "jockey": "富田"
+    },
+    {
+     "ub": 9,
+     "waku": 5,
+     "name": "スターアニス",
+     "kyaku": "差し",
+     "jockey": "ルメー"
+    },
+    {
+     "ub": 10,
+     "waku": 5,
+     "name": "レイピア",
+     "kyaku": "差し",
+     "jockey": "横山武"
+    },
+    {
+     "ub": 11,
+     "waku": 6,
+     "name": "ルガル",
+     "kyaku": "先行",
+     "jockey": "鮫島駿"
+    },
+    {
+     "ub": 12,
+     "waku": 6,
+     "name": "ブラックチャリス",
+     "kyaku": "先行",
+     "jockey": "浜中"
+    },
+    {
+     "ub": 13,
+     "waku": 7,
      "name": "パンジャタワー",
      "kyaku": "差し",
      "jockey": "松山"
     },
     {
-     "reg": 13,
+     "ub": 14,
+     "waku": 7,
+     "name": "ウインカーネリアン",
+     "kyaku": "先行",
+     "jockey": "三浦"
+    },
+    {
+     "ub": 15,
+     "waku": 8,
      "name": "フリッカージャブ",
      "kyaku": "差し",
      "jockey": "西村淳",
@@ -14303,37 +14341,15 @@
      "kyaku_note": "記録上は前（4角 セントウルS 2番手・北九州記念 先頭・北陸S 先頭・オーシャンS 4〜5番手）"
     },
     {
-     "reg": 14,
-     "name": "サウンドモリアーナ",
-     "kyaku": "先行",
-     "jockey": "吉田隼"
-    },
-    {
-     "reg": 15,
-     "name": "レイピア",
-     "kyaku": "差し",
-     "jockey": "横山武"
-    },
-    {
-     "reg": 16,
-     "name": "アイサンサン",
-     "kyaku": "先行",
-     "jockey": ""
-    },
-    {
-     "reg": 20,
-     "name": "スターアニス",
-     "kyaku": "差し",
-     "jockey": "ルメー"
-    },
-    {
-     "reg": 21,
-     "name": "ブラックチャリス",
-     "kyaku": "先行",
-     "jockey": "浜中"
+     "ub": 16,
+     "waku": 8,
+     "name": "ピューロマジック",
+     "kyaku": "逃げ",
+     "jockey": "岩田望",
+     "kyaku_src": "本人"
     }
    ],
-   "drawn": false
+   "drawn": true
   }
  ],
  "直線": {
