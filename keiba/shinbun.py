@@ -110,7 +110,10 @@ CSS = """
 .shinbun td.post{text-align:center;font-family:var(--f-num);font-size:.8rem;
   color:var(--ink-2);padding:0 4px;white-space:nowrap}
 .shinbun td.rname{padding:3px 7px;font-size:.78rem;line-height:1.25;min-width:132px}
-.shinbun td.rname u{display:block;text-decoration:none;font-size:.64rem;color:var(--ink-2)}
+.shinbun td.rname u{display:flex;align-items:baseline;white-space:nowrap;text-decoration:none;font-size:.64rem;color:var(--ink-2)}
+/* 頭数はレース名の右下。取消・除外を引いた出走頭数（競走中止は数える） */
+.shinbun td.rname u em{font-style:normal;margin-left:auto;padding-left:8px;
+  font-family:var(--f-num);font-weight:700;color:var(--ink);white-space:nowrap}
 /* 荒れそう／堅そう。率は出さない（区分に付いた一般値であって今日の確率ではない） */
 .shinbun td.rname b.ar{font-weight:700;margin-left:6px;padding:0 4px;
   border-radius:2px;background:#ECEAE4;color:var(--ink)}
@@ -196,6 +199,7 @@ class RaceRow:
     post_time: str
     arare: str
     cells: list[Cell]
+    tosu: int = 0                                          # 出走頭数（取消・除外を引く。中止は数える）
     top3: list[int | None] = field(default_factory=list)   # 1-3着の馬番
     payouts: dict[str, str] = field(default_factory=dict)
 
@@ -265,6 +269,25 @@ def load_result(entries: str) -> tuple[dict[int, int], set[int], dict[str, str]]
                     pay[k] = f"{int(v):,}"
         break
     return chaku, scratched, pay
+
+
+def not_started(entries: str) -> set[int]:
+    """取消・除外の馬番。競走中止は出走しているので含めない（頭数に数える）。"""
+    got = result_stem(entries)
+    if not got:
+        return set()
+    folder, prefix = got
+    out: set[int] = set()
+    for f in sorted(folder.glob(f"{prefix}*_結果.csv")):
+        with open(f, encoding="utf-8-sig") as fp:
+            for row in csv.DictReader(fp):
+                if (row.get("着順") or "").strip() in ("取消", "除外"):
+                    try:
+                        out.add(int(row["馬番"]))
+                    except (KeyError, ValueError, TypeError):
+                        pass
+        break
+    return out
 
 
 
@@ -398,6 +421,7 @@ def race_row(r: dict, records=None, as_of=None,
                    name=r.get("name", ""), grade=r.get("grade", ""),
                    surface=r.get("surface", ""), baba=baba,
                    post_time=r.get("post_time", ""), arare=arare, cells=cells,
+                   tosu=len({h.umaban for h in horses} - not_started(r["entries"])),
                    top3=top3, payouts=pay)
 
 
@@ -460,7 +484,8 @@ def _venue_table(venue: str, rows: list[RaceRow]) -> str:
                f'<td class="rname">{_esc(r.name)}'
                + (f"<u>{_esc(r.grade)}"
                   + (f'<b class="ar">{_esc(r.arare)}</b>' if r.arare else "")
-                  + "</u>" if (r.grade or r.arare) else "") + "</td>",
+                  + (f"<em>{r.tosu}頭</em>" if r.tosu else "")
+                  + "</u>" if (r.grade or r.arare or r.tosu) else "") + "</td>",
                f'<td class="kyori edge">{_esc(r.surface)}'
                f'<u>{_esc(r.baba)}</u></td>']
         for _, _, lo, hi in GROUPS:

@@ -161,6 +161,36 @@ class TestSheetMatchesTheResultFiles(unittest.TestCase):
             self.assertEqual(len(top3), 3)
 
 
+class TestFieldSize(unittest.TestCase):
+    """レース名の右下の頭数。取消・除外は引き、競走中止は数える。"""
+
+    def test_scratch_and_exclusion_are_not_started_but_dnf_is(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            e = d / "2026-01-01_中山09R_テスト_出走馬.csv"
+            e.write_text("馬番\n1\n", encoding="utf-8-sig")
+            with open(d / "2026-01-01_中山09R_テスト_結果.csv", "w",
+                      encoding="utf-8-sig", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["着順", "馬番"])
+                w.writerows([["1", "1"], ["中止", "2"], ["取消", "3"], ["除外", "4"]])
+            self.assertEqual(shinbun.not_started(str(e)), {3, 4})
+
+    def test_no_result_means_nothing_subtracted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(shinbun.not_started(str(Path(tmp) / "x_出走馬.csv")), set())
+
+    @unittest.skipUnless(CONFIG.exists(), "設定が無い")
+    def test_every_race_shows_its_field_size(self):
+        for r in config()["races"]:
+            row = shinbun.race_row(r)
+            with open(r["entries"], encoding="utf-8-sig") as f:
+                n = len({int(x["馬番"]) for x in csv.DictReader(f)})
+            self.assertEqual(row.tosu, n - len(shinbun.not_started(r["entries"])))
+            self.assertIn(f"<em>{row.tosu}頭</em>",
+                          shinbun._venue_table(row.venue, [row]))
+
+
 @unittest.skipUnless(CONFIG.exists(), "設定が無い")
 class TestAmebloSafe(unittest.TestCase):
     FORBIDDEN = ("html", "head", "body", "iframe", "object", "form", "input",
