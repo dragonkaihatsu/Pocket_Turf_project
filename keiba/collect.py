@@ -684,11 +684,18 @@ def find_jra_race_days(year: int, month: int, fetcher: "Fetcher") -> list[str]:
     return [d for d in days if d.startswith(f"{year}-{month:02d}")]
 
 
-def find_jra_race_ids(date: str, fetcher: "Fetcher", venue: str | None = None) -> list[str]:
+def find_jra_race_ids(date: str, fetcher: "Fetcher", venue: str | None = None,
+                      refresh: bool = False) -> list[str]:
     """開催日のrace_idを返す。中央のrace_idは開催回・日目で決まり日付から
-    組み立てられないため、その日のレース一覧から引く。"""
+    組み立てられないため、その日のレース一覧から引く。
+
+    refresh=True で一覧もキャッシュを無視して取り直す。**開催前の一覧は
+    日を追って埋まる**（2026-09-26の一覧は9/22のキャッシュだと特別レース
+    9-11Rしか無く、12Rと平場が丸ごと抜けていた）ので、`--force` を付けた
+    取得では一覧も取り直す"""
     key = date.replace("-", "")
-    html = fetcher.get(JRA_RACE_LIST_URL.format(date=key), f"jra_list_{key}")
+    html = fetcher.get(JRA_RACE_LIST_URL.format(date=key), f"jra_list_{key}",
+                       refresh=refresh)
     if html is None:
         return []
     ids = sorted({r for r in re.findall(r"race_id=(\d{12})", html)})
@@ -713,7 +720,7 @@ def collect_jra_day(
     outdir = Path(outdir)
     collected = []
 
-    for race_id in find_jra_race_ids(date, fetcher, venue):
+    for race_id in find_jra_race_ids(date, fetcher, venue, refresh=force):
         no = int(race_id[-2:])
         if race_numbers and no not in race_numbers:
             continue
@@ -774,7 +781,7 @@ def collect_jra_shutuba(
     outdir = Path(outdir)
     saved: list[dict] = []
 
-    for race_id in find_jra_race_ids(date, fetcher, venue):
+    for race_id in find_jra_race_ids(date, fetcher, venue, refresh=force):
         no = int(race_id[-2:])
         if race_numbers and no not in race_numbers:
             continue
@@ -845,7 +852,7 @@ def collect_jra_shutuba_preview(
     outdir = Path(outdir)
     saved: list[dict] = []
 
-    for race_id in find_jra_race_ids(date, fetcher, venue):
+    for race_id in find_jra_race_ids(date, fetcher, venue, refresh=force):
         no = int(race_id[-2:])
         if race_numbers and no not in race_numbers:
             continue

@@ -210,6 +210,13 @@ def cmd_text(args) -> None:
                    f"+上がり3F{args.agari_mix:.0%}")
     if args.no_records:
         heading += " / 馬柱のみ"
+    # JRA公式のクッション値・含水率（`baba-info` で取った最新分）。表示のみ
+    from . import babainfo
+    from .shinbun import config_date
+    day = args.race_date or config_date(cfg)
+    venues = list(dict.fromkeys(r.get("venue") for r in races if r.get("venue")))
+    if baba_lines := babainfo.heading_lines(day, venues):
+        heading += "\n" + "\n".join(baba_lines)
     text = format_day(blocks, heading)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -312,6 +319,22 @@ def cmd_shutuba(args) -> None:
         interval=args.interval, force=args.force,
     )
     print(f"\n取得完了: {len(saved)}レース → {args.outdir}")
+
+
+def cmd_baba_info(args) -> None:
+    from datetime import datetime, timedelta, timezone
+    from . import babainfo
+    info = babainfo.fetch()
+    venues = [v.strip() for v in args.venue.split(",")] if args.venue else None
+    now = datetime.now(timezone(timedelta(hours=9)))
+    info["取得時刻"] = now.strftime("%Y-%m-%d %H:%M JST")
+    out = Path(args.outdir) / f"{args.date or now.strftime('%Y-%m-%d')}_{now.strftime('%H%M')}_馬場情報.json"
+    babainfo.save(info, out)
+    print(f"JRA馬場情報（{info['取得時刻']}取得）")
+    for line in babainfo.summary_lines(info, venues):
+        print("  " + line)
+    print(f"保存: {out}")
+    print("※クッション値・含水率はスコアに入れていない（表示と記録のみ）")
 
 
 def cmd_shutuba_preview(args) -> None:
@@ -481,6 +504,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_preview.add_argument("--force", action="store_true",
                            help="キャッシュがあっても再取得する")
     p_preview.set_defaults(func=cmd_shutuba_preview)
+
+    p_baba = sub.add_parser("baba-info", help="JRA公式の芝クッション値・含水率を取得して保存（表示のみ）")
+    p_baba.add_argument("--date", help="保存ファイル名に付ける日付（既定は今日）")
+    p_baba.add_argument("--venue", help="表示する場（例: 中山,阪神）。既定は全場")
+    p_baba.add_argument("--outdir", default="data/baba")
+    p_baba.set_defaults(func=cmd_baba_info)
 
     p_horses = sub.add_parser("horses", help="馬ごとの全戦績をnetkeibaから取得")
     p_horses.add_argument("--cache-dir", default="data/raw",
